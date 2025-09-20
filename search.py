@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
@@ -186,14 +187,54 @@ def index():
 
 @app.route('/search')
 def search():
-    query = request.args.get('query', '').lower()
+    query = request.args.get('query', '').lower().strip()
     if not query:
         return jsonify(DATA[:200])  # default show some data
-    results = [
-        msg for msg in DATA
-        if query in msg.get('username', '').lower() or query in msg.get('message', '').lower()
-    ]
-    return jsonify(results)
+
+    results = DATA
+    from_user = None
+    contains_text = None
+    has_image = None
+
+    # Parse from:(user)
+    match_from = re.search(r'from:\((.*?)\)', query)
+    if match_from:
+        from_user = match_from.group(1).lower()
+        query = re.sub(r'from:\(.*?\)', '', query).strip()
+
+    # Parse contains:(text)
+    match_contains = re.search(r'contains:\((.*?)\)', query)
+    if match_contains:
+        contains_text = match_contains.group(1).lower()
+        query = re.sub(r'contains:\(.*?\)', '', query).strip()
+
+    # Parse has:image_true
+    if 'has:image_true' in query:
+        has_image = True
+        query = query.replace('has:image_true', '').strip()
+
+    # Filter messages and remove duplicates
+    filtered = []
+    seen_ids_local = set()
+    for msg in results:
+        msg_id = msg.get('id')
+        if msg_id in seen_ids_local:
+            continue
+        seen_ids_local.add(msg_id)
+
+        if from_user and from_user not in msg.get('username', '').lower():
+            continue
+        if contains_text and contains_text not in msg.get('message', '').lower():
+            continue
+        if has_image and not msg.get('img'):
+            continue
+        if query and query not in msg.get('message', '').lower() and query not in msg.get('username','').lower():
+            continue
+
+        filtered.append(msg)
+
+    return jsonify(filtered[:200])
+
 
 if __name__ == "__main__":
     app.run(debug=True)
