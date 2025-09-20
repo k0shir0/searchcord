@@ -7,22 +7,27 @@ app = Flask(__name__)
 # Load all JSON files from current directory
 DATA = []
 FILES = [f for f in os.listdir('.') if f.endswith('.json')]
+seen_ids = set()
+
 for f in FILES:
     with open(f, 'r', encoding='utf-8') as file:
         try:
             messages = json.load(file)
             for msg in messages:
-                msg['source'] = f.replace('.json', '')
-            DATA.extend(messages)
+                msg_id = msg.get('id')
+                if msg_id and msg_id not in seen_ids:
+                    seen_ids.add(msg_id)
+                    msg['source'] = f.replace('.json', '')
+                    DATA.append(msg)
         except Exception:
             pass
 
-# HTML Template with modern UI
+# HTML Template with animations
 HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Discord Scraper Viewer</title>
+    <title>Searchcord Viewer</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, sans-serif;
@@ -41,7 +46,7 @@ HTML = """
             letter-spacing: 1px;
         }
         main {
-            max-width: 900px;
+            max-width: 950px;
             margin: 20px auto;
             padding: 15px;
         }
@@ -74,9 +79,12 @@ HTML = """
         .message {
             background: #2d2d44;
             padding: 15px;
-            margin: 12px 0;
+            margin: 15px 0;
             border-radius: 12px;
             box-shadow: 0px 2px 6px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.5s forwards;
         }
         .username {
             font-weight: bold;
@@ -95,7 +103,7 @@ HTML = """
             border-radius: 10px;
             border: 2px solid #0077ff;
         }
-        .source {
+        .meta {
             font-size: 0.8em;
             margin-top: 8px;
             color: #9d9d9d;
@@ -115,10 +123,14 @@ HTML = """
         #loadMore:hover {
             background: #d20072;
         }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
-    <header>📂 Discord Scraper Viewer</header>
+    <header>🔍 Searchcord Viewer</header>
     <main>
         <div class="search-bar">
             <input type="text" id="search" placeholder="Search username or message...">
@@ -154,7 +166,9 @@ HTML = """
                 html += '<div class="username">' + msg.username + '</div>';
                 html += '<div class="text">' + msg.message + '</div>';
                 if (msg.img) html += '<img class="img" src="' + msg.img + '">';
-                html += '<div class="source">From: ' + msg.source + '</div>';
+                html += '<div class="meta">From: ' + msg.source + '</div>';
+                html += '<div class="meta">Sent: ' + msg.time_sent + '</div>';
+                html += '<div class="meta">Message ID: ' + msg.id + '</div>';
                 html += '</div>';
                 container.innerHTML += html;
             }
@@ -175,7 +189,10 @@ def search():
     query = request.args.get('query', '').lower()
     if not query:
         return jsonify(DATA[:200])  # default show some data
-    results = [msg for msg in DATA if query in msg.get('username','').lower() or query in msg.get('message','').lower()]
+    results = [
+        msg for msg in DATA
+        if query in msg.get('username', '').lower() or query in msg.get('message', '').lower()
+    ]
     return jsonify(results)
 
 if __name__ == "__main__":
