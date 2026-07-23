@@ -1,97 +1,114 @@
-SearchCord
-==========
+# Searchcord
 
-SearchCord is a two-part tool for collecting and searching through Discord messages.  
-It includes:
+A local, self-hosted tool for archiving and searching Discord messages. Runs
+entirely on your machine as a single FastAPI app with a browser UI — scrape
+channels into SQLite, then search, filter, and chart what you collected.
 
-- scrape.py → A scraper that collects messages from servers or DMs into .json files.  
-- search.py → A Flask-based web app that lets you search across all scraped datasets with a clean, user-friendly interface.  
+> **Read the [wrongful use warning](LICENSE) before running this.** This tool
+> archives other people's private conversations, automating a user account
+> against Discord's API violates their Terms of Service, and the risk is
+> entirely yours. Use it on your own history or with the consent of the people
+> involved.
 
-------------------------------------------------------------
-Features
-------------------------------------------------------------
-- Collect messages into per-channel JSON datasets.
-- Automatically saves images and message timestamps.
-- Simple, modern web interface with blue/pink styling.
-- Search by username or message text.
-- Results displayed in chat-style message cards.
-- Load more button to paginate results in batches of 50.
-- Supports multiple datasets from multiple servers.
+---
 
-------------------------------------------------------------
-Project Structure
-------------------------------------------------------------
-SearchCord/
-│
-├── scrape.py      # Scraper script
-├── search.py      # Web interface (Flask app)
-├── data.json      # Example JSON dataset (created by scraper)
-└── README.txt
+## Features
 
-------------------------------------------------------------
-Installation
-------------------------------------------------------------
-1. Make sure you have Python 3.9+ installed.
-2. Install required dependencies:
+- **Browse** your servers and channels, or your DMs and group DMs.
+- **Queue and scrape** any number of channels at once, with an optional
+  per-channel message cap, live progress, and a stop button.
+- **Live monitor** channels and watch new messages stream in as they arrive.
+- **Search** everything you have collected, filtered by server, channel,
+  author, and date range, with match highlighting and pagination.
+- **Stats** — totals, top senders, messages per server, activity over the
+  last 30 days, and a by-hour histogram.
+- **ChatML export** — turn a conversation into a `.jsonl` file in the
+  OpenAI/ChatML message format.
 
-   pip install flask requests
+Everything is stored in one SQLite file at `data/searchcord.db`. Nothing is
+sent anywhere except to Discord's own API.
 
-3. (Optional) Use a virtual environment to keep things clean:
+---
 
-   python3 -m venv venv
-   source venv/bin/activate
+## Requirements
 
-------------------------------------------------------------
-Usage
-------------------------------------------------------------
+- Python 3.9 or newer
+- A Discord token
 
-1. Scraping Messages
---------------------
-Run the scraper to collect messages into JSON files.
+## Installation
 
-   python3 scrape.py
+```bash
+git clone https://github.com/k0shir0/searchcord.git
+cd searchcord
+pip install -r requirements.txt
+```
 
-- Choose whether to scrape servers or DMs.
-- Select a channel or conversation.
-- Provide a timeframe (e.g. 5h, 2d, 1m).
-- A JSON file will be created with the name format:
+## Running
 
-   servername_channelname.json
+```bash
+python app.py
+```
 
-2. Searching Messages
----------------------
-Once you have scraped data, start the web interface:
+The app starts on <http://127.0.0.1:8000> and opens your browser. On Windows
+you can double-click `start.bat` instead.
 
-   python3 search.py
+It binds to loopback only. There is **no authentication** — anyone who can
+reach the port gets your token and your entire archive — so only change the
+host if you understand that:
 
-Then open your browser and go to:
+```bash
+SEARCHCORD_HOST=0.0.0.0 SEARCHCORD_PORT=8000 python app.py
+```
 
-   http://127.0.0.1:5000
+## First run
 
-------------------------------------------------------------
-Web Interface
-------------------------------------------------------------
-- Enter a username or part of a message in the search bar.
-- Up to 50 messages are shown at first.
-- Click "Display More" to load additional results.
-- Each message card shows:
-  * Username
-  * Message text
-  * Image (if attached)
-  * Source file (server/channel it came from)
+Open the hamburger menu, paste your token, and hit **Save & Verify**. Once it
+reports a connected username your servers will load in the **browse** tab.
 
-------------------------------------------------------------
-Design
-------------------------------------------------------------
-The interface is styled with:
-- Blue + Pink gradient header
-- Dark theme background
-- Rounded, shadowed message cards
-- Embedded images styled with borders and rounded corners
+To scrape: click channels to add them to the queue, optionally set a
+"msgs back" limit, then **start scraping**. Leave the limit blank to pull the
+full history.
 
-------------------------------------------------------------
-Disclaimer
-------------------------------------------------------------
-This project is for educational and personal archival purposes only.  
-Do not use it in violation of Discord’s Terms of Service.  
-You are responsible for how you use this software.
+---
+
+## Project structure
+
+```
+searchcord/
+├── app.py             # FastAPI backend — API, scraper, live poller, export
+├── requirements.txt
+├── start.bat          # Windows launcher
+├── static/
+│   ├── index.html
+│   ├── app.js         # Frontend logic
+│   └── style.css
+└── data/              # Created at runtime — gitignored, never commit
+    └── searchcord.db
+```
+
+---
+
+## Data & privacy
+
+`data/searchcord.db` contains **your Discord token in plaintext** in the
+`settings` table, alongside every message you have scraped. The `data/`
+directory is gitignored for that reason. Do not commit it, do not share it,
+and delete it when you are done. **Clear All Data** in the settings panel
+wipes the messages table; deleting the file removes everything including the
+token.
+
+If you ever push this database anywhere by accident, treat your token as
+compromised and reset it immediately by changing your Discord password.
+
+## Notes
+
+- Uses your user token against Discord's HTTP API. This is against Discord's
+  Terms of Service and can get your account terminated. You accept that risk
+  by running it.
+- Requests are rate-limit aware and back off on HTTP 429, with a retry cap.
+- Scraping pages backwards 100 messages at a time with a short delay between
+  batches; a full server takes a while.
+
+## License
+
+MIT, with a wrongful use warning — see [LICENSE](LICENSE).

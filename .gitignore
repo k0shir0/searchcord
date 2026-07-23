@@ -1,0 +1,53 @@
+# ─── Scraped data — NEVER COMMIT ─────────────────────────────
+# The database holds your Discord token in the settings table plus every
+# message you have ever scraped. The JSONL files are datasets built from
+# those messages. None of this belongs in a public repository.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.jsonl
+# Legacy scrape output landed in the project root as <server>_<channel>.json.
+# Scoped to the root so it can't silently swallow real config files.
+/*.json
+
+# Model / training artifacts
+*_lora/
+*.gguf
+*.safetensors
+checkpoint-*/
+
+# ─── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Secrets / local config ──────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+token.txt
+
+# ─── Editor / OS ─────────────────────────────────────────────
+.claude/
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>searchcord</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────── -->
+<header class="header">
+  <span class="wordmark">searchcord</span>
+  <div class="header-right">
+    <div class="scrape-pill" id="scrapePill">
+      <span class="pulse-dot"></span>
+      <span id="scrapeStatus">scraping…</span>
+    </div>
+    <button class="hamburger" id="menuBtn" aria-label="Settings">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<!-- ── Settings overlay + panel ───────────────────────── -->
+<div class="overlay" id="overlay"></div>
+<aside class="settings-panel" id="settingsPanel">
+  <div class="sp-head">
+    <span class="sp-title">settings</span>
+    <button class="sp-close" id="closeSettings">&#x2715;</button>
+  </div>
+  <div class="sp-body">
+
+    <div class="sg">
+      <label class="sg-label">discord token</label>
+      <div class="token-row">
+        <input type="password" id="tokenInput" placeholder="Paste your token here…" autocomplete="off" spellcheck="false">
+        <button class="token-toggle" id="tokenToggle">show</button>
+      </div>
+      <p class="sg-hint">Stored locally in <code>data/searchcord.db</code>. Never sent anywhere except Discord's API.</p>
+      <button class="btn-mint" id="saveToken">Save &amp; Verify</button>
+      <div class="token-status" id="tokenStatus"></div>
+    </div>
+
+    <div class="sg">
+      <label class="sg-label">database</label>
+      <p class="sg-hint" id="dbStats">—</p>
+      <button class="btn-danger" id="clearDb">Clear All Data</button>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ── Tab nav ────────────────────────────────────────── -->
+<nav class="tabnav">
+  <button class="tab active" data-view="browse">browse</button>
+  <button class="tab" data-view="dms">dms</button>
+  <button class="tab" data-view="search">search</button>
+  <button class="tab" data-view="live">live <span class="live-badge" id="liveBadge"></span></button>
+  <button class="tab" data-view="stats">stats</button>
+</nav>
+
+<!-- ── Main ──────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Browse view -->
+  <section class="view active" id="view-browse">
+    <div class="sidebar">
+      <div class="sidebar-label">servers</div>
+      <div class="server-list" id="serverList">
+        <div class="placeholder-msg">loading…</div>
+      </div>
+    </div>
+    <div class="content" id="content">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">⌗</div>
+        <p>Select a server to browse channels</p>
+      </div>
+      <div class="channels-pane" id="channelsPane">
+        <div class="cp-head" id="cpHead"></div>
+        <div class="cp-body" id="cpBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DMs view -->
+  <section class="view" id="view-dms">
+    <div class="channels-pane visible">
+      <div class="cp-head">Direct Messages</div>
+      <div class="cp-body" id="dmBody">
+        <div class="placeholder-msg">loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live view -->
+  <section class="view" id="view-live">
+    <div class="live-wrap">
+      <div class="live-sidebar">
+        <div class="live-sidebar-head">
+          <span class="live-sidebar-label">monitoring</span>
+          <button class="btn-ghost" id="stopAllLive" style="font-size:10px;padding:3px 8px">stop all</button>
+        </div>
+        <div class="live-monitor-list" id="liveMonitorList">
+          <div class="live-empty-msg">No channels monitored.<br>Go to Browse → ⚡ to start.</div>
+        </div>
+      </div>
+      <div class="live-feed-wrap">
+        <div class="live-feed-head">
+          <span class="live-feed-label">live feed</span>
+          <button class="btn-ghost" id="clearFeed" style="font-size:10px;padding:3px 8px">clear</button>
+        </div>
+        <div class="live-feed" id="liveFeed">
+          <div class="live-feed-empty">Messages will appear here as they arrive.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search view -->
+  <section class="view" id="view-search">
+    <div class="search-wrap">
+      <div class="search-top">
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Search messages…" autocomplete="off">
+          <button id="searchBtn">search</button>
+        </div>
+        <div class="search-filters" id="searchFilters">
+          <input type="text" id="fGuild"   list="dl-guilds"   placeholder="Server…"       autocomplete="off">
+          <input type="text" id="fChannel" list="dl-channels" placeholder="Channel…"      autocomplete="off">
+          <input type="text" id="fUser"    list="dl-users"    placeholder="User or ID…"   autocomplete="off">
+          <datalist id="dl-guilds"></datalist>
+          <datalist id="dl-channels"></datalist>
+          <datalist id="dl-users"></datalist>
+          <input type="date" id="fDateFrom" title="From">
+          <input type="date" id="fDateTo" title="To">
+        </div>
+      </div>
+      <div class="search-results" id="searchResults">
+        <div class="empty-state-search">search your scraped messages</div>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </section>
+
+<!-- ── Scrape queue bar ───────────────────────────────── -->
+<div class="queue-bar" id="queueBar">
+  <div class="qb-left">
+    <span class="qb-label">queue</span>
+    <span class="qb-count" id="queueCount">0</span>
+  </div>
+  <div class="qb-chips" id="queueChips"></div>
+  <div class="qb-limit">
+    <input type="number" id="scrapeLimit" placeholder="∞" min="0" step="100" title="Messages to scrape back (blank = all)">
+    <span class="qb-limit-label">msgs back</span>
+  </div>
+  <div class="qb-right">
+    <button class="btn-ghost" id="clearQueue">clear</button>
+    <button class="btn-mint" id="startScrape">start scraping</button>
+  </div>
+</div>
+
+<!-- ── Scrape progress modal ──────────────────────────── -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">scraping in progress</span>
+      <button class="stop-btn" id="stopScrapeBtn" title="Stop scraping">&#x2715; stop</button>
+    </div>
+    <div class="modal-body">
+      <div class="mo-channel" id="moChannel">Initializing…</div>
+      <div class="mo-bar-wrap"><div class="mo-bar" id="moBar"></div></div>
+      <div class="mo-stats" id="moStats"></div>
+      <div class="mo-log" id="moLog"></div>
+    </div>
+    <div class="modal-foot" id="modalFoot">
+      <button class="btn-mint" id="dismissModal">done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ChatML export modal ────────────────────────────── -->
+<div class="modal-bg" id="exportModalBg">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">export to chatml</span>
+      <button class="sp-close" id="closeExportModal">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="sg-label" style="margin-bottom:8px">who is the assistant?</div>
+      <div class="export-participants" id="exportParticipants">
+        <div class="placeholder-msg">loading…</div>
+      </div>
+
+      <div class="export-field">
+        <label>other participant's name (optional override)</label>
+        <input type="text" id="exportOtherName" placeholder="defaults to the other sender's name" autocomplete="off">
+      </div>
+
+      <div class="export-field">
+        <label>system prompt (optional override)</label>
+        <textarea id="exportSystemPrompt" placeholder="You are {target}. You are texting {other}. Respond in your natural texting style."></textarea>
+        <div class="sg-hint">Use <code>{target}</code> and <code>{other}</code> as placeholders.</div>
+      </div>
+    </div>
+    <div class="modal-foot visible">
+      <button class="btn-mint" id="runExportBtn" disabled>export .jsonl</button>
+    </div>
+  </div>
+</div>
+
+  <!-- Stats view -->
+  <section class="view" id="view-stats">
+    <div class="stats-scroll">
+      <div class="stats-topbar">
+        <span class="stats-topbar-title">overview</span>
+        <button class="btn-ghost" id="refreshStats">↻ refresh</button>
+      </div>
+      <!-- stat cards -->
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-val" id="sTotal">—</div>
+          <div class="stat-lbl">messages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sServers">—</div>
+          <div class="stat-lbl">servers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sChannels">—</div>
+          <div class="stat-lbl">channels</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sUsers">—</div>
+          <div class="stat-lbl">unique users</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="sDbSize">—</div>
+          <div class="stat-lbl">db size</div>
+        </div>
+      </div>
+      <!-- leaderboard + by-server -->
+      <div class="stats-row">
+        <div class="chart-card">
+          <div class="chart-title">top senders</div>
+          <div class="leaderboard" id="leaderboard"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">messages by server</div>
+          <div class="chart-box"><canvas id="chartByServer"></canvas></div>
+        </div>
+      </div>
+      <!-- over time -->
+      <div class="chart-card">
+        <div class="chart-title">messages over time <span class="chart-sub">(last 30 days)</span></div>
+        <div class="chart-box chart-box-tall"><canvas id="chartOverTime"></canvas></div>
+      </div>
+      <!-- by hour -->
+      <div class="chart-card">
+        <div class="chart-title">activity by hour</div>
+        <div class="chart-box"><canvas id="chartByHour"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+  integrity="sha256-DiMmxoaAcr7BWSdgxnKQQ8ruopYKK0bO5qIZKqxqv/A="
+  crossorigin="anonymous"
+  referrerpolicy="no-referrer"></script>
+<script src="app.js"></script>
+</body>
+</html>
