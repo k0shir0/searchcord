@@ -29,31 +29,10 @@ anything in this repository.
 
 This software archives other people's private conversations. That is its
 entire function. The messages it collects were written by real people who did
-not agree to have them stored, indexed, searched, exported, or fed into a
-machine learning model. Treat every message you collect as something you are
-holding on someone else's behalf.
+not agree to have them stored, indexed, searched, exported. Use this tool at
+your own discretion. 
 
-WHAT THIS SOFTWARE IS FOR
 
-  Archiving and searching conversations you are a legitimate party to, or that
-  you have permission to retain — your own message history, a community you
-  administer with the knowledge of its members, or research with informed
-  consent and an ethics review.
-
-WHAT YOU MUST NOT USE THIS SOFTWARE FOR
-
-  - Surveillance, stalking, monitoring, or building a profile of any person.
-  - Harassment, intimidation, blackmail, doxxing, or exposing private
-    conversation, whether or not you were part of it.
-  - Collecting messages from minors, or from any space you gained access to
-    under false pretenses, through a compromised account, or by evading a
-    ban, block, or permission setting.
-  - Training, fine-tuning, or prompting a model to imitate a specific real
-    person without that person's explicit, informed, revocable consent.
-  - Republishing, selling, leaking, or otherwise redistributing collected
-    messages, including as a "dataset."
-  - Any purpose that would be unlawful, tortious, or harmful if done by hand
-    instead of by script.
 
 LEGAL EXPOSURE IS YOURS ALONE
 
@@ -68,11 +47,3 @@ LEGAL EXPOSURE IS YOURS ALONE
   you collect with it. The author provides no warranty, does not endorse any
   particular use, and accepts no liability for any harm, loss, claim, or
   penalty arising from your use of it — as stated in the MIT terms above.
-
-IF YOU COLLECT ANYTHING, LOOK AFTER IT
-
-  The database this tool creates contains your Discord token in plaintext
-  alongside every message you have scraped. Keep it local, keep it encrypted
-  if you can, never commit it to version control, and delete it when you no
-  longer need it. If you are not prepared to be a careful custodian of other
-  people's words, do not run this.
