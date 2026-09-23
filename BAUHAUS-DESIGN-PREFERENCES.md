@@ -21,7 +21,7 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 - Geometry is welcome when it is composed as one deliberate system. Keep it restrained and purposeful, not as isolated dots or floating shapes.
 - Search-box geometry should use clear alignment without a straight grid. Circles should remain complete inside their reserved bay, sized as large as possible without clipping or competing with the headline and form.
 - Fill the blue banner with a few large, related circles and triangles, supported by a square and bar where the layout has room, plus angled rules. Do not use scattered mini ornaments or a straight grid. Let the forms sit behind the headline, search field, and filters with a clear banner-colored gap at each edge. Rules should appear to stop at the gap and resume on the far side. Keep circles whole. Use substantial left and center groups to balance the main right group; on narrow screens simplify the layout while keeping the main circle and triangle visible when search opens.
-- Keep the dark-blue and light-purple direction, with pale blue and marigold accents. Avoid the coral-red and white pairing.
+- Deepen the banner to navy, use light lavender and cool mint-green accents, and keep yellow and other warm accents out of the trial.
 - Color should reach across the page through meaningful surfaces, tabs, stats, and states instead of random decoration.
 - The result area should remain. It represents the messages revealed by search and sorting, and should be labelled `results`.
 - On the browse surface, do not render a redundant results box or a results tab. Submitting the main search reveals the results view and smoothly scrolls there.
@@ -56,14 +56,12 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 
 - Recent Bauhaus form research supports using circles, squares, triangles, lines, planes, and grids as compositional material. Arrange them with proportion, rhythm, contrast, and intentional overlap; do not scatter isolated ornaments or leave unexplained fragments.
 - Use five angled rules across the banner plus two angled rules through the lower-left group; do not use a straight grid. Remove isolated mini ornaments. Keep the lower-left circle-and-triangle group visibly tilted and irregular, with the rules passing behind it and stopping at a clear banner-colored gap around each form. Leave the same visible gap around text and controls. Keep circles whole. Keep the main right-side group visible when search opens, and use lower-left and center groups to continue the composition. On narrow screens, retain the right circle and triangle while simplifying the extra groups.
-- Focusing/clicking the main query unfolds the filter tray from the banner’s lower edge, and clicking outside or pressing Escape returns the banner and its forms to their resting positions. Keep the motion tied to that interaction and honor reduced-motion preferences.
-- Bauhaus history does not mandate one color per shape. Dark blue and light purple remain the base palette; pale blue and marigold are contemporary accents, not claimed historical rules. Do not reintroduce the coral-red accent.
+- Focusing/clicking the main query lifts the right-side group clear before the filter tray unfolds from the banner’s lower edge. Clicking outside or pressing Escape retracts the tray before returning the group. Keep the motion tied to that interaction and honor reduced-motion preferences.
+- Bauhaus history does not mandate one color per shape. Use deep navy, light lavender, and cool green as contemporary choices; avoid yellow and warm accents.
 - Keep geometry motion subtle and coordinated as one layer. The banner has no purple focus border and the search field has no outline on focus. Match the search and clear-filter buttons: blue outlined at rest, then invert to cream and dark ink when hovered, pressed, or focused. Center the wordmark and distinguish one segment with an accent color; keep the un-underlined privacy link at the bottom.
 
-## Banner refinement (2026-09-23)
+## Deep navy and cool geometry direction (2026-09-23)
 
-- Keep “What are you looking for?” and the search field as the banner’s main focus. Give the upper-left ring-and-triangle pair a clear band above the heading, and keep linework out of the heading, search input, and expanded filter fields.
-- Enlarge the lower-left ring-and-triangle pair and lower-center triangle so they carry more visual weight inside the banner. Retain the right grouping and its open-state motion.
-- Use three shallow rules across the upper band and two upright rules to the right of the capped filter tray on wide layouts. Hide the upright rules below 1050px. Run two separated angled rules behind the lower forms; keep their paths clear of the heading, search input, and expanded filter fields.
-- On compact screens, hide the upper-left pair and upper grid, and retain the lower-left ring plus right ring-and-triangle pair. Keep the mobile lower rules below the filter row as they pass through those forms.
-- Coordinate geometry and filter-tray transitions around the same duration, and keep the existing reduced-motion behavior.
+- Use a deep navy banner and mint-green `cord` wordmark accent so the name reads clearly against the field.
+- Add a small group of large translucent circles, squares, and triangles behind the search headline. Keep the forms light lavender, mint green, and cool blue so they fill the background while the heading stays easy to read.
+- Keep the filled shapes and angled rules as low-contrast background material. Maintain complete circles, purposeful overlaps, and the existing search/filter animation; remove yellow and marigold from the trial palette.

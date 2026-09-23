@@ -36,9 +36,9 @@ The banner geometry is grounded in the Getty Research Institute’s Bauhaus teac
 
 Sources: [Getty Research Institute, Form and Color](https://www.getty.edu/research/exhibitions_events/exhibitions/bauhaus/new_artist/form_color/form/); [Getty Research Institute, Bauhaus Beginnings wall text](https://www.getty.edu/research/exhibitions_events/exhibitions/bauhaus/beginnings/wall_text.pdf); [Getty Research Institute, Principles and Curriculum](https://www.getty.edu/research/exhibitions_events/exhibitions/bauhaus/new_artist/history/principles_curriculum/); [Bauhaus Dessau Foundation, The Power of Color and Form](https://artsandculture.google.com/story/the-power-of-color-and-form-at-bauhaus-stiftung-bauhaus-dessau/XAXRMKlYpAG6Ig?hl=en).
 
-Banner translation: keep the field open, remove the orthogonal grid, and use five angled rules across the banner plus two through the lower-left group. Remove isolated mini ornaments. Compose large circles and triangles in right, left, and center groupings, with the square and bar supporting the right group. Keep the lower-left circle-and-triangle group tilted and irregular. Let the geometry sit behind the search copy and filters with a visible banner-colored clearance; rules appear to stop at each clearance and resume after it. Keep every circle whole. When filters expand, retain the full right-side group and shift it upward on wider layouts; on narrow screens keep its large circle and triangle visible while simplifying the other groups. Use dark blue and light purple with pale-blue and marigold accents as contemporary choices, not as claimed historical color mappings.
+Banner translation: keep the field open, remove the orthogonal grid, and use five angled rules across the banner plus two through the lower-left group. Remove isolated mini ornaments. Compose large circles and triangles in right, left, and center groupings, with the square and bar supporting the right group. Keep the lower-left circle-and-triangle group tilted and irregular. Let the geometry sit behind the search copy and filters with a visible banner-colored clearance; rules appear to stop at each clearance and resume after it. Keep every circle whole. When filters expand, retain the full right-side group and shift it upward on wider layouts; on narrow screens keep its large circle and triangle visible while simplifying the other groups. Use deep navy, light lavender, pale blue, and mint green as contemporary choices, not as claimed historical color mappings; avoid yellow and warm accents.
 
-Interaction repair: keep the search interaction reversible. Activating the query opens the filter tray from the banner’s lower edge and shifts the main right group up without hiding it; outside click or Escape returns the whole surface to its resting composition. Keep the motion tied to the user action, preserve reduced-motion behavior, and do not add perpetual animation.
+Interaction repair: keep the search interaction reversible. On open, lift the main right group clear of the filter tray before the tray unfolds; on close, retract the tray before the group returns. Outside click or Escape restores the full resting composition. Keep the motion tied to the user action, preserve reduced-motion behavior, and do not add perpetual animation.
 
 Sources:
 
@@ -60,7 +60,7 @@ Sources:
 | Asymmetric composition | Give the query/search result area the dominant block and offset supporting stats or saved filters | Preserve predictable tab order and responsive stacking |
 | New Typography | Use a clean sans-serif, large display labels, small uppercase metadata, and a disciplined type scale | Keep body copy readable and do not use all-caps for paragraphs |
 | Material honesty | Use flat surfaces, hairline rules, hard or tiny radii, and restrained shadows | Do not recreate the old green glow with gradients or neon effects |
-| Motion as composition | Animate the filter tray out from the lower edge of the search block on focus/click, with the banner forms transitioning in sync; reverse on outside click or Escape | Respect `prefers-reduced-motion`; no decorative perpetual animation |
+| Motion as composition | Lift the right group clear before unfolding the tray on focus/click, then retract the tray before returning the group on outside click or Escape | Respect `prefers-reduced-motion`; no decorative perpetual animation |
 
 ## Proposed visual system
 
@@ -68,7 +68,7 @@ Sources:
 - **Branding:** use a single large `searchcord` wordmark in the top header. Keep the upper-left rail free of duplicate branding, subtitles, trial banners, and decorative marks.
 - **Navigation:** keep useful top-level destinations, but omit a redundant search or results destination when the home surface owns search and reveals results. Do not add a server sidebar. Make active destinations clear and keep labels visible.
 - **Browse:** use the available width for the full-width search banner. Place separate, compact messages-indexed and active-server stat boxes immediately below it.
-- **Search:** the blue search banner spans the page. Use a few large circles and triangles, supported by the right-side square and bar, with angled rules instead of a straight grid. Remove scattered mini ornaments. Leave a banner-colored gap around forms, headline, and controls; let rules stop at the gap and resume beyond it, and keep circles whole. Keep the search copy unobstructed. Focusing the query opens the lower-edge filter tray while the large right group stays visible; outside click or Escape reverses the composition. The trial uses pale-blue and marigold accents with its dark-blue and light-purple base, without coral red. Server, channel, and author filters remain scalable text inputs with autocomplete. Result rows omit a redundant “view message” action and use the freed space for readable message text.
+- **Search:** the deep-navy banner spans the page. Use large circles and triangles, supported by a right-side square and bar, with angled rules instead of a straight grid. Remove scattered mini ornaments. Let a few low-contrast forms sit behind the headline while keeping the white copy clear; preserve a solid surface behind the search field and filter controls. Keep circles whole. Focusing the query opens the lower-edge filter tray while the large right group stays visible; outside click or Escape reverses the composition. Use light lavender and mint green accents, without yellow or warm colors. Server, channel, and author filters remain scalable text inputs with autocomplete. Result rows omit a redundant “view message” action and use the freed space for readable message text.
 - **Live:** treat the feed as a time-indexed poster/list. The live indicator is a circle plus the word “live,” not color alone.
 - **Stats:** use open chart panels with strong axes and labels. Keep the data legible before adding geometric decoration.
 - **Settings:** preserve the token workflow and warnings, but make the drawer feel like a labeled utility sheet instead of a floating dark overlay.
@@ -84,13 +84,11 @@ The static homepage trial links to `privacy-policy.html` from its footer at the 
 
 These are deliberately separate static pages and use mock data only:
 
-1. **Sky outline:** a darker blue banner with thick, low-contrast sky-blue outlines.
-2. **Lavender outline:** the same banner and geometry in low-contrast light purple.
+1. **Deep blue / lavender / green:** use a deep navy field, light lavender geometry, and a cool green wordmark accent.
 
 The trial pages do not load Dribbble assets, do not call Searchcord APIs, and do not contain tokens, scraped messages, or personal data. They are available locally at:
 
-- `/trials/bauhaus-blue-purple.html` (sky outline)
-- `/trials/bauhaus-lavender-outline.html` (lavender outline)
+- `/trials/bauhaus-blue-purple.html`
 
 ### Trial revision
 
@@ -100,11 +98,11 @@ The first visual pass used a “find the signal” headline and a “recent sign
 
 MoMA’s account of its 2009 Bauhaus exhibition website describes a stable grid that let visitors sort the works without changing the organizing structure. Getty’s Bauhaus teaching materials treat points, lines, planes, circles, squares, and triangles as forms to study through proportion, rhythm, and spatial relationships; they do not prescribe a universal color for each shape. Apply those ideas as a stable search layout with one composed group of forms, not as a fixed historical color code.
 
-In the blue and purple trial, remove the scattered mini shapes and use larger circle-and-triangle groupings, supported by a square and bar at the right. Keep five angled rules across the banner and add two through the tilted lower-left group. Keep the forms behind the text and controls, with a visible blue clearance at each edge; the rules appear to break at that gap and continue beyond it. Preserve the main right-side group when the filter tray opens, shifting it upward on wider layouts and keeping its circle and triangle on narrow screens. Keep the dark-blue and light-purple base with pale-blue and marigold accents, without coral red. Honor reduced-motion preferences.
+In the blue and purple trial, remove the scattered mini shapes and use larger circle-and-triangle groupings, supported by a square and bar at the right. Keep five angled rules across the banner and add two through the tilted lower-left group. Keep the forms behind the text and controls, with a visible blue clearance at each edge; the rules appear to break at that gap and continue beyond it. Preserve the main right-side group when the filter tray opens, shifting it upward on wider layouts and keeping its circle and triangle on narrow screens. Keep the deep-blue and light-lavender base with cool green accents; avoid yellow and warm colors. Honor reduced-motion preferences.
 
-### Banner refinement pass (2026-09-23)
+### Direction reset (2026-09-23)
 
-The sky and lavender trials share seven outline forms: ring-and-triangle pairs at the upper-left and lower-left, a large lower-center triangle, and a right-side ring-and-triangle pair. Three shallow rules run across the upper band; two upright rules remain to the right of the capped filter tray on wide layouts and disappear below 1050px; two angled rules pass behind the lower forms. Linework stays out of the heading, search field, and expanded filter fields. On compact screens, simplify the geometry to the lower-left ring and right-side ring-and-triangle pair; the lower rules angle through the visible forms below the filters. The banner field is darker blue, the outlines are thick but low contrast, and the browse tabs are taller with a clear marigold selected state. The geometry and tray use a coordinated 340ms transition, with reduced-motion behavior retained. The rest of the home surface is unchanged.
+Restore the filled-shape composition, then deepen the banner to near-navy and give `cord` a muted mint-green accent. Add a few large, low-opacity circles, squares, and triangles behind the search headline so they occupy the hero background. Use pale lavender as the main geometry color with mint and cool blue support. Preserve readable search/filter surfaces, the click/focus animation, and reduced-motion behavior. Keep warm yellow accents out of the trial.
 
 Sources: [MoMA, Bauhaus: from Weimar to the Web](https://www.moma.org/explore/inside_out/2009/11/13/bauhaus-from-weimar-to-the-web/); [Getty Research Institute, Primary Forms](https://www.getty.edu/research/exhibitions_events/exhibitions/bauhaus/new_artist/form_color/form/).
 
