@@ -59,3 +59,11 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 - Focusing/clicking the main query unfolds the filter tray from the banner’s lower edge, and clicking outside or pressing Escape returns the banner and its forms to their resting positions. Keep the motion tied to that interaction and honor reduced-motion preferences.
 - Bauhaus history does not mandate one color per shape. Dark blue and light purple remain the base palette; pale blue and marigold are contemporary accents, not claimed historical rules. Do not reintroduce the coral-red accent.
 - Keep geometry motion subtle and coordinated as one layer. The banner has no purple focus border and the search field has no outline on focus. Match the search and clear-filter buttons: blue outlined at rest, then invert to cream and dark ink when hovered, pressed, or focused. Center the wordmark and distinguish one segment with an accent color; keep the un-underlined privacy link at the bottom.
+
+## Banner refinement (2026-09-23)
+
+- Keep “What are you looking for?” and the search field as the banner’s main focus. Give the upper-left ring-and-triangle pair a clear band above the heading, and keep linework out of the heading, search input, and expanded filter fields.
+- Enlarge the lower-left ring-and-triangle pair and lower-center triangle so they carry more visual weight inside the banner. Retain the right grouping and its open-state motion.
+- Use three shallow rules across the upper band and two upright rules to the right of the capped filter tray on wide layouts. Hide the upright rules below 1050px. Run two separated angled rules behind the lower forms; keep their paths clear of the heading, search input, and expanded filter fields.
+- On compact screens, hide the upper-left pair and upper grid, and retain the lower-left ring plus right ring-and-triangle pair. Keep the mobile lower rules below the filter row as they pass through those forms.
+- Coordinate geometry and filter-tray transitions around the same duration, and keep the existing reduced-motion behavior.

@@ -84,11 +84,13 @@ The static homepage trial links to `privacy-policy.html` from its footer at the 
 
 These are deliberately separate static pages and use mock data only:
 
-1. **Blue / purple:** cooler, more digital, and closer to a modern archive or tool. Keep the blue dark and the purple light so the developer-tool surface stays focused while still carrying Bauhaus color.
+1. **Sky outline:** a darker blue banner with thick, low-contrast sky-blue outlines.
+2. **Lavender outline:** the same banner and geometry in low-contrast light purple.
 
 The trial pages do not load Dribbble assets, do not call Searchcord APIs, and do not contain tokens, scraped messages, or personal data. They are available locally at:
 
-- `/trials/bauhaus-blue-purple.html`
+- `/trials/bauhaus-blue-purple.html` (sky outline)
+- `/trials/bauhaus-lavender-outline.html` (lavender outline)
 
 ### Trial revision
 
@@ -99,6 +101,10 @@ The first visual pass used a “find the signal” headline and a “recent sign
 MoMA’s account of its 2009 Bauhaus exhibition website describes a stable grid that let visitors sort the works without changing the organizing structure. Getty’s Bauhaus teaching materials treat points, lines, planes, circles, squares, and triangles as forms to study through proportion, rhythm, and spatial relationships; they do not prescribe a universal color for each shape. Apply those ideas as a stable search layout with one composed group of forms, not as a fixed historical color code.
 
 In the blue and purple trial, remove the scattered mini shapes and use larger circle-and-triangle groupings, supported by a square and bar at the right. Keep five angled rules across the banner and add two through the tilted lower-left group. Keep the forms behind the text and controls, with a visible blue clearance at each edge; the rules appear to break at that gap and continue beyond it. Preserve the main right-side group when the filter tray opens, shifting it upward on wider layouts and keeping its circle and triangle on narrow screens. Keep the dark-blue and light-purple base with pale-blue and marigold accents, without coral red. Honor reduced-motion preferences.
+
+### Banner refinement pass (2026-09-23)
+
+The sky and lavender trials share seven outline forms: ring-and-triangle pairs at the upper-left and lower-left, a large lower-center triangle, and a right-side ring-and-triangle pair. Three shallow rules run across the upper band; two upright rules remain to the right of the capped filter tray on wide layouts and disappear below 1050px; two angled rules pass behind the lower forms. Linework stays out of the heading, search field, and expanded filter fields. On compact screens, simplify the geometry to the lower-left ring and right-side ring-and-triangle pair; the lower rules angle through the visible forms below the filters. The banner field is darker blue, the outlines are thick but low contrast, and the browse tabs are taller with a clear marigold selected state. The geometry and tray use a coordinated 340ms transition, with reduced-motion behavior retained. The rest of the home surface is unchanged.
 
 Sources: [MoMA, Bauhaus: from Weimar to the Web](https://www.moma.org/explore/inside_out/2009/11/13/bauhaus-from-weimar-to-the-web/); [Getty Research Institute, Primary Forms](https://www.getty.edu/research/exhibitions_events/exhibitions/bauhaus/new_artist/form_color/form/).
 
