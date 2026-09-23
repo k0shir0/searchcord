@@ -20,8 +20,8 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 - Bauhaus should be visible as structure: geometry, clear rules, strong blocks, asymmetry with alignment, and intentional composition.
 - Geometry is welcome when it is composed as one deliberate system. Keep it restrained and purposeful, not as isolated dots or floating shapes.
 - Search-box geometry should use clear alignment without a straight grid. Circles should remain complete inside their reserved bay, sized as large as possible without clipping or competing with the headline and form.
-- Fill the blue banner with a few large, related circles and triangles, supported by a square and bar where the layout has room, plus angled rules. Do not use scattered mini ornaments or a straight grid. Let the forms sit behind the headline, search field, and filters with a clear banner-colored gap at each edge. Rules should appear to stop at the gap and resume on the far side. Keep circles whole. Use substantial left and center groups to balance the main right group; on narrow screens simplify the layout while keeping the main circle and triangle visible when search opens.
-- Deepen the banner to navy, use light lavender and cool mint-green accents, and keep yellow and other warm accents out of the trial.
+- Use a few large, related circles and triangles, supported by a square and bar where the layout has room, plus angled rules. Keep the forms in clear bays around the copy and controls. Let the rules pass through transparent cutout shapes. Keep circles whole and use the left, center, and right groups as one composition; on narrow screens simplify the layout while keeping the main circle and triangle visible when search opens.
+- Deepen the banner to navy and use lavender, mint, pale blue, and restrained muted gold. Keep mint on the `cord` wordmark and use gold selectively on the geometry and browse accents.
 - Color should reach across the page through meaningful surfaces, tabs, stats, and states instead of random decoration.
 - The result area should remain. It represents the messages revealed by search and sorting, and should be labelled `results`.
 - On the browse surface, do not render a redundant results box or a results tab. Submitting the main search reveals the results view and smoothly scrolls there.
@@ -63,5 +63,12 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 ## Deep navy and cool geometry direction (2026-09-23)
 
 - Use a deep navy banner and mint-green `cord` wordmark accent so the name reads clearly against the field.
-- Add a small group of large translucent circles, squares, and triangles behind the search headline. Keep the forms light lavender, mint green, and cool blue so they fill the background while the heading stays easy to read.
-- Keep the filled shapes and angled rules as low-contrast background material. Maintain complete circles, purposeful overlaps, and the existing search/filter animation; remove yellow and marigold from the trial palette.
+- Keep the `cord` wordmark accent mint green and the banner deep navy. The following banner refinement section defines the current shape treatment, spacing, and gold use.
+
+## Banner refinement direction (2026-09-23)
+
+- Draw every banner shape as a transparent cutout with a consistent 3px full-strength outline. Use the lavender right circle as the reference. Keep the lavender, mint, pale-blue, and muted-gold strokes clear and consistent.
+- Reserve separate bays for the left shapes, search copy, right group, and lower forms. Keep the headline and inputs unobstructed, preserve complete circles, and fit every outline inside the banner.
+- Run the angled rules continuously through the transparent shapes. Keep the two lower-left rules parallel as they cross the tilted circle-and-triangle group, and fade the right-side vertical rules before the filter controls open across them.
+- Use porcelain search and filter fields with dark text, a restrained gold edge, and mint focus treatment. Give every view tab a visible top stripe and larger geometric lettering, including Browse.
+- Keep the open/close movement short and eased, with the right group lifting before the filter tray appears. Honor reduced-motion preferences.

@@ -68,7 +68,7 @@ Sources:
 - **Branding:** use a single large `searchcord` wordmark in the top header. Keep the upper-left rail free of duplicate branding, subtitles, trial banners, and decorative marks.
 - **Navigation:** keep useful top-level destinations, but omit a redundant search or results destination when the home surface owns search and reveals results. Do not add a server sidebar. Make active destinations clear and keep labels visible.
 - **Browse:** use the available width for the full-width search banner. Place separate, compact messages-indexed and active-server stat boxes immediately below it.
-- **Search:** the deep-navy banner spans the page. Use large circles and triangles, supported by a right-side square and bar, with angled rules instead of a straight grid. Remove scattered mini ornaments. Let a few low-contrast forms sit behind the headline while keeping the white copy clear; preserve a solid surface behind the search field and filter controls. Keep circles whole. Focusing the query opens the lower-edge filter tray while the large right group stays visible; outside click or Escape reverses the composition. Use light lavender and mint green accents, without yellow or warm colors. Server, channel, and author filters remain scalable text inputs with autocomplete. Result rows omit a redundant “view message” action and use the freed space for readable message text.
+- **Search:** the deep-navy banner spans the page. Use large transparent cutout circles and triangles, supported by a right-side square and bar, with angled rules instead of a straight grid. Reserve clear bays for the top-left shapes, search copy, right group, and lower forms. Let rules continue through the shapes, keep all outlines and complete circles inside the banner, and keep the copy and controls unobstructed. Focusing the query lifts the right group before the lower filter tray appears; outside click or Escape reverses the movement. Use lavender, mint, pale blue, and selective muted gold. Server, channel, and author filters remain scalable text inputs with autocomplete. Result rows omit a redundant “view message” action and use the freed space for readable message text.
 - **Live:** treat the feed as a time-indexed poster/list. The live indicator is a circle plus the word “live,” not color alone.
 - **Stats:** use open chart panels with strong axes and labels. Keep the data legible before adding geometric decoration.
 - **Settings:** preserve the token workflow and warnings, but make the drawer feel like a labeled utility sheet instead of a floating dark overlay.
@@ -84,7 +84,7 @@ The static homepage trial links to `privacy-policy.html` from its footer at the 
 
 These are deliberately separate static pages and use mock data only:
 
-1. **Deep blue / lavender / green:** use a deep navy field, light lavender geometry, and a cool green wordmark accent.
+1. **Deep blue / lavender / green:** use a deep navy field, light lavender geometry, a mint-green wordmark accent, and restrained muted-gold details.
 
 The trial pages do not load Dribbble assets, do not call Searchcord APIs, and do not contain tokens, scraped messages, or personal data. They are available locally at:
 
@@ -100,9 +100,17 @@ MoMA’s account of its 2009 Bauhaus exhibition website describes a stable grid 
 
 In the blue and purple trial, remove the scattered mini shapes and use larger circle-and-triangle groupings, supported by a square and bar at the right. Keep five angled rules across the banner and add two through the tilted lower-left group. Keep the forms behind the text and controls, with a visible blue clearance at each edge; the rules appear to break at that gap and continue beyond it. Preserve the main right-side group when the filter tray opens, shifting it upward on wider layouts and keeping its circle and triangle on narrow screens. Keep the deep-blue and light-lavender base with cool green accents; avoid yellow and warm colors. Honor reduced-motion preferences.
 
-### Direction reset (2026-09-23)
+### Direction reset (2026-09-23, earlier pass)
 
-Restore the filled-shape composition, then deepen the banner to near-navy and give `cord` a muted mint-green accent. Add a few large, low-opacity circles, squares, and triangles behind the search headline so they occupy the hero background. Use pale lavender as the main geometry color with mint and cool blue support. Preserve readable search/filter surfaces, the click/focus animation, and reduced-motion behavior. Keep warm yellow accents out of the trial.
+Deepen the banner to near-navy and give `cord` a muted mint-green accent. That pass used translucent circles, squares, and triangles; the refinement below replaces those fills with consistent outline cutouts.
+
+### Banner clarity and control refinement (2026-09-23)
+
+Use one 3px full-opacity outline for every banner shape, with transparent interiors so the angled rules continue through the forms. Keep the lavender right circle as the treatment reference. Place the larger left shapes in a dedicated bay, preserve a clear column for “What are you looking for?” and the search field, keep the right group intact, and use the lower band for the enlarged irregular forms. Keep shapes fully inside the banner.
+
+Use a porcelain fill with dark text and a restrained gold edge for the search and filter inputs; use mint for focus. Add a top color stripe to Browse, DMs, Live, and Stats, with larger geometric labels. Keep gold selective alongside the mint wordmark and lavender geometry.
+
+Open the filter tray with a short eased transition: the right forms lift first, then the tray unfolds. Fade the right-side vertical rules before the filters reach them, keep the lower-left rules parallel through that group, and honor reduced-motion preferences.
 
 Sources: [MoMA, Bauhaus: from Weimar to the Web](https://www.moma.org/explore/inside_out/2009/11/13/bauhaus-from-weimar-to-the-web/); [Getty Research Institute, Primary Forms](https://www.getty.edu/research/exhibitions_events/exhibitions/bauhaus/new_artist/form_color/form/).
 
