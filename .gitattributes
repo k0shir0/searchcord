@@ -1,0 +1,2 @@
+# Preserve the upstream bytes used by the documented dependency checksum.
+static/vendor/chart.umd.min.js -text

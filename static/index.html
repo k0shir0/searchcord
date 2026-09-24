@@ -8,19 +8,22 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="bauhaus.css">
   <link rel="stylesheet" href="home.css">
+  <link rel="stylesheet" href="workspace.css">
 </head>
 <body>
 
-<header class="topline"><h1><span>search</span><span class="wordmark-accent">cord</span></h1></header>
-<div class="utility-bar"><span id="connectionStatus" role="status">Your local archive</span>
-<div class="scrape-pill" id="scrapePill"><span class="pulse-dot"></span><span id="scrapeStatus">scraping…</span></div>
-<button class="btn-ghost" id="menuBtn" aria-controls="settingsPanel" aria-expanded="false">settings</button></div>
+<header class="topline app-masthead"><h1><span>search</span><span class="wordmark-accent">cord</span></h1>
+  <button class="settings-trigger" id="menuBtn" aria-label="Open settings" title="Settings" aria-controls="settingsPanel" aria-expanded="false">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 10H17 M27 10H33 M7 20H9 M19 20H33 M7 30H21 M31 30H33"/><circle cx="22" cy="10" r="3"/><rect x="11" y="17" width="6" height="6"/><circle cx="26" cy="30" r="3"/></svg>
+    <span class="sr-only">Settings</span>
+  </button>
+</header>
 <!-- ── Settings overlay + panel ───────────────────────── -->
 <div class="overlay" id="overlay"></div>
 <aside class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-label="Settings" inert>
   <div class="sp-head">
     <span class="sp-title">settings</span>
-    <button class="sp-close" id="closeSettings" aria-label="Close settings">&#x2715;</button>
+    <button class="sp-close" id="closeSettings" aria-label="Close settings">close</button>
   </div>
   <div class="sp-body">
 
@@ -32,7 +35,7 @@
       </div>
       <p class="sg-hint">Stored in your configured local database. Never sent anywhere except Discord's API.</p>
       <button class="btn-mint" id="saveToken">Save &amp; Verify</button>
-      <div class="token-status" id="tokenStatus"></div>
+      <div class="token-status" id="tokenStatus" role="status"></div>
     </div>
 
     <div class="sg">
@@ -44,6 +47,9 @@
   </div>
 </aside>
 
+<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">scrape</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">stats</button></nav>
+<div id="pageStage" class="page-stage">
+<p id="archiveStatus" class="archive-error" role="status" hidden></p>
       <section class="composition" id="homeOverview" aria-label="Search overview">
         <div class="query-block" id="queryBlock">
           <div class="bauhaus-geometry" aria-hidden="true">
@@ -101,7 +107,7 @@
           <div class="index-stat"><span class="index-number" id="homeServers">…</span><span class="index-caption">indexed servers</span></div>
         </div>
       </section>
-<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">browse</button><button class="surface-tab tab" type="button" data-view="dms" aria-pressed="false" aria-controls="view-dms">dms</button><button class="surface-tab tab" type="button" data-view="live" aria-pressed="false" aria-controls="view-live">live <span class="live-badge" id="liveBadge"></span></button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">stats</button></nav>
+
 <!-- ── Main ──────────────────────────────────────────── -->
 <main class="main">
 
@@ -111,74 +117,34 @@
       <div class="result-list" id="searchResults"></div>
       <nav class="pagination" id="pagination" aria-label="Results pages" hidden></nav>
     </section>
-    <details class="archive-tools" id="archiveTools"><summary>Archive channels</summary>
-      <p class="sg-hint">Connect Discord to choose channels for scraping or live monitoring.</p>
-      <button class="btn-ghost" id="connectDiscord">connect Discord</button>
-      <div class="server-list" id="serverList"><p class="placeholder-msg">Server list loads when you connect.</p></div>
-      <div class="content" id="content"><div class="empty-state" id="emptyState"><p>Select a server to browse channels</p></div>
-        <div class="channels-pane" id="channelsPane"><div class="cp-head" id="cpHead"></div><div class="cp-body" id="cpBody"></div></div>
-      </div>
-    </details>
+
   </section>
 
-  <!-- DMs view -->
-  <section class="view" id="view-dms">
-    <div class="channels-pane visible">
-      <div class="cp-head">Direct Messages</div>
-      <div class="cp-body" id="dmBody">
-        <div class="placeholder-msg">loading…</div>
-      </div>
+  <section class="view" id="view-scrape" aria-labelledby="scrapeTitle"><header class="workspace-banner"><div><p class="eyebrow">scrape workspace</p><h2>Collect with intention.</h2><p>Channels, conversations, and live monitoring. One queue, one place.</p></div><svg class="workspace-art" viewBox="0 0 420 240" aria-hidden="true"><g class="art-rules"><path d="M24 76L80 62 M132 140L207 126 M220 218L393 187 M211 22L216 89 M34 225L167 225"/></g><circle class="art-circle" cx="310" cy="105" r="80"/><path class="art-triangle" d="M160 18L210 104H110Z"/><rect class="art-square" x="37" y="132" width="66" height="66" transform="rotate(-12 70 165)"/><path class="art-bar" d="M164 159H187V205H164Z"/></svg></header>
+    <div class="collection-toolbar"><div><h3 id="scrapeTitle">Your sources</h3><p id="connectionStatus" role="status">Connect Discord to load your channels and conversations.</p></div><button class="btn-mint" id="connectDiscord">connect Discord</button></div>
+    <div class="collection-grid">
+      <section class="collection-panel" aria-label="Collection sources">
+        <div class="source-tabs" role="tablist" aria-label="Source type"><button id="sourceChannels" role="tab" aria-selected="true" aria-controls="source-channels" data-source="channels">channels</button><button id="sourceDms" role="tab" aria-selected="false" aria-controls="source-dms" tabindex="-1" data-source="dms">direct messages</button></div>
+        <label class="collection-filter">Find a channel or conversation<input type="search" id="collectionSearch" placeholder="filter by name" autocomplete="off"></label>
+        <div id="source-channels" role="tabpanel" aria-labelledby="sourceChannels"><div class="server-list" id="serverList"><p class="placeholder-msg">Your servers appear here after connecting.</p></div><div class="content" id="content"><div class="empty-state" id="emptyState"><p>Select a server to browse channels.</p></div><div class="channels-pane" id="channelsPane"><h4 class="cp-head" id="cpHead"></h4><div class="cp-body" id="cpBody"></div></div></div></div>
+        <div id="source-dms" role="tabpanel" aria-labelledby="sourceDms" hidden><div id="dmBody"><p class="placeholder-msg">Open direct messages to load conversations.</p></div></div>
+      </section>
+      <section class="collection-panel monitoring-panel" aria-label="Live monitoring"><div class="panel-heading"><h3>Live monitor <span class="live-badge" id="liveBadge"></span></h3><button class="btn-ghost" id="stopAllLive">stop all</button></div>
+        <div class="live-monitor-list" id="liveMonitorList"><p class="live-empty-msg">Use “monitor” beside a channel to start collecting new messages.</p></div>
+        <div class="panel-heading feed-heading"><h4>Incoming messages</h4><button class="btn-ghost" id="clearFeed">clear feed</button></div><div class="live-feed" id="liveFeed" role="log" aria-label="Live messages" aria-live="off"><p class="live-feed-empty">New messages appear here while monitoring.</p></div>
+      </section>
     </div>
+    <section class="queue-bar" id="queueBar" aria-label="Collection queue"><div class="qb-left"><h3 class="qb-label">collection queue</h3><span class="qb-count" id="queueCount">0</span></div><div class="qb-chips" id="queueChips"></div>
+      <div class="queue-controls"><label class="qb-limit">Messages per channel<input type="number" id="scrapeLimit" placeholder="all history" min="0" step="100"></label><label class="profile-choice"><input type="checkbox" id="harvestProfiles"> fetch expanded profiles</label><div class="qb-right"><button class="btn-ghost" id="clearQueue">clear queue</button><button class="btn-mint" id="startScrape" disabled>start scraping</button></div></div><p class="queue-hint">Profiles are optional. Stopping a run preserves its saved messages and resume cursor.</p>
+    </section><div class="scrape-pill" id="scrapePill"><span class="pulse-dot"></span><span id="scrapeStatus">scraping…</span><button class="btn-ghost" id="showScrapeProgress">view progress</button></div>
   </section>
-
-  <!-- Live view -->
-  <section class="view" id="view-live">
-    <div class="live-wrap">
-      <div class="live-sidebar">
-        <div class="live-sidebar-head">
-          <span class="live-sidebar-label">monitoring</span>
-          <button class="btn-ghost" id="stopAllLive" style="font-size:10px;padding:3px 8px">stop all</button>
-        </div>
-        <div class="live-monitor-list" id="liveMonitorList">
-          <div class="live-empty-msg">No channels monitored.<br>Go to Browse → ⚡ to start.</div>
-        </div>
-      </div>
-      <div class="live-feed-wrap">
-        <div class="live-feed-head">
-          <span class="live-feed-label">live feed</span>
-          <button class="btn-ghost" id="clearFeed" style="font-size:10px;padding:3px 8px">clear</button>
-        </div>
-        <div class="live-feed" id="liveFeed">
-          <div class="live-feed-empty">Messages will appear here as they arrive.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-<!-- ── Scrape queue bar ───────────────────────────────── -->
-<div class="queue-bar" id="queueBar">
-  <div class="qb-left">
-    <span class="qb-label">queue</span>
-    <span class="qb-count" id="queueCount">0</span>
-  </div>
-  <div class="qb-chips" id="queueChips"></div>
-  <div class="qb-limit">
-    <input type="number" id="scrapeLimit" placeholder="∞" min="0" step="100" title="Messages to scrape back (blank = all)">
-    <span class="qb-limit-label">msgs back</span>
-  </div>
-  <label><input type="checkbox" id="harvestProfiles"> fetch profiles</label>
-  <div class="qb-right">
-    <button class="btn-ghost" id="clearQueue">clear</button>
-    <button class="btn-mint" id="startScrape">start scraping</button>
-  </div>
-</div>
 
 <!-- ── Scrape progress modal ──────────────────────────── -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <div class="modal-head">
       <span class="modal-title">scraping in progress</span>
-      <button class="stop-btn" id="stopScrapeBtn" title="Stop scraping">&#x2715; stop</button>
+      <button class="stop-btn" id="stopScrapeBtn" title="Stop scraping">stop</button>
     </div>
     <div class="modal-body">
       <div class="mo-channel" id="moChannel">Initializing…</div>
@@ -197,7 +163,7 @@
   <div class="modal">
     <div class="modal-head">
       <span class="modal-title">export to chatml</span>
-      <button class="sp-close" id="closeExportModal">&#x2715;</button>
+      <button class="sp-close" id="closeExportModal">close</button>
     </div>
     <div class="modal-body">
       <div class="sg-label" style="margin-bottom:8px">who is the assistant?</div>
@@ -206,12 +172,12 @@
       </div>
 
       <div class="export-field">
-        <label>other participant's name (optional override)</label>
+        <label for="exportOtherName">other participant's name (optional override)</label>
         <input type="text" id="exportOtherName" placeholder="defaults to the other sender's name" autocomplete="off">
       </div>
 
       <div class="export-field">
-        <label>system prompt (optional override)</label>
+        <label for="exportSystemPrompt">system prompt (optional override)</label>
         <textarea id="exportSystemPrompt" placeholder="You are {target}. You are texting {other}. Respond in your natural texting style."></textarea>
         <div class="sg-hint">Use <code>{target}</code> and <code>{other}</code> as placeholders.</div>
       </div>
@@ -222,63 +188,28 @@
   </div>
 </div>
 
-  <!-- Stats view -->
-  <section class="view" id="view-stats">
-    <div class="stats-scroll">
-      <div class="stats-topbar">
-        <span class="stats-topbar-title">overview</span>
-        <button class="btn-ghost" id="refreshStats">↻ refresh</button>
-      </div>
-      <!-- stat cards -->
-      <div class="stat-cards">
-        <div class="stat-card">
-          <div class="stat-val" id="sTotal">—</div>
-          <div class="stat-lbl">messages</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val" id="sServers">—</div>
-          <div class="stat-lbl">servers</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val" id="sChannels">—</div>
-          <div class="stat-lbl">channels</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val" id="sUsers">—</div>
-          <div class="stat-lbl">unique users</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-val" id="sDbSize">—</div>
-          <div class="stat-lbl">db size</div>
-        </div>
-      </div>
-      <!-- leaderboard + by-server -->
-      <div class="stats-row">
-        <div class="chart-card">
-          <div class="chart-title">top senders</div>
-          <div class="leaderboard" id="leaderboard"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">messages by server</div>
-          <div class="chart-box"><canvas id="chartByServer"></canvas></div>
-        </div>
-      </div>
-      <!-- over time -->
-      <div class="chart-card">
-        <div class="chart-title">messages over time <span class="chart-sub">(last 30 days)</span></div>
-        <div class="chart-box chart-box-tall"><canvas id="chartOverTime"></canvas></div>
-      </div>
-      <!-- by hour -->
-      <div class="chart-card">
-        <div class="chart-title">activity by hour</div>
-        <div class="chart-box"><canvas id="chartByHour"></canvas></div>
-      </div>
+  <section class="view" id="view-stats" aria-label="Archive statistics"><header class="workspace-banner"><div><p class="eyebrow">statistics</p><h2>The shape of your archive.</h2><p>Explore the people, places, and rhythms behind the messages.</p></div><svg class="workspace-art" viewBox="0 0 420 240" aria-hidden="true"><g class="art-rules"><path d="M24 76L80 62 M132 140L207 126 M220 218L393 187 M211 22L216 89 M34 225L167 225"/></g><circle class="art-circle" cx="310" cy="105" r="80"/><path class="art-triangle" d="M160 18L210 104H110Z"/><rect class="art-square" x="37" y="132" width="66" height="66" transform="rotate(-12 70 165)"/><path class="art-bar" d="M164 159H187V205H164Z"/></svg></header>
+    <div class="stats-toolbar"><p>Archive totals · all time</p><button class="btn-ghost" id="refreshStats">refresh data</button></div><p id="statsStatus" role="status"></p>
+    <div class="stat-cards"><div class="stat-card"><div class="stat-val" id="sTotal">…</div><div class="stat-lbl">messages</div></div><div class="stat-card"><div class="stat-val" id="sServers">…</div><div class="stat-lbl">servers</div></div><div class="stat-card"><div class="stat-val" id="sChannels">…</div><div class="stat-lbl">channels</div></div><div class="stat-card"><div class="stat-val" id="sUsers">…</div><div class="stat-lbl">contributors</div></div><div class="stat-card"><div class="stat-val" id="sDbSize">…</div><div class="stat-lbl">database</div></div></div>
+    <div class="stats-grid">
+      <section class="chart-card contributor-card"><div class="panel-heading"><div><h3>Top contributors</h3><p>All senders, ranked by archived messages</p></div></div><label class="contributor-search">Find a contributor<input id="contributorSearch" type="search" placeholder="name or user ID" autocomplete="off"></label><div class="leaderboard" id="leaderboard" tabindex="0" role="region" aria-label="Scrollable top contributors"></div><div class="contributor-foot"><span id="contributorStatus" role="status"></span><button class="btn-ghost" id="moreContributors">load more</button></div></section>
+      <section class="chart-card"><div class="panel-heading"><div><h3>Messages by server</h3><p>Select a server to search its archive.</p></div><label class="chart-select">View<select id="serverChartType"><option value="bar">bars</option><option value="doughnut">share</option></select></label></div><div class="chart-box"><canvas id="chartByServer" role="img" aria-label="Messages by server"></canvas></div><details class="chart-data"><summary>View data</summary><div id="chartByServerData"></div></details></section>
+    </div>
+    <div class="timeline-panel"><section class="chart-card"><div class="panel-heading"><div><h3>Messages over time</h3><p>Select a date to open its messages.</p></div><div class="chart-controls"><label class="chart-select">Window<select id="statsRange"><option value="7">7 days</option><option value="30">30 days</option><option value="90" selected>90 days</option><option value="365">1 year</option><option value="0">all time</option></select></label><label class="chart-select">View<select id="timelineType"><option value="line">line</option><option value="bar">bars</option></select></label></div></div><div class="chart-box"><canvas id="chartOverTime" role="img" aria-label="Messages over time"></canvas></div><details class="chart-data"><summary>View data</summary><div id="chartOverTimeData"></div></details></section><p id="statsRangeLabel" class="chart-footnote"></p></div>
+    <div class="stats-grid">
+      <section class="chart-card"><div class="panel-heading"><div><h3>Most active channels</h3><p>Top 20 · select a channel to explore.</p></div></div><div class="chart-box"><canvas id="chartByChannel" role="img" aria-label="Most active channels"></canvas></div><details class="chart-data"><summary>View data</summary><div id="chartByChannelData"></div></details></section>
+      <section class="chart-card"><div class="panel-heading"><div><h3>Activity by hour</h3><p>All time · UTC hours</p></div></div><div class="chart-box"><canvas id="chartByHour" role="img" aria-label="Activity by hour"></canvas></div><details class="chart-data"><summary>View data</summary><div id="chartByHourData"></div></details></section>
+      <section class="chart-card"><div class="panel-heading"><div><h3>The weekly rhythm</h3><p>All time · UTC days</p></div></div><div class="chart-box"><canvas id="chartByWeekday" role="img" aria-label="The weekly rhythm"></canvas></div><details class="chart-data"><summary>View data</summary><div id="chartByWeekdayData"></div></details></section>
+      <section class="chart-card"><div class="panel-heading"><div><h3>Monthly volume</h3><p>All time · select a month to search.</p></div></div><div class="chart-box"><canvas id="chartByMonth" role="img" aria-label="Monthly volume"></canvas></div><details class="chart-data"><summary>View data</summary><div id="chartByMonthData"></div></details></section>
     </div>
   </section>
 
 </main>
+</div>
 <footer class="site-footer"><a href="privacy.html">privacy &amp; data</a></footer>
 
-<script src="app.js"></script>
+<script src="vendor/chart.umd.min.js" defer></script>
+<script src="app.js" defer></script>
+<script src="stats.js" defer></script>
 </body>
 </html>

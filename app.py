@@ -1158,7 +1158,7 @@ async def open_image(message_id: int, image_index: int):
 
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(days: Annotated[int, Query(ge=0, le=3650)] = 90):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
@@ -1177,7 +1177,7 @@ async def get_stats():
         async with db.execute("""
             SELECT ranked.author_id, authors.name AS author_name, ranked.count
             FROM (SELECT key AS author_id, count FROM stats_counts
-                  WHERE kind='author' AND count>0 ORDER BY count DESC LIMIT 3) AS ranked
+                  WHERE kind='author' AND count>0 ORDER BY count DESC, key LIMIT 50) AS ranked
             LEFT JOIN authors ON authors.id=ranked.author_id
         """) as cur:
             top_users = [dict(r) for r in await cur.fetchall()]
@@ -1185,17 +1185,31 @@ async def get_stats():
         async with db.execute("""
             SELECT guilds.name AS guild_name, ranked.guild_id, ranked.count
             FROM (SELECT NULLIF(key, '') AS guild_id, count FROM stats_counts
-                  WHERE kind='guild' AND count>0 ORDER BY count DESC LIMIT 10) AS ranked
+                  WHERE kind='guild' AND count>0 ORDER BY count DESC, key LIMIT 20) AS ranked
             LEFT JOIN guilds ON guilds.id=ranked.guild_id
         """) as cur:
             by_server = [dict(r) for r in await cur.fetchall()]
 
-        async with db.execute("""
-            SELECT key AS date, count FROM stats_counts
-            WHERE kind='day' AND key >= DATE('now', '-30 days') AND count>0
-            ORDER BY key ASC
-        """) as cur:
-            by_day = [dict(r) for r in await cur.fetchall()]
+        async with db.execute("""SELECT key AS date, count FROM stats_counts
+            WHERE kind='day' AND count>0 ORDER BY key""") as cur:
+            daily = [dict(r) for r in await cur.fetchall()]
+        by_weekday = [0] * 7
+        monthly = {}
+        for row in daily:
+            by_weekday[datetime.fromisoformat(row['date']).weekday()] += row['count']
+            month = row['date'][:7]
+            monthly[month] = monthly.get(month, 0) + row['count']
+        range_end = daily[-1]['date'] if daily else None
+        range_start = ((datetime.fromisoformat(range_end) - timedelta(days=days - 1)).date().isoformat()
+                       if days and range_end else daily[0]['date'] if daily else None)
+        by_day = [row for row in daily if row['date'] >= range_start] if range_start else []
+        async with db.execute("""SELECT ranked.key AS channel_id,
+            channels.name AS channel_name, guilds.name AS guild_name, ranked.count
+            FROM (SELECT key, count FROM stats_counts WHERE kind='channel' AND count>0
+                  ORDER BY count DESC, key LIMIT 20) ranked
+            LEFT JOIN channels ON channels.id=ranked.key
+            LEFT JOIN guilds ON guilds.id=channels.guild_id""") as cur:
+            by_channel = [dict(r) for r in await cur.fetchall()]
 
         async with db.execute("""
             SELECT CAST(NULLIF(key, '') AS INTEGER) AS hour, count
@@ -1220,7 +1234,33 @@ async def get_stats():
         "messages_by_server": by_server,
         "messages_by_day":  by_day,
         "messages_by_hour": by_hour,
+        "messages_by_channel": by_channel,
+        "messages_by_weekday": [{"day": day, "count": count} for day, count in enumerate(by_weekday)],
+        "messages_by_month": [{"month": month, "count": count} for month, count in monthly.items()],
+        "range_start": range_start,
+        "range_end": range_end,
     }
+
+
+@app.get("/api/stats/contributors")
+async def contributors(
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    q: Annotated[str, Query(max_length=100)] = "",
+):
+    """Bounded, deterministic leaderboard pages over the cached author counts."""
+    query = q.strip().replace('!', '!!').replace('%', '!%').replace('_', '!_')
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""SELECT counts.key AS author_id, authors.name AS author_name,
+            counts.count FROM stats_counts counts LEFT JOIN authors ON authors.id=counts.key
+            WHERE counts.kind='author' AND counts.count>0
+            AND (?='' OR authors.name LIKE ? ESCAPE '!' OR counts.key=?)
+            ORDER BY counts.count DESC, counts.key LIMIT ? OFFSET ?""",
+            (query, f'%{query}%', q.strip(), limit + 1, offset)) as cur:
+            rows = [dict(row) for row in await cur.fetchall()]
+    return {"users": rows[:limit], "has_more": len(rows) > limit,
+            "offset": offset, "limit": limit}
 
 
 @app.get("/api/search/filters")

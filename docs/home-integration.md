@@ -18,8 +18,9 @@ working tree are included as the backend foundation for this integration.
 | Stored profile avatars | Bounded profile join for returned authors; geometric fallback |
 | Image links | Existing `/api/images/{message_id}/{index}` redirect |
 | Settings | Existing settings, token validation, and archive-clear endpoints |
-| Channel collection | Expand Archive channels, explicitly connect Discord, existing queue |
-| DMs / Live / Stats | Existing application views and endpoints, addressed by URL hash |
+| Channel and DM collection | `#scrape`, explicitly connect Discord, shared queue |
+| Live monitoring | Channel monitor controls and live feed within `#scrape` |
+| Statistics | `#stats`, cached aggregates and paginated contributors; see [workspace report](workspace-redesign.md) |
 
 Suggestions contain stable IDs to distinguish identical server/channel names.
 Unresolved text is rejected visibly instead of silently widening the query.
@@ -33,6 +34,9 @@ The default data directory is application-relative `data/`. Set
 application-relative. No private absolute path is committed.
 
 ## Verification
+
+The following records the original home integration. See the
+[workspace report](workspace-redesign.md) for the expanded current test results.
 
 - 21 Python tests pass, including HTTP pagination bounds, date validation,
   indexed avatar lookup, migration, search, stats, export, and scraper regressions.
@@ -56,7 +60,8 @@ credentials, then run `node tests/browser_home.mjs http://127.0.0.1:8766`.
 Set `CHROME_PATH` if Chromium is not at the normal Windows Chrome location.
 The script writes screenshots and aggregate results under ignored `agents/`.
 
-Live Discord operations, attachment refresh, and CDN chart/avatar success paths
-are not part of this real-data browser test. Existing mocked backend tests cover
-scraping and expired image refresh. Offline Stats now gives a visible chart-load
-fallback and still renders archive counters. Chart.js loads only on visiting Stats.
+Live Discord operations, attachment refresh, and CDN avatar success paths are
+not part of the real-data browser test. Mocked backend tests cover scraping and
+expired image refresh. The current browser suite also exercises collection with
+synthetic responses, while all archive reads use the isolated real-data copy.
+Chart.js is now bundled locally, with data tables available if it cannot load.

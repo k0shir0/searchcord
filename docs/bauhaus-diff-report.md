@@ -1,5 +1,10 @@
 # Bauhaus integration and page drafts
 
+Historical report for the initial home promotion. The subsequent
+[workspace redesign report](workspace-redesign.md) documents the current
+three-view application, local charts, additional verification, and publication.
+The no-push statement and separate DMs/Live views below describe that earlier commit.
+
 The trial is now the real home page. Home controls use the archive API, with
 portable data-directory configuration and no embedded private machine paths.
 Home geometry uses only cool colors. The other screens have separate visual

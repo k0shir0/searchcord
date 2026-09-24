@@ -1,6 +1,11 @@
 # Searchcord Bauhaus web direction
 
-Status: approved home promoted to production; secondary designs remain local drafts
+Status: Browse, the unified Scrape workspace, and interactive Stats are in production.
+Earlier standalone secondary designs remain available as drafts.
+
+The [workspace redesign report](docs/workspace-redesign.md) records current
+routes, research, endpoint changes, browser verification, and the history audit.
+It supersedes the older production-versus-draft status below.
 
 ## Secondary page drafts
 

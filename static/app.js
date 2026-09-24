@@ -7,6 +7,7 @@ const S = {
   queue:         [],
   scraping:      false,
   activeJobId:   null,
+  activeJobKind: null,
   searchPage:    1,
   filterChans:   [],
   liveChannels:  new Set(),
@@ -30,8 +31,46 @@ document.addEventListener('DOMContentLoaded', () => {
   initExportModal();
   initLive();
   initStats();
+  initCounterSizing();
+  initDialogFocus();
   boot();
 });
+
+function initCounterSizing() {
+  const fit = () => document.querySelectorAll('.index-number').forEach(number => {
+    if (!number.clientWidth) return;
+    number.style.fontSize = '';
+    const available = number.parentElement.clientWidth - 2 * parseFloat(getComputedStyle(number.parentElement).paddingLeft);
+    if (number.scrollWidth > available) number.style.fontSize = `${parseFloat(getComputedStyle(number).fontSize) * available / number.scrollWidth}px`;
+  });
+  const observer = new ResizeObserver(() => requestAnimationFrame(fit));
+  document.querySelectorAll('.index-stat').forEach(panel => observer.observe(panel));
+  new MutationObserver(fit).observe($('homeMessages'), {childList:true});
+  new MutationObserver(fit).observe($('homeServers'), {childList:true});
+}
+
+function initDialogFocus() {
+  for (const id of ['modalBg', 'exportModalBg']) {
+    const overlay = $(id), dialog = overlay.querySelector('.modal');
+    dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.tabIndex = -1;
+    dialog.setAttribute('aria-label', id === 'modalBg' ? 'Collection progress' : 'Export conversation');
+    let previousFocus;
+    new MutationObserver(() => {
+      if (overlay.classList.contains('visible')) {
+        previousFocus = document.activeElement;
+        (dialog.querySelector('button:not(:disabled)') || dialog).focus();
+      } else if (previousFocus?.isConnected) previousFocus.focus();
+    }).observe(overlay, {attributes:true, attributeFilter:['class']});
+    dialog.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { overlay.classList.remove('visible'); return; }
+      if (event.key !== 'Tab') return;
+      const targets = [...dialog.querySelectorAll('button,input,textarea')].filter(el => !el.disabled && el.getClientRects().length);
+      if (!targets.length) { event.preventDefault(); dialog.focus(); return; }
+      if (event.shiftKey && document.activeElement === targets[0]) { event.preventDefault(); targets.at(-1).focus(); }
+      else if (!event.shiftKey && document.activeElement === targets.at(-1)) { event.preventDefault(); targets[0].focus(); }
+    });
+  }
+}
 
 async function boot() {
   await loadSearchFilters();
@@ -42,7 +81,7 @@ async function boot() {
   if (params.has('search') || [...Object.keys(searchFields)].some(key => params.has(key))) {
     await doSearch(Math.max(1, Number(params.get('page')) || 1), false);
   }
-  switchView(view);
+  await switchView(view, true, false);
 }
 
 function initNav() {
@@ -51,20 +90,88 @@ function initNav() {
   );
   window.addEventListener('hashchange', () => switchView(location.hash.slice(1), false));
   $('connectDiscord').addEventListener('click', connectDiscord);
+  $('collectionSearch').addEventListener('input', filterCollection);
+  document.querySelectorAll('[data-source]').forEach(button => {
+    button.addEventListener('click', () => switchSource(button.dataset.source));
+    button.addEventListener('keydown', event => {
+      if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      const source = event.key === 'Home' ? 'channels' : event.key === 'End' ? 'dms' : button.dataset.source === 'channels' ? 'dms' : 'channels';
+      switchSource(source); document.querySelector(`[data-source="${source}"]`).focus();
+    });
+  });
+  $('showScrapeProgress').addEventListener('click', () => $('modalBg').classList.add('visible'));
 }
 
-function switchView(name, updateUrl = true) {
-  if (!['browse', 'dms', 'live', 'stats'].includes(name)) name = 'browse';
-  document.querySelectorAll('.tab').forEach(t => {
-    t.classList.toggle('active', t.dataset.view === name);
-    t.setAttribute('aria-pressed', String(t.dataset.view === name));
+let activeView = 'browse';
+let navigationVersion = 0;
+let viewTransition;
+async function switchView(name, updateUrl = true, animate = true) {
+  const source = name === 'dms' ? 'dms' : null;
+  if (name === 'dms' || name === 'live') name = 'scrape';
+  if (!['browse', 'scrape', 'stats'].includes(name)) name = 'browse';
+  const version = ++navigationVersion;
+  const changed = activeView !== name;
+  const apply = () => {
+    if (version !== navigationVersion) return;
+    activeView = name;
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.view === name);
+      t.setAttribute('aria-pressed', String(t.dataset.view === name));
+    });
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
+    $('homeOverview').hidden = name !== 'browse';
+    if (updateUrl) history.replaceState(null, '', `${location.pathname}${location.search}#${name}`);
+    if (name === 'stats') loadStats();
+    if (name === 'scrape') {
+      refreshLiveStatus();
+      if (source) switchSource(source);
+    }
+  };
+  viewTransition?.skipTransition();
+  if (changed && animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (document.startViewTransition) {
+      viewTransition = document.startViewTransition(apply);
+      // Superseded navigation rejects ready even when finished resolves.
+      viewTransition.ready.catch(() => {});
+      await viewTransition.finished.catch(() => {});
+    } else {
+      const stage = $('pageStage');
+      stage.getAnimations().forEach(animation => animation.cancel());
+      await stage.animate([{opacity:1},{opacity:0}], {duration:100,fill:'forwards'}).finished.catch(() => {});
+      if (version !== navigationVersion) return;
+      apply();
+      stage.getAnimations().forEach(animation => animation.cancel());
+      if (version === navigationVersion) stage.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}], {duration:220,easing:'ease-out'});
+    }
+  } else apply();
+}
+
+function switchSource(source) {
+  document.querySelectorAll('[data-source]').forEach(button => {
+    const selected = button.dataset.source === source;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    $('source-' + button.dataset.source).hidden = !selected;
   });
-  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
-  $('homeOverview').hidden = name !== 'browse';
-  if (updateUrl) history.replaceState(null, '', `${location.pathname}${location.search}#${name}`);
-  if (name === 'live') connectLiveSSE();
-  if (name === 'stats') loadStats();
-  if (name === 'dms') loadDms();
+  if (source === 'dms') loadDms();
+  filterCollection();
+}
+
+function filterCollection() {
+  const query = $('collectionSearch').value.trim().toLocaleLowerCase();
+  document.querySelectorAll('#cpBody .ch-item, #dmBody .ch-item').forEach(row => {
+    row.hidden = !row.querySelector('.ch-name').textContent.toLocaleLowerCase().includes(query);
+  });
+}
+
+async function refreshLiveStatus() {
+  try {
+    const data = await api('/api/live/status');
+    S.liveChannels = new Set(data.channels.map(channel => channel.channel_id));
+    updateLiveBadge(); renderMonitorList();
+    if (S.liveChannels.size) connectLiveSSE();
+  } catch (error) { $('liveMonitorList').textContent = `Could not load monitors: ${error.message}`; }
 }
 
 async function connectDiscord() {
@@ -113,15 +220,18 @@ function initSettings() {
     const token = inp.value.trim();
     if (!token) return;
     setTokenStatus('verifying…', '');
-    await api('/api/settings', { method: 'POST', body: { token } });
-    const v = await api('/api/token/validate');
-    if (v.valid) {
-      setTokenStatus(`✓ connected as ${v.username}`, 'ok');
-      inp.value = '';
-      setTimeout(() => { closeSettings(); loadGuilds(); }, 900);
-    } else {
-      setTokenStatus('✗ invalid token', 'fail');
-    }
+    $('saveToken').disabled = true;
+    try {
+      await api('/api/settings', { method: 'POST', body: { token } });
+      const v = await api('/api/token/validate');
+      if (v.valid) {
+        setTokenStatus(`connected as ${v.username}`, 'ok');
+        $('connectionStatus').textContent = `Connected as ${v.username}`;
+        inp.value = '';
+        setTimeout(() => { closeSettings(); loadGuilds(); }, 600);
+      } else setTokenStatus('Invalid token. Check it and try again.', 'fail');
+    } catch (error) { setTokenStatus(`Connection failed: ${error.message}`, 'fail'); }
+    finally { $('saveToken').disabled = false; }
   });
 
   $('clearDb').addEventListener('click', async () => {
@@ -221,8 +331,10 @@ async function selectGuild(guild) {
 
   try {
     const channels = await api(`/api/guilds/${guild.id}/channels`);
+    if (S.guild.id !== guild.id) return;
     renderChannels(channels, guild);
   } catch {
+    if (S.guild.id !== guild.id) return;
     $('cpBody').innerHTML = '<div class="error-msg">Failed to load channels</div>';
   }
 }
@@ -254,31 +366,30 @@ function renderDmList(dms, body) {
     if (S.queue.some(q => q.id === dm.id)) el.classList.add('queued');
 
     const hash = ce('div', 'ch-hash');
-    hash.textContent = dm.type === 3 ? '👥' : '@';
+    hash.textContent = dm.type === 3 ? 'group' : '@';
 
     const name = ce('div', 'ch-name');
     name.textContent = dm.name;
 
     const btn = ce('button', 'ch-btn');
     btn.setAttribute('aria-label', 'Toggle scrape queue');
-    btn.textContent = el.classList.contains('queued') ? '✓' : '+';
+    btn.textContent = el.classList.contains('queued') ? 'queued' : 'queue';
 
     const exportBtn = ce('button', 'ch-btn');
     exportBtn.setAttribute('aria-label', 'Export to ChatML JSONL');
     exportBtn.title = 'Export to ChatML JSONL';
-    exportBtn.textContent = '⇩';
+    exportBtn.textContent = 'export';
 
-    // DM clear button (trash icon)
+    // DM deletion has a separate confirmation step.
     const clearBtn = ce('button', 'ch-btn ch-clear-btn');
     clearBtn.setAttribute('aria-label', 'Delete your messages in this DM');
     clearBtn.title = 'Delete your messages in this DM';
-    clearBtn.textContent = '🗑';
+    clearBtn.textContent = 'delete';
 
     el.append(hash, name, btn, exportBtn, clearBtn);
 
-    // Whole row toggles the scrape queue, matching how server channel rows
-    // behave. guild_id/guild_name are synthetic since DMs have no guild.
-    el.addEventListener('click', e => {
+    // DMs share the channel queue but have no guild ID.
+    btn.addEventListener('click', e => {
       e.stopPropagation();
       const guild = { id: null, name: dm.type === 3 ? 'Group DM' : 'Direct Message' };
       toggleQueue(dm, guild, el, btn);
@@ -294,12 +405,15 @@ function renderDmList(dms, body) {
 
     body.appendChild(el);
   });
+  filterCollection();
+  renderQueue();
 }
 
 // DM Clear state
 let dmClearPending = null; // { dm, el, clearBtn, confirmed: boolean }
 
 function handleDmClearClick(dm, el, clearBtn) {
+  if (S.activeJobKind) { $('modalBg').classList.add('visible'); return; }
   if (dmClearPending && dmClearPending.dm.id === dm.id && dmClearPending.confirmed) {
     // Already confirmed and running — do nothing (progress modal is open)
     return;
@@ -308,7 +422,7 @@ function handleDmClearClick(dm, el, clearBtn) {
   if (dmClearPending && dmClearPending.dm.id === dm.id && !dmClearPending.confirmed) {
     // Second click = confirm
     dmClearPending.confirmed = true;
-    clearBtn.textContent = '⏳';
+    clearBtn.textContent = 'starting';
     clearBtn.disabled = true;
     clearBtn.title = 'Starting…';
     startDmClear(dm);
@@ -318,20 +432,21 @@ function handleDmClearClick(dm, el, clearBtn) {
   // First click on this DM (or different DM) — show inline confirm
   if (dmClearPending) {
     // Reset previous pending DM's button
-    dmClearPending.clearBtn.textContent = '🗑';
+    dmClearPending.clearBtn.textContent = 'delete';
     dmClearPending.clearBtn.disabled = false;
     dmClearPending.clearBtn.title = 'Delete your messages in this DM';
+    dmClearPending.clearBtn.classList.remove('pending-confirm');
   }
 
   dmClearPending = { dm, el, clearBtn, confirmed: false };
-  clearBtn.textContent = '✕';
+  clearBtn.textContent = 'confirm';
   clearBtn.title = 'Click again to confirm deletion';
   clearBtn.classList.add('pending-confirm');
 
   // Auto-cancel after 5 seconds
   setTimeout(() => {
     if (dmClearPending && dmClearPending.dm.id === dm.id && !dmClearPending.confirmed) {
-      clearBtn.textContent = '🗑';
+      clearBtn.textContent = 'delete';
       clearBtn.disabled = false;
       clearBtn.title = 'Delete your messages in this DM';
       clearBtn.classList.remove('pending-confirm');
@@ -341,6 +456,8 @@ function handleDmClearClick(dm, el, clearBtn) {
 }
 
 async function startDmClear(dm) {
+  S.activeJobKind = 'dm-clear';
+  renderQueue();
   const modal = $('modalBg');
   const modalTitle = modal.querySelector('.modal-title');
   modalTitle.textContent = 'deleting your messages';
@@ -349,7 +466,7 @@ async function startDmClear(dm) {
   $('stopScrapeBtn').disabled = false;
   $('moLog').innerHTML = '';
   $('moBar').style.width = '0%';
-  $('moStats').textContent = `Deleting your messages in ${esc(dm.name)}…`;
+  $('moStats').textContent = `Deleting your messages in ${dm.name}…`;
   $('moChannel').textContent = 'Starting…';
 
   $('scrapePill').classList.add('visible');
@@ -378,7 +495,7 @@ async function startDmClear(dm) {
         break;
 
       case 'warning':
-        logLine(log, `⚠ ${ev.message}`, 'err');
+        logLine(log, `Notice: ${ev.message}`, 'err');
         break;
 
       case 'complete':
@@ -386,7 +503,7 @@ async function startDmClear(dm) {
         $('moBar').style.width = '100%';
         $('moChannel').textContent = 'Done.';
         $('moStats').textContent = `Deleted ${n(ev.deleted)} messages`;
-        logLine(log, `✓ Complete — ${n(ev.deleted)} messages deleted`, 'ok');
+        logLine(log, `Complete — ${n(ev.deleted)} messages deleted`, 'ok');
         finishDmClear();
         break;
 
@@ -394,13 +511,13 @@ async function startDmClear(dm) {
         es.close();
         $('moChannel').textContent = 'Stopped.';
         $('moStats').textContent = `Deleted ${n(ev.deleted)} messages before stopping`;
-        logLine(log, `⏹ Stopped — ${n(ev.deleted)} messages deleted`, 'ok');
+        logLine(log, `Stopped — ${n(ev.deleted)} messages deleted`, 'ok');
         finishDmClear();
         break;
 
       case 'error':
         es.close();
-        logLine(log, `✗ ${ev.message}`, 'err');
+        logLine(log, `${ev.message}`, 'err');
         finishDmClear(ev.message);
         break;
     }
@@ -417,10 +534,12 @@ function finishDmClear(errMsg) {
   $('stopScrapeBtn').disabled = true;
   $('scrapePill').classList.remove('visible');
   S.activeJobId = null;
+  S.activeJobKind = null;
+  renderQueue();
 
   // Reset the DM clear button
   if (dmClearPending) {
-    dmClearPending.clearBtn.textContent = '🗑';
+    dmClearPending.clearBtn.textContent = 'delete';
     dmClearPending.clearBtn.disabled = false;
     dmClearPending.clearBtn.title = 'Delete your messages in this DM';
     dmClearPending.clearBtn.classList.remove('pending-confirm');
@@ -454,7 +573,7 @@ function renderChannels(channels, guild) {
     if (S.liveChannels.has(ch.id)) el.classList.add('live');
 
     const hash = ce('div', 'ch-hash');
-    hash.textContent = ch.type === 5 ? '📣' : '#';
+    hash.textContent = '#';
 
     const name = ce('div', 'ch-name');
     name.textContent = ch.name;
@@ -465,17 +584,17 @@ function renderChannels(channels, guild) {
     // scrape queue toggle
     const btn = ce('button', 'ch-btn');
     btn.setAttribute('aria-label', 'Toggle scrape queue');
-    btn.textContent = el.classList.contains('queued') ? '✓' : '+';
+    btn.textContent = el.classList.contains('queued') ? 'queued' : 'queue';
 
     // live monitor toggle
     const liveBtn = ce('button', 'ch-btn ch-live-btn');
     liveBtn.setAttribute('aria-label', 'Toggle live monitor');
-    liveBtn.textContent = '⚡';
+    liveBtn.textContent = S.liveChannels.has(ch.id) ? 'stop monitor' : 'monitor';
     liveBtn.title = S.liveChannels.has(ch.id) ? 'Stop live monitor' : 'Start live monitor';
 
     el.append(hash, name, dot, btn, liveBtn);
 
-    el.addEventListener('click', e => {
+    btn.addEventListener('click', e => {
       e.stopPropagation();
       toggleQueue(ch, guild, el, btn);
     });
@@ -495,19 +614,22 @@ function renderChannels(channels, guild) {
     body.appendChild(lbl);
     chs.forEach(c => body.appendChild(makeRow(c)));
   });
+  filterCollection();
+  renderQueue();
 }
 
 // ── Scrape queue ─────────────────────────────────────────────
 function toggleQueue(ch, guild, rowEl, btnEl) {
+  if (S.scraping) return;
   const idx = S.queue.findIndex(q => q.id === ch.id);
   if (idx > -1) {
     S.queue.splice(idx, 1);
     rowEl.classList.remove('queued');
-    btnEl.textContent = '+';
+    btnEl.textContent = 'queue';
   } else {
     S.queue.push({ id: ch.id, name: ch.name, guild_id: guild.id, guild_name: guild.name });
     rowEl.classList.add('queued');
-    btnEl.textContent = '✓';
+    btnEl.textContent = 'queued';
   }
   renderQueue();
 }
@@ -519,19 +641,30 @@ function initQueue() {
     document.querySelectorAll('.ch-item.queued').forEach(el => {
       el.classList.remove('queued');
       const b = el.querySelector('.ch-btn');
-      if (b) b.textContent = '+';
+      if (b) b.textContent = 'queue';
     });
   });
   $('startScrape').addEventListener('click', startScraping);
+  renderQueue();
 }
 
 function renderQueue() {
   const bar   = $('queueBar');
   const chips = $('queueChips');
   $('queueCount').textContent = S.queue.length;
-
+  document.querySelectorAll('.ch-item').forEach(row => {
+    const queued = S.queue.some(ch => ch.id === row.dataset.id);
+    row.classList.toggle('queued', queued);
+    const button = row.querySelector('[aria-label="Toggle scrape queue"]');
+    if (button) { button.textContent = queued ? 'queued' : 'queue'; button.setAttribute('aria-pressed', String(queued)); button.disabled = S.scraping; }
+  });
+  $('clearQueue').disabled = S.scraping;
+  $('scrapeLimit').disabled = S.scraping;
+  $('harvestProfiles').disabled = S.scraping;
+  $('startScrape').disabled = !!S.activeJobKind || S.queue.length === 0;
   if (S.queue.length === 0) {
     bar.classList.remove('visible');
+    chips.innerHTML = '<p class="queue-empty">Select channels or conversations to build a queue.</p>';
     return;
   }
   bar.classList.add('visible');
@@ -542,12 +675,12 @@ function renderQueue() {
     chip.innerHTML =
       `<span>#</span><span>${esc(ch.name)}</span>` +
       `<span class="qb-chip-server">${esc(ch.guild_name)}</span>` +
-      `<button class="qb-chip-x" data-id="${ch.id}">&#x2715;</button>`;
+      `<button class="qb-chip-x" data-id="${ch.id}" ${S.scraping ? 'disabled' : ''}>remove</button>`;
     chip.querySelector('.qb-chip-x').addEventListener('click', () => {
       S.queue = S.queue.filter(q => q.id !== ch.id);
       renderQueue();
       const row = document.querySelector(`.ch-item[data-id="${ch.id}"]`);
-      if (row) { row.classList.remove('queued'); const b = row.querySelector('.ch-btn'); if (b) b.textContent = '+'; }
+      if (row) { row.classList.remove('queued'); const b = row.querySelector('.ch-btn'); if (b) b.textContent = 'queue'; }
     });
     chips.appendChild(chip);
   });
@@ -555,14 +688,17 @@ function renderQueue() {
 
 // ── Scraping ─────────────────────────────────────────────────
 async function startScraping() {
-  if (!S.queue.length || S.scraping) return;
+  if (!S.queue.length || S.activeJobKind) return;
   S.scraping = true;
+  S.activeJobKind = 'scrape';
+  renderQueue();
 
   const limitVal = parseInt($('scrapeLimit').value, 10);
   const limit = (!isNaN(limitVal) && limitVal > 0) ? limitVal : 0;
 
   // Show modal
   const modal = $('modalBg');
+  modal.querySelector('.modal-title').textContent = 'scraping in progress';
   modal.classList.add('visible');
   $('modalFoot').classList.remove('visible');
   $('stopScrapeBtn').disabled = false;
@@ -611,11 +747,11 @@ async function startScraping() {
       case 'channel_complete':
         done++;
         $('moBar').style.width = `${(done / total) * 100}%`;
-        logLine(log, `✓ #${ev.channel}: ${n(ev.messages)} msgs`, 'ok');
+        logLine(log, `Saved #${ev.channel}: ${n(ev.messages)} msgs`, 'ok');
         break;
 
       case 'profiles':
-        logLine(log, `✓ #${ev.channel}: ${n(ev.saved)} new profiles`, 'ok');
+        logLine(log, `Saved #${ev.channel}: ${n(ev.saved)} new profiles`, 'ok');
         break;
 
       case 'profile_progress':
@@ -623,12 +759,12 @@ async function startScraping() {
         break;
 
       case 'profile_warning':
-        logLine(log, `⚠ ${ev.message}`, 'err');
+        logLine(log, `Notice: ${ev.message}`, 'err');
         break;
 
       case 'channel_error':
         done++;
-        logLine(log, `✗ #${ev.channel}: ${ev.message}`, 'err');
+        logLine(log, `#${ev.channel}: ${ev.message}`, 'err');
         break;
 
       case 'complete':
@@ -637,7 +773,7 @@ async function startScraping() {
         $('moChannel').textContent = 'Done.';
         $('moStats').textContent =
           `${n(ev.total_messages)} messages scraped across ${ev.channels} channels`;
-        logLine(log, `✓ Complete — ${n(ev.total_messages)} total`, 'ok');
+        logLine(log, `Complete — ${n(ev.total_messages)} total`, 'ok');
         finishScrape();
         break;
 
@@ -645,13 +781,13 @@ async function startScraping() {
         es.close();
         $('moChannel').textContent = 'Stopped.';
         $('moStats').textContent = `Scraped ${n(ev.total_messages)} messages before stopping`;
-        logLine(log, `⏹ Stopped — ${n(ev.total_messages)} msgs saved`, 'ok');
+        logLine(log, `Stopped — ${n(ev.total_messages)} msgs saved`, 'ok');
         finishScrape();
         break;
 
       case 'error':
         es.close();
-        logLine(log, `✗ ${ev.message}`, 'err');
+        logLine(log, `${ev.message}`, 'err');
         finishScrape(ev.message);
         break;
     }
@@ -666,6 +802,7 @@ async function startScraping() {
 function finishScrape(errMsg) {
   S.scraping = false;
   S.activeJobId = null;
+  S.activeJobKind = null;
   $('scrapePill').classList.remove('visible');
   $('stopScrapeBtn').disabled = true;
   $('modalFoot').classList.add('visible');
@@ -682,14 +819,10 @@ function initModal() {
     $('stopScrapeBtn').disabled = true;
     $('moChannel').textContent = 'Stopping…';
     try {
-      // The same modal is reused for both scrape and DM clear jobs.
-      // Check if it's a DM clear job by seeing if the job exists in delete_jobs (can't from here).
-      // We'll just try both - one will 404, the other will succeed.
-      await api(`/api/scrape/${S.activeJobId}/stop`, { method: 'POST' });
-    } catch {
-      try {
-        await api(`/api/dm-clear/${S.activeJobId}/stop`, { method: 'POST' });
-      } catch { /* SSE will still fire cancelled event */ }
+      await api(`/api/${S.activeJobKind}/${S.activeJobId}/stop`, { method: 'POST' });
+    } catch (error) {
+      $('stopScrapeBtn').disabled = false;
+      $('moChannel').textContent = `Could not stop: ${error.message}. Try again.`;
     }
   });
 }
@@ -783,15 +916,16 @@ async function loadSearchFilters() {
       option.value = display;
       $('dl-guilds').appendChild(option);
     });
-    const compact = value => Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(value);
-    $('homeMessages').textContent = compact(f.total_messages);
+    $('homeMessages').textContent = n(f.total_messages);
     $('homeMessages').title = n(f.total_messages);
-    $('homeServers').textContent = compact(f.guilds.length);
+    $('homeServers').textContent = n(f.guilds.length);
     $('homeServers').title = n(f.guilds.length);
     populateChannelFilter(resolveFilter(S.guildMap, $('fGuild').value));
-    $('connectionStatus').textContent = 'Local archive ready';
+    document.body.dataset.archiveReady = 'true';
+    $('archiveStatus').hidden = true;
   } catch {
-    $('connectionStatus').textContent = 'Archive unavailable. Check the server, then reload.';
+    $('archiveStatus').textContent = 'Archive unavailable. Check the server, then reload.';
+    $('archiveStatus').hidden = false;
     $('homeMessages').textContent = '—'; $('homeServers').textContent = '—';
   }
 }
@@ -856,11 +990,13 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   params.set('page', page); params.set('limit', 50);
   submittedSearch = new URLSearchParams(params);
   S.searchPage = page;
-  switchView('browse');
   $('resultsSection').hidden = false;
   $('resultsStatus').textContent = 'Searching…';
   $('searchResults').setAttribute('aria-busy', 'true');
   $('searchResults').innerHTML = spinnerHTML();
+  await switchView('browse');
+  if (request !== searchRequest) return;
+  if (activeView !== 'browse') { $('searchResults').removeAttribute('aria-busy'); return; }
   const url = new URLSearchParams(params); url.delete('limit'); url.set('search', '1');
   history.replaceState(null, '', `${location.pathname}?${url}#browse`);
   searchController = new AbortController();
@@ -868,7 +1004,7 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
     const data = await api(`/api/search?${params}`, {signal: searchController.signal});
     if (request !== searchRequest) return;
     renderResults(data, params.get('q') || '');
-    if (shouldScroll) $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+    if (shouldScroll && activeView === 'browse') $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
   } catch (error) {
     if (error.name === 'AbortError' || request !== searchRequest) return;
     $('resultsStatus').textContent = `Search failed: ${error.message}`;
@@ -934,210 +1070,6 @@ function renderPagination(page, pages) {
 }
 
 
-// ── Stats / data visualisation ───────────────────────────────
-
-function initStats() {
-  $('refreshStats').addEventListener('click', loadStats);
-}
-
-async function loadStats() {
-  // Show spinner in each chart box while loading
-  ['chartByServer', 'chartOverTime', 'chartByHour'].forEach(id => {
-    const canvas = $(id);
-    if (canvas) canvas.style.opacity = '0.3';
-  });
-
-  try {
-    const [d] = await Promise.all([api('/api/stats'), loadChartLibrary()]);
-    renderStats(d);
-  } catch {
-    // silent fail — DB might be empty
-  } finally {
-    ['chartByServer', 'chartOverTime', 'chartByHour'].forEach(id => {
-      const canvas = $(id);
-      if (canvas) canvas.style.opacity = '1';
-    });
-  }
-}
-
-function renderStats(d) {
-  // ── Summary cards
-  $('sTotal').textContent   = n(d.total_messages);
-  $('sServers').textContent = n(d.total_servers);
-  $('sChannels').textContent= n(d.total_channels);
-  $('sUsers').textContent   = n(d.total_users);
-  $('sDbSize').textContent  = fmtBytes(d.db_size_bytes);
-
-  // ── Leaderboard
-  const lb = $('leaderboard');
-  lb.innerHTML = '';
-  const medals = ['🥇', '🥈', '🥉'];
-  const maxCount = d.top_users[0]?.count || 1;
-
-  if (!d.top_users.length) {
-    lb.innerHTML = '<div class="lb-empty">No data yet</div>';
-  } else {
-    d.top_users.forEach((u, i) => {
-      const pct = Math.round((u.count / maxCount) * 100);
-      const item = ce('div', 'lb-item');
-      item.innerHTML =
-        `<span class="lb-rank">${medals[i] || (i + 1)}</span>` +
-        `<div class="lb-info">` +
-          `<div class="lb-name">${esc(u.author_name)}</div>` +
-          `<div class="lb-uid">${esc(u.author_id)}</div>` +
-        `</div>` +
-        `<div class="lb-bar-wrap"><div class="lb-bar" style="width:${pct}%"></div></div>` +
-        `<div class="lb-count">${n(u.count)}</div>`;
-      lb.appendChild(item);
-    });
-  }
-
-  // ── Chart: messages by server (horizontal bar)
-  renderChart('chartByServer', 'bar', {
-    labels: d.messages_by_server.map(s => truncate(s.guild_name, 18)),
-    datasets: [{
-      data:            d.messages_by_server.map(s => s.count),
-      backgroundColor: 'rgba(0,229,160,0.7)',
-      hoverBackgroundColor: '#00e5a0',
-      borderRadius:    4,
-      borderSkipped:   false,
-    }],
-  }, {
-    indexAxis: 'y',
-    scales: {
-      x: { grid: { color: '#1e1e1e' }, ticks: { color: '#666', font: { size: 10 } }, border: { color: '#232323' } },
-      y: { grid: { display: false },   ticks: { color: '#aaa', font: { size: 10 } }, border: { color: '#232323' } },
-    },
-  });
-
-  // ── Chart: messages over time (line)
-  const dayLabels  = d.messages_by_day.map(r => r.date);
-  const dayCounts  = d.messages_by_day.map(r => r.count);
-
-  renderChart('chartOverTime', 'line', {
-    labels: dayLabels,
-    datasets: [{
-      data:         dayCounts,
-      borderColor:  '#00e5a0',
-      borderWidth:  1.5,
-      pointRadius:  2,
-      pointHoverRadius: 4,
-      pointBackgroundColor: '#00e5a0',
-      fill:         true,
-      backgroundColor: (ctx) => {
-        const chart = ctx.chart;
-        const { ctx: c, chartArea } = chart;
-        if (!chartArea) return 'transparent';
-        const grad = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        grad.addColorStop(0, 'rgba(0,229,160,0.22)');
-        grad.addColorStop(1, 'rgba(0,229,160,0)');
-        return grad;
-      },
-      tension: 0.35,
-    }],
-  }, {
-    scales: {
-      x: { grid: { color: '#1e1e1e' }, ticks: { color: '#666', font: { size: 10 }, maxTicksLimit: 8 }, border: { color: '#232323' } },
-      y: { grid: { color: '#1e1e1e' }, ticks: { color: '#666', font: { size: 10 } }, border: { color: '#232323' }, beginAtZero: true },
-    },
-  });
-
-  // ── Chart: activity by hour (bar)
-  const hourBuckets = Array.from({ length: 24 }, (_, i) => {
-    const found = d.messages_by_hour.find(h => h.hour === i);
-    return found ? found.count : 0;
-  });
-  const peakHour = hourBuckets.indexOf(Math.max(...hourBuckets));
-
-  renderChart('chartByHour', 'bar', {
-    labels: Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}h`),
-    datasets: [{
-      data: hourBuckets,
-      backgroundColor: hourBuckets.map((_, i) =>
-        i === peakHour ? '#00e5a0' : 'rgba(0,229,160,0.45)'
-      ),
-      hoverBackgroundColor: '#00e5a0',
-      borderRadius: 3,
-      borderSkipped: false,
-    }],
-  }, {
-    scales: {
-      x: { grid: { display: false }, ticks: { color: '#666', font: { size: 9 } }, border: { color: '#232323' } },
-      y: { grid: { color: '#1e1e1e' }, ticks: { color: '#666', font: { size: 10 } }, border: { color: '#232323' }, beginAtZero: true },
-    },
-  });
-}
-
-let chartLibraryPromise;
-function loadChartLibrary() {
-  if (typeof Chart !== 'undefined') return Promise.resolve();
-  if (!chartLibraryPromise) chartLibraryPromise = new Promise(resolve => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
-    script.integrity = 'sha256-DiMmxoaAcr7BWSdgxnKQQ8ruopYKK0bO5qIZKqxqv/A=';
-    script.crossOrigin = 'anonymous'; script.referrerPolicy = 'no-referrer';
-    script.onload = () => resolve();
-    script.onerror = () => { chartLibraryPromise = null; script.remove(); resolve(); };
-    document.head.appendChild(script);
-  });
-  return chartLibraryPromise;
-}
-
-function renderChart(id, type, data, extraOpts = {}) {
-  if (typeof Chart === 'undefined') {
-    $(id).hidden = true;
-    const box = $(id).parentElement;
-    if (!box.querySelector('.chart-error')) {
-      const note = ce('p', 'chart-error');
-      note.textContent = 'Chart library unavailable. Reconnect and refresh to load charts.';
-      box.appendChild(note);
-    }
-    return;
-  }
-  $(id).hidden = false;
-  $(id).parentElement.querySelector('.chart-error')?.remove();
-  if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
-  const canvas = $(id);
-  if (!canvas) return;
-
-  const base = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 400 },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#161616',
-        borderColor: '#2e2e2e',
-        borderWidth: 1,
-        titleColor: '#efefef',
-        bodyColor: '#aaaaaa',
-        padding: 8,
-        cornerRadius: 6,
-      },
-    },
-  };
-
-  _charts[id] = new Chart(canvas, {
-    type,
-    data,
-    options: deepMerge(base, extraOpts),
-  });
-}
-
-// Simple deep merge for chart options (two levels)
-function deepMerge(base, extra) {
-  const out = { ...base };
-  for (const k of Object.keys(extra)) {
-    if (extra[k] && typeof extra[k] === 'object' && !Array.isArray(extra[k]) && typeof base[k] === 'object') {
-      out[k] = deepMerge(base[k], extra[k]);
-    } else {
-      out[k] = extra[k];
-    }
-  }
-  return out;
-}
-
 function fmtBytes(b) {
   if (!b) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB'];
@@ -1160,14 +1092,13 @@ function initLive() {
 }
 
 async function toggleLiveChannel(ch, guild, rowEl, btnEl) {
+  btnEl.disabled = true;
   if (S.liveChannels.has(ch.id)) {
     await stopLiveChannels([ch.id]);
   } else {
     await startLiveChannels([{ id: ch.id, name: ch.name, guild_id: guild.id, guild_name: guild.name }]);
-    // Auto-switch to live tab
-    switchView('live');
-    connectLiveSSE();
   }
+  btnEl.disabled = false;
 }
 
 async function startLiveChannels(channels) {
@@ -1175,16 +1106,18 @@ async function startLiveChannels(channels) {
     await api('/api/live/start', { method: 'POST', body: { channels } });
     channels.forEach(ch => S.liveChannels.add(ch.id));
     updateLiveBadge();
+    renderMonitorList();
+    connectLiveSSE();
     // Update any visible channel rows
     channels.forEach(ch => {
       const row = document.querySelector(`.ch-item[data-id="${ch.id}"]`);
       if (row) {
         row.classList.add('live');
         const lb = row.querySelector('.ch-live-btn');
-        if (lb) lb.title = 'Stop live monitor';
+        if (lb) { lb.title = 'Stop live monitor'; lb.textContent = 'stop monitor'; }
       }
     });
-  } catch (e) { console.error('live start failed', e); }
+  } catch (e) { $('connectionStatus').textContent = `Could not start monitor: ${e.message}`; }
 }
 
 async function stopLiveChannels(channelIds) {
@@ -1197,12 +1130,12 @@ async function stopLiveChannels(channelIds) {
       if (row) {
         row.classList.remove('live');
         const lb = row.querySelector('.ch-live-btn');
-        if (lb) lb.title = 'Start live monitor';
+        if (lb) { lb.title = 'Start live monitor'; lb.textContent = 'monitor'; }
       }
     });
     updateLiveBadge();
     renderMonitorList();
-  } catch (e) { console.error('live stop failed', e); }
+  } catch (e) { $('connectionStatus').textContent = `Could not stop monitor: ${e.message}`; }
 }
 
 function connectLiveSSE() {
@@ -1246,7 +1179,7 @@ function connectLiveSSE() {
 function renderMonitorList() {
   const list = $('liveMonitorList');
   if (S.liveChannels.size === 0) {
-    list.innerHTML = '<div class="live-empty-msg">No channels monitored.<br>Go to Browse → ⚡ to start.</div>';
+    list.innerHTML = '<div class="live-empty-msg">No channels monitored. Use the monitor button beside a channel to start.</div>';
     return;
   }
   list.innerHTML = '';
@@ -1261,14 +1194,14 @@ function renderMonitorList() {
         `<div class="lm-dot"></div>` +
         `<div class="lm-info"><div class="lm-channel">#${esc(ch.channel_name)}</div>` +
         `<div class="lm-guild">${esc(ch.guild_name)}</div></div>` +
-        `<button class="lm-stop" title="Stop monitoring" data-cid="${ch.channel_id}">✕</button>`;
+        `<button class="lm-stop" title="Stop monitoring" data-cid="${ch.channel_id}">stop</button>`;
       item.querySelector('.lm-stop').addEventListener('click', () =>
         stopLiveChannels([ch.channel_id])
       );
       list.appendChild(item);
     });
     if (!data.channels.length) {
-      list.innerHTML = '<div class="live-empty-msg">No channels monitored.<br>Go to Browse → ⚡ to start.</div>';
+      list.innerHTML = '<div class="live-empty-msg">No channels monitored. Use the monitor button beside a channel to start.</div>';
     }
   }).catch(() => {});
 }
@@ -1285,7 +1218,7 @@ function appendLiveMessage(ev) {
   let attsHtml = '';
   if (ev.attachments?.length) {
     const links = ev.attachments.map(url =>
-      `<a href="${esc(url)}" target="_blank" rel="noopener" class="rc-att">🖼 image</a>`
+      `<a href="${esc(url)}" target="_blank" rel="noopener" class="rc-att">image</a>`
     ).join('');
     attsHtml = `<div class="live-msg-atts">${links}</div>`;
   }
@@ -1365,14 +1298,17 @@ function renderExportParticipants(participants) {
   }
 
   participants.forEach(p => {
-    const el = ce('div', 'persona-item');
+    const el = ce('button', 'persona-item');
+    el.type = 'button';
+    el.setAttribute('aria-pressed', 'false');
     el.dataset.id = p.author_id;
     el.innerHTML =
       `<span class="persona-name">${esc(p.author_name)}</span>` +
       `<span class="persona-uid">${esc(p.author_id)}</span>`;
     el.addEventListener('click', () => {
-      document.querySelectorAll('.persona-item').forEach(x => x.classList.remove('selected'));
+      document.querySelectorAll('.persona-item').forEach(x => { x.classList.remove('selected'); x.setAttribute('aria-pressed', 'false'); });
       el.classList.add('selected');
+      el.setAttribute('aria-pressed', 'true');
       exportTarget.targetId = p.author_id;
       exportTarget.targetName = p.author_name;
       $('runExportBtn').disabled = false;

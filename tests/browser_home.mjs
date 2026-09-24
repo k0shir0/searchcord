@@ -5,6 +5,7 @@ import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'node:fs';
 import {setTimeout as delay} from 'node:timers/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {checkScrape} from './browser_scrape.mjs';
 
 const base = process.argv[2] || 'http://127.0.0.1:8766';
 const output = path.resolve(process.argv[3] || 'agents/home-browser');
@@ -26,7 +27,7 @@ try {
   let id=0; const pending=new Map(); const exceptions=[];
   socket.onmessage=({data})=>{
     const msg=JSON.parse(data);
-    if(msg.method==='Runtime.exceptionThrown') exceptions.push(msg.params.exceptionDetails.text);
+    if(msg.method==='Runtime.exceptionThrown') exceptions.push({description:msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text, line:msg.params.exceptionDetails.lineNumber});
     if(!msg.id) return;
     const item=pending.get(msg.id); pending.delete(msg.id);
     msg.error ? item.reject(msg.error) : item.resolve(msg.result);
@@ -38,6 +39,17 @@ try {
     return r.result.value;
   };
   const until=async expression=>{for(let i=0;i<300;i++){if(await evaluate(expression))return; await delay(100);} throw new Error('Timed out: '+expression);};
+  const navigate=async url=>{
+    await evaluate(`window.__testNavigationPending=true`);
+    const navigation=await command('Page.navigate',{url});
+    // A hash-only CDP navigation keeps the old document and its test mocks.
+    // Load through a blank document when the caller requests a fresh page.
+    if (!navigation.loaderId) {
+      await command('Page.navigate',{url:'about:blank'});
+      await command('Page.navigate',{url});
+    }
+    await until(`!window.__testNavigationPending`);
+  };
   const check=async(name,expr)=>{assert(await evaluate(expr), name);report.checks.push(name);};
   const click=async selector=>{
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'})`);
@@ -52,8 +64,8 @@ try {
   // Real archived messages never leave this local test browser.
   await command('Network.setBlockedURLs',{urls:['https://*','http://cdn.*']});
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
-  await command('Page.navigate',{url:base});
-  await until(`document.querySelector('#connectionStatus')?.textContent === 'Local archive ready'`);
+  await navigate(base);
+  await until(`document.body.dataset.archiveReady === 'true'`);
   await check('live archive totals', `Number(document.querySelector('#homeMessages').title.replaceAll(',',''))>0`);
   await check('settings stays closed without Discord', `!document.querySelector('#settingsPanel').classList.contains('open')`);
   await check('filters start inert', `document.querySelector('#filterTray').inert`);
@@ -110,31 +122,98 @@ try {
   await check('settings opens with focused token input', `document.activeElement.id==='tokenInput' && !document.querySelector('#settingsPanel').inert`);
   await key('Escape');
   await check('settings Escape restores focus', `document.activeElement.id==='menuBtn' && document.querySelector('#settingsPanel').inert`);
-  await click('[data-view="live"]');
-  await check('live navigation', `document.querySelector('#view-live').classList.contains('active') && document.querySelector('#homeOverview').hidden`);
-  await click('[data-view="dms"]');
+  await check('three centered uniquely colored navigation boxes', `(()=>{const tabs=[...document.querySelectorAll('[data-view]')];return tabs.length===3 && tabs.every(el=>getComputedStyle(el).justifyContent==='center') && new Set(tabs.map(el=>getComputedStyle(el).getPropertyValue('--tab-accent').trim())).size===3;})()`);
+  await click('[data-view="scrape"]');
+  await until(`document.querySelector('#view-scrape').classList.contains('active')`);
+  await check('unified scrape workspace', `document.querySelector('#homeOverview').hidden && !!document.querySelector('#view-scrape #liveMonitorList') && !!document.querySelector('#view-scrape #queueBar')`);
+  await click('#sourceDms');
   await until(`document.querySelector('#dmBody .error-msg')`);
   await check('DM network failure is visible', `!!document.querySelector('#dmBody .error-msg')`);
   await click('[data-view="stats"]');
-  await until(`document.querySelector('#sTotal').textContent!=='—'`);
-  await check('stats show real archive counts', `document.querySelector('#sTotal').textContent===document.querySelector('#homeMessages').title`);
-  await check('offline chart dependency has a visible fallback', `document.querySelectorAll('.chart-error').length===3`);
+  await until(`Object.keys(_charts).length===6 && !document.querySelector('#view-stats').hasAttribute('aria-busy') && document.querySelectorAll('.lb-item').length===50`);
+  await check('stats show real archive counts', `document.querySelector('#sTotal').title===document.querySelector('#homeMessages').title`);
+  await check('six offline charts with accessible tables', `Object.values(_charts).every(c=>c.width>0) && document.querySelectorAll('.chart-data table').length===6 && [...document.scripts].some(s=>s.src.endsWith('/vendor/chart.umd.min.js'))`);
+  await evaluate(`document.querySelector('#leaderboard').scrollTop=document.querySelector('#leaderboard').scrollHeight;`);
+  await until(`document.querySelectorAll('.lb-item').length===100`);
+  await check('contributors scroll into next page', `new Set([...document.querySelectorAll('.lb-uid')].map(el=>el.textContent)).size===100`);
+  await click('#moreContributors');
+  await until(`document.querySelectorAll('.lb-item').length===150`);
+  await check('keyboard-accessible contributor pagination', `document.querySelectorAll('.lb-item').length===150`);
+  await evaluate(`window.authorFixture=document.querySelector('.lb-uid').textContent;document.querySelector('#contributorSearch').value=window.authorFixture;document.querySelector('#contributorSearch').dispatchEvent(new Event('input',{bubbles:true}));`);
+  await until(`!contributorState.busy && document.querySelectorAll('.lb-item').length===1`);
+  await click('.lb-item');
+  await until(`document.querySelector('#view-browse').classList.contains('active') && !document.querySelector('#searchResults').hasAttribute('aria-busy')`);
+  await check('contributor drilldown searches real author', `new URLSearchParams(location.search).get('author_id')===window.authorFixture && document.querySelectorAll('.result-row').length>0`);
+  await click('[data-view="stats"]');
+  await until(`!document.querySelector('#view-stats').hasAttribute('aria-busy') && document.querySelector('#view-stats').classList.contains('active')`);
+  await evaluate(`document.querySelector('#statsRange').value='7';document.querySelector('#statsRange').dispatchEvent(new Event('change'));`);
+  await until(`!document.querySelector('#view-stats').hasAttribute('aria-busy') && _charts.chartOverTime.data.labels.length===7`);
+  await evaluate(`document.querySelector('#timelineType').value='bar';document.querySelector('#timelineType').dispatchEvent(new Event('change'));document.querySelector('#serverChartType').value='doughnut';document.querySelector('#serverChartType').dispatchEvent(new Event('change'));`);
+  await check('interactive timeline window and chart styles', `_charts.chartOverTime.config.type==='bar' && _charts.chartByServer.config.type==='doughnut'`);
+  await evaluate(`document.querySelector('#chartByChannel').scrollIntoView({behavior:'instant',block:'center'});`);
+  await delay(400);
+  const chartPoint = await evaluate(`(()=>{const c=_charts.chartByChannel,r=c.canvas.getBoundingClientRect(),p=c.getDatasetMeta(0).data[0].getCenterPoint();return {x:r.x+p.x,y:r.y+p.y};})()`);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',...chartPoint});
+  await delay(300);
+  await check('chart hover exposes a tooltip', `_charts.chartByChannel.tooltip.opacity>0`);
+  await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...chartPoint});
+  await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...chartPoint});
+  await until(`activeView==='browse' && !document.querySelector('#searchResults').hasAttribute('aria-busy')`);
+  await check('canvas selection searches the chosen channel', `new URLSearchParams(location.search).get('channel_id')===statsData.messages_by_channel[0].channel_id && document.querySelectorAll('.result-row').length>0`);
+  await click('[data-view="stats"]');
+  await until(`activeView==='stats' && !document.querySelector('#view-stats').hasAttribute('aria-busy')`);
+  await evaluate(`document.querySelector('#statsRange').value='0';document.querySelector('#statsRange').dispatchEvent(new Event('change'));`);
+  await until(`!document.querySelector('#view-stats').hasAttribute('aria-busy') && _charts.chartOverTime.data.labels.length>90`);
+  await check('all-time timeline retains complete archive range', `_charts.chartOverTime.data.labels[0]===statsData.range_start && _charts.chartOverTime.data.labels.at(-1)===statsData.range_end`);
+  await shot('stats-desktop');
+  await evaluate(`document.querySelector('#chartByMonthData').parentElement.open=true;`);
+  await click('#chartByMonthData button:last-of-type');
+  await until(`document.querySelector('#view-browse').classList.contains('active') && !document.querySelector('#searchResults').hasAttribute('aria-busy')`);
+  await check('chart table drilldown filters inclusive month', `new URLSearchParams(location.search).get('date_from')?.endsWith('-01') && !!new URLSearchParams(location.search).get('date_to') && document.querySelectorAll('.result-row').length>0`);
+  await evaluate(`Promise.all([switchView('stats'),switchView('scrape'),switchView('browse')])`);
+  await check('rapid navigation keeps final intended view', `activeView==='browse' && document.querySelectorAll('.view.active').length===1 && location.hash==='#browse'`);
+  await evaluate(`(async()=>{const native=document.startViewTransition;document.startViewTransition=undefined;await switchView('scrape');await Promise.all([switchView('stats'),switchView('browse')]);document.startViewTransition=native;})()`);
+  await delay(300);
+  await check('fallback transitions settle without hidden content', `activeView==='browse' && getComputedStyle(document.querySelector('#pageStage')).opacity==='1'`);
   for(const width of [768,375]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:950,deviceScaleFactor:1,mobile:width<600});
-    await command('Page.navigate',{url:base});
-    await until(`document.querySelector('#connectionStatus')?.textContent==='Local archive ready'`);
+    await navigate(base);
+    await until(`document.body.dataset.archiveReady==='true'`);
     await check(`home has no horizontal overflow at ${width}`, `document.documentElement.scrollWidth<=innerWidth`);
     await shot(`home-${width}`);
     await click('#searchInput'); await delay(650);
     await check(`expanded filters fit at ${width}`, `document.documentElement.scrollWidth<=innerWidth && document.querySelector('#filterForm').getBoundingClientRect().bottom<=document.querySelector('#filterTray').getBoundingClientRect().bottom+1`);
     await shot(`home-${width}-expanded`);
+    await key('Escape');
+    await check(`totals fill two equal halves at ${width}`, `(()=>{const row=document.querySelector('.index-block'), panels=[...row.children],r=row.getBoundingClientRect(),a=panels[0].getBoundingClientRect(),b=panels[1].getBoundingClientRect();return Math.abs(a.width-b.width)<1 && Math.abs(a.left-r.left)<2 && Math.abs(b.right-r.right)<2;})()`);
+    await evaluate(`document.querySelector('#homeMessages').textContent='9,999,999,999,999';document.querySelector('#homeServers').textContent='9,999,999,999';`);
+    await delay(300);
+    await check(`large archive counts fit at ${width}`, `[...document.querySelectorAll('.index-number')].every(el=>el.scrollWidth<=el.parentElement.clientWidth-2*parseFloat(getComputedStyle(el.parentElement).paddingLeft)+2)`);
+    for (const view of ['scrape','stats']) {
+      await click('[data-view="'+view+'"]');
+      await until(`activeView==='${view}'`);
+      if(view==='stats') await until(`Object.keys(_charts).length===6 && !document.querySelector('#view-stats').hasAttribute('aria-busy')`);
+      await delay(400);
+      await check(`${view} has no horizontal overflow at ${width}`, `document.documentElement.scrollWidth<=innerWidth`);
+      await shot(`${view}-${width}`);
+    }
   }
   await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   await check('reduced motion honored', `parseFloat(getComputedStyle(document.querySelector('.geometry-forms-right')).transitionDuration)<0.01`);
+  await evaluate(`switchView('scrape')`);
+  await check('reduced motion skips page transitions', `activeView==='scrape' && document.getAnimations().every(a=>!a.effect?.pseudoElement?.includes('view-transition'))`);
   // HTTP measurements use the same browser fetch path. Only aggregate values leave the page.
-  report.api=await evaluate(`(async()=>{const out=[];for(const endpoint of ['/api/search?limit=50','/api/search?limit=50&page=2','/api/search?q=release&limit=50','/api/search/filters?include_users=false','/api/search/authors?q=te','/api/stats']){const start=performance.now();const r=await fetch(endpoint);const data=await r.json();out.push({endpoint,status:r.status,milliseconds:Math.round(performance.now()-start),rows:data.messages?.length??data.length??null,total:data.total??data.total_messages??null});}return out;})()`);
+  report.api=await evaluate(`(async()=>{const out=[];for(const endpoint of ['/api/search?limit=50','/api/search?limit=50&page=2','/api/search?q=release&limit=50','/api/search/filters?include_users=false','/api/search/authors?q=te','/api/stats','/api/stats?days=0','/api/stats/contributors?offset=50&limit=50']){const start=performance.now();const r=await fetch(endpoint);const data=await r.json();out.push({endpoint,status:r.status,milliseconds:Math.round(performance.now()-start),rows:data.messages?.length??data.users?.length??data.length??null,total:data.total??data.total_messages??null});}return out;})()`);
   assert(report.api.every(r=>r.status===200), 'Read endpoints return success');
-  assert.equal(exceptions.length,0,'No uncaught browser exceptions');
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
+  await checkScrape({evaluate,check,click,until,key,shot});
+  await command('Network.setCacheDisabled',{cacheDisabled:true});
+  await command('Network.setBlockedURLs',{urls:['https://*','http://cdn.*',base+'/vendor/chart.umd.min.js']});
+  await navigate(base+'/#stats');
+  await until(`document.body.dataset.archiveReady==='true' && document.querySelectorAll('.chart-data table').length===6 && !document.querySelector('#view-stats').hasAttribute('aria-busy')`);
+  await check('missing chart script preserves accessible data and totals', `typeof Chart==='undefined' && document.querySelectorAll('.chart-data[open]').length===6 && Number(document.querySelector('#sTotal').title.replaceAll(',',''))>0 && document.querySelector('#statsStatus').textContent.includes('data tables')`);
+  if(exceptions.length) writeFileSync(path.join(output,'exceptions.json'),JSON.stringify(exceptions,null,2));
+  assert.equal(exceptions.length,0,'No uncaught browser exceptions; details are in the ignored output folder');
   report.checks.push('no uncaught browser exceptions');
   writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));

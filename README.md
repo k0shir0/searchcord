@@ -14,7 +14,8 @@ channels into SQLite, then search, filter, and chart what you collected.
 
 ## Features
 
-- **Browse** your servers and channels, or your DMs and group DMs.
+- **Three workspaces**: Browse for local search, Scrape for channels, DMs,
+  a shared collection queue and live monitoring, and Stats for archive exploration.
 - **Queue and scrape** any number of channels at once, with an optional
   per-channel message cap, live progress, a stop button, and an optional
   expanded-profile fetch for message authors.
@@ -27,14 +28,16 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Bauhaus home** with an integrated search and expanding filter tray, indexed
   archive totals, cool outline geometry, and compact previous/next pagination.
   Search URLs preserve filters and page selection across reloads.
-- **Stats** — totals, top senders, messages per server, activity over the
-  last 30 days, and a by-hour histogram.
+- **Stats**: searchable, scrollable contributor rankings; server and channel
+  charts; daily, monthly, weekday, and hourly activity. Select a contributor,
+  server, channel, date, or month to search its messages. Accessible data tables
+  accompany every chart. Timeline windows end at the latest archived message.
 - **ChatML export** — turn a conversation into a `.jsonl` file in the
   OpenAI/ChatML message format.
 
 Message text and image links are stored in one SQLite file at `data/searchcord.db`.
 Image bytes are never downloaded into the database. Archive data stays local;
-the UI also loads Chart.js from a CDN for its charts.
+Chart.js is bundled locally, so charts work without a CDN connection.
 
 ---
 
@@ -61,9 +64,10 @@ python app.py
 The app starts on <http://127.0.0.1:8000> and opens your browser. On Windows
 you can double-click `start.bat` instead.
 
-The home page uses the approved Bauhaus design. First drafts for the remaining
-screens are available at `/trials/`; these use synthetic data and local preview
-interactions. See [the full change report](docs/bauhaus-diff-report.md).
+The three production workspaces share the Bauhaus design. Earlier standalone
+drafts remain at `/trials/`, with synthetic data and local preview interactions.
+See [the workspace change report](docs/workspace-redesign.md) and the
+[original integration and draft report](docs/bauhaus-diff-report.md).
 
 It binds to loopback only. There is **no authentication** — anyone who can
 reach the port gets your token and your entire archive — so only change the
@@ -80,10 +84,11 @@ Discord. Select server, channel, and author suggestions or paste their IDs.
 Date filters use UTC and include the entire selected end date. Clear filters
 keeps the text query. Queries and filter IDs appear in the browser URL.
 
-For collection, open **settings**, paste your token, and hit **Save & Verify**.
-Expand **Archive channels** under Browse to choose servers and channels. Use
-**connect Discord** to load servers with an already saved token. DMs, Live, and
-Stats remain available from the view tabs.
+For collection, use the geometric settings button beside the wordmark, paste
+your token, and hit **Save & Verify**. Open **Scrape** and use **connect Discord**
+to load servers with an already saved token. Switch between **channels** and
+**direct messages**, filter by name, and use the labeled queue/monitor/export
+controls. Live monitoring and its incoming feed remain in the same workspace.
 
 ### Data directory
 
@@ -102,8 +107,8 @@ Opening an older archive runs the storage migration described below. For testing
 an existing archive, use a separate copy first. Keep database directories and
 exports out of version control.
 
-To scrape: click channels to add them to the queue, optionally set a
-"msgs back" limit, then **start scraping**. Leave the limit blank to pull the
+To scrape: use **queue** beside a channel or conversation, optionally set a
+**Messages per channel** limit, then **start scraping**. Leave the limit blank to pull the
 full history. Later jobs fetch only messages newer than each channel's saved
 cursor. If a first run is limited or stopped, a later job can resume the
 remaining older history. Check **fetch profiles** to request expanded Discord
@@ -132,7 +137,10 @@ searchcord/
 ├── static/
 │   ├── index.html
 │   ├── app.js         # Frontend logic
-│   └── style.css
+│   ├── stats.js       # Contributor pagination, charts and drilldowns
+│   ├── workspace.css  # Production three-view layout
+│   ├── vendor/        # Pinned Chart.js and its license
+│   └── style.css      # Base controls, extended by the Bauhaus styles
 └── data/              # Created at runtime — gitignored, never commit
     └── searchcord.db
 ```

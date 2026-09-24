@@ -2,6 +2,27 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Production workspaces (2026-09-24)
+
+- Use exactly three centered navigation boxes: Browse in lavender, Scrape in
+  blue, Stats in mint. Channel collection, DMs, the queue, and live monitoring
+  belong together in Scrape. This supersedes the expandable Browse tools below.
+- The two archive-total boxes span the entire content row in equal halves.
+  Show full numbers, with sizing that accommodates large values at narrow widths.
+  This supersedes earlier compact-counter directions.
+- Use a geometric outline settings control beside the wordmark. No emoji
+  controls or redundant local-ready banner. Keep actual errors and job status.
+- Compose the secondary banners on an asymmetric grid: a large circle balances
+  a smaller triangle, rotated square, bar and detached rule segments. Leave
+  navy clearance between every decorative line and shape. Decoration must stay
+  subordinate to headings and controls, including at mobile widths.
+- Transitions use short opacity/transform motion. Rapid navigation must settle
+  on the latest requested view; reduced motion disables page and chart animation.
+- Contributor rankings scroll and load further bounded pages. Every chart has
+  an accessible table; useful chart selections open the real search results.
+- Keep production geometry cool: navy, lavender, mint, pale blue and porcelain.
+  The original draft gallery remains available for later iteration.
+
 ## Production promotion (2026-09-23)
 
 - The approved trial now supplies the real home page. `static/bauhaus.css` is
@@ -20,7 +41,7 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 - Search belongs on the home surface. Do not add a separate search tab just because search is important.
 - The main search field owns the filters. Clicking or focusing it expands the filter tray with a visible animation; clicking outside or pressing Escape collapses the tray back into the search surface.
 - Use one primary `searchcord` wordmark in the large top header. Do not repeat the brand in a sidebar lockup, add a “message archive” subtitle, or put a trial-status strip above it.
-- The blue search banner spans the full page width. Put the messages-indexed and active-server totals in two compact, separate boxes directly beneath it.
+- The blue search banner spans the full page width. Put the messages-indexed and active-server totals in two equal-width boxes spanning the content row directly beneath it.
 - Remove the server sidebar. Keep server selection in the search filters and use the freed width for the full-width banner and results.
 - Server, channel, and author filters must be text inputs with autocomplete from indexed data. Dropdowns do not scale to the expected number of servers, channels, or users.
 - Preserve the real search filters and result behavior when a visual direction is promoted from the static trial.
