@@ -1,0 +1,79 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Searchcord export conversation design draft with synthetic content"><title>searchcord · export conversation draft</title>
+<link rel="stylesheet" href="workspace-drafts.css">
+</head>
+
+<body style="--draft-accent:var(--gold)">
+<div class="draft-shell">
+<header class="topline">
+<h1>search<span class="wordmark-accent">cord</span>
+</h1>
+</header>
+<div class="draft-utility"><span>design draft · sample data</span><a href="index.html">all design drafts ↗</a><a href="/">open application ↗</a>
+</div>
+<nav class="draft-nav" aria-label="Page drafts"><a href="dms.html">dms</a><a href="live.html">live</a><a href="stats.html">stats</a><a href="settings.html">settings</a>
+</nav>
+<main>
+<section class="draft-hero">
+<div>
+<p class="eyebrow">chatml
+</p>
+<h2>Export conversation
+</h2>
+<p>Choose the assistant identity and inspect the shape of the conversation before exporting.
+</p>
+</div><svg class="draft-art" viewBox="0 0 480 180" aria-hidden="true"><circle class="form-one" cx="82" cy="88" r="60"/><path class="form-two" d="M244 28 L300 144 H188 Z"/><path class="form-three" d="M346 40 H452 V146 H346 Z"/><path class="art-rule" d="M22 170 H144 M188 170 H300 M346 170 H452 M164 22 V148 M324 22 V148"/></svg>
+</section>
+<div class="draft-main">
+
+<div class="draft-grid">
+<section class="draft-panel">
+<h3>Conversation roles
+</h3>
+<p>Mara &amp; Eli · 12,408 archived messages
+</p>
+<fieldset class="draft-panel">
+<legend>Who is the assistant?
+</legend>
+<div class="draft-stack">
+<label class="draft-check"><input type="radio" name="assistant" value="Mara" checked>Mara
+</label>
+<label class="draft-check"><input type="radio" name="assistant" value="Eli">Eli
+</label>
+</div>
+</fieldset>
+<div class="draft-actions"><button class="draft-action" id="draftExport">prepare export</button><a class="draft-secondary" href="dms.html">back to conversations</a>
+</div>
+</section>
+<aside class="draft-panel">
+<p class="eyebrow">output preview
+</p>
+<h3>ChatML · JSONL
+</h3>
+<pre class="draft-code" id="draftPreview">{
+  "messages": [
+    {"role": "system", "content": "You are Mara."},
+    {"role": "user", "content": "Ready to review?"},
+    {"role": "assistant", "content": "Yes. Let’s start."}
+  ]
+}
+</pre>
+<p class="draft-note">Exports contain conversation text. Treat them as private files.
+</p>
+</aside>
+</div>
+<p class="draft-status" id="draftStatus" role="status">
+</p>
+</div>
+</main>
+<footer class="site-footer"><a href="../privacy.html">privacy &amp; data</a>
+</footer>
+</div>
+<script src="workspace-drafts.js"></script>
+</body>
+</html>

@@ -2,7 +2,29 @@
 
 Status: approved home promoted to production; secondary designs remain local drafts
 
+## Secondary page drafts
+
+The [draft gallery](static/trials/index.html) links DMs, Live, Stats, Settings,
+Archive Channels, ChatML Export, and Scrape Progress. Each is a separate HTML
+page with synthetic content and local-only preview interactions. They share
+`workspace-drafts.css` and `workspace-drafts.js`; they do not call application
+APIs or perform collection/deletion/export operations.
+
+Deep navy, mint, lavender, pale blue, and porcelain connect these drafts to the
+home page. Stats and Export add restrained gold. Full outline circles, triangles,
+and squares sit in separate bays with detached rules. Transitions are short and
+respect reduced motion. The production secondary views remain functional while
+these replacements are reviewed and iterated.
+
+The old privacy placeholder links to the production privacy and data notes.
+See [the integration report](docs/bauhaus-diff-report.md) for page links and
+validation evidence.
+
 Working preferences: read [BAUHAUS-DESIGN-PREFERENCES.md](BAUHAUS-DESIGN-PREFERENCES.md) before making further visual changes.
+
+The sections below preserve the original trial research and planning history.
+The production promotion and secondary-draft status above supersede their earlier
+instructions to keep the design isolated and their privacy-placeholder description.
 
 ## Recommendation
 

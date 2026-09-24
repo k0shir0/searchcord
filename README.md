@@ -61,6 +61,10 @@ python app.py
 The app starts on <http://127.0.0.1:8000> and opens your browser. On Windows
 you can double-click `start.bat` instead.
 
+The home page uses the approved Bauhaus design. First drafts for the remaining
+screens are available at `/trials/`; these use synthetic data and local preview
+interactions. See [the full change report](docs/bauhaus-diff-report.md).
+
 It binds to loopback only. There is **no authentication** — anyone who can
 reach the port gets your token and your entire archive — so only change the
 host if you understand that:

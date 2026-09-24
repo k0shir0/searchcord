@@ -1,0 +1,81 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Searchcord your workspace design draft with synthetic content"><title>searchcord · your workspace draft</title>
+<link rel="stylesheet" href="workspace-drafts.css">
+</head>
+
+<body style="--draft-accent:var(--cool-accent)">
+<div class="draft-shell">
+<header class="topline">
+<h1>search<span class="wordmark-accent">cord</span>
+</h1>
+</header>
+<div class="draft-utility"><span>design draft · sample data</span><a href="index.html">all design drafts ↗</a><a href="/">open application ↗</a>
+</div>
+<nav class="draft-nav" aria-label="Page drafts"><a href="dms.html">dms</a><a href="live.html">live</a><a href="stats.html">stats</a><a href="settings.html" aria-current="page">settings</a>
+</nav>
+<main>
+<section class="draft-hero">
+<div>
+<p class="eyebrow">settings
+</p>
+<h2>Your workspace
+</h2>
+<p>A local archive, an explicit connection, and clear control over the data you keep.
+</p>
+</div><svg class="draft-art" viewBox="0 0 480 180" aria-hidden="true"><circle class="form-one" cx="82" cy="88" r="60"/><path class="form-two" d="M244 28 L300 144 H188 Z"/><path class="form-three" d="M346 40 H452 V146 H346 Z"/><path class="art-rule" d="M22 170 H144 M188 170 H300 M346 170 H452 M164 22 V148 M324 22 V148"/></svg>
+</section>
+<div class="draft-main">
+
+<div class="draft-grid">
+<form class="draft-panel" id="draftSettings">
+<h3>Discord connection
+</h3>
+<div class="draft-stack">
+<label class="draft-field">Discord token<input id="draftToken" type="password" autocomplete="off" placeholder="Use a dummy value in this draft">
+</label>
+<p class="draft-note">Visual draft only. Do not enter a real credential here. The production app saves tokens in its configured local database.
+</p>
+</div>
+<div class="draft-actions"><button class="draft-action" type="submit">save &amp; verify</button><button class="draft-secondary" type="button" id="draftReveal">show</button>
+</div>
+</form>
+<aside class="draft-panel">
+<p class="eyebrow">storage
+</p>
+<h3>Local database
+</h3>
+<ul class="draft-list">
+<li>Messages<strong>124,000</strong>
+</li>
+<li>Database size<strong>82 MB</strong>
+</li>
+<li>Data directory<strong>configured locally</strong>
+</li>
+</ul>
+<p>Search remains available without a Discord connection.
+</p><a class="draft-secondary" href="../privacy.html">privacy &amp; data</a>
+</aside>
+</div>
+<section class="draft-panel">
+<h3>Clear archive data
+</h3>
+<p>Production asks you to confirm before clearing archived messages and indexes. Your Discord messages, local exports, and backup copies are separate.
+</p>
+<p class="draft-note">Destructive actions are disabled in this draft.
+</p>
+</section>
+<p class="draft-status" id="draftStatus" role="status">
+</p>
+</div>
+</main>
+<footer class="site-footer"><a href="../privacy.html">privacy &amp; data</a>
+</footer>
+</div>
+<script src="workspace-drafts.js"></script>
+</body>
+</html>
