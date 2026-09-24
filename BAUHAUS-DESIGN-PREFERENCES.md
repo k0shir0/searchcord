@@ -19,7 +19,7 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 - The standalone `searchcord` hero is stronger than a slogan. Give the wordmark a little breathing room in its lettering.
 - Bauhaus should be visible as structure: geometry, clear rules, strong blocks, asymmetry with alignment, and intentional composition.
 - Geometry is welcome when it is composed as one deliberate system. Keep it restrained and purposeful, not as isolated dots or floating shapes.
-- Search-box geometry should use clear alignment without a straight grid. Circles should remain complete inside their reserved bay, sized as large as possible without clipping or competing with the headline and form.
+- Search-box geometry should use clear alignment and an open, slightly angled grid. Circles should remain complete inside their reserved bay, sized as large as possible without clipping or competing with the headline and form.
 - Use a few large, related circles and triangles, supported by a square and bar where the layout has room, plus angled rules. Keep the forms in clear bays around the copy and controls. Let the rules show inside transparent cutouts, with a small navy gap wherever a rule meets an outline. Keep circles whole and use the left, center, and right groups as one composition; on narrow screens simplify the layout while keeping the main circle and triangle visible when search opens.
 - Deepen the banner to navy and use lavender, mint, pale blue, and restrained muted gold. Keep mint on the `cord` wordmark and use gold selectively on the geometry and browse accents.
 - Color should reach across the page through meaningful surfaces, tabs, stats, and states instead of random decoration.
@@ -55,7 +55,7 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 ## Banner repair notes (2026-09-22)
 
 - Recent Bauhaus form research supports using circles, squares, triangles, lines, planes, and grids as compositional material. Arrange them with proportion, rhythm, contrast, and intentional overlap; do not scatter isolated ornaments or leave unexplained fragments.
-- Use five angled rules across the banner plus two angled rules through the lower-left group; do not use a straight grid. Remove isolated mini ornaments. Keep the lower-left circle-and-triangle group visibly tilted and irregular, with the rules passing behind it and stopping at a clear banner-colored gap around each form. Leave the same visible gap around text and controls. Keep circles whole. Keep the main right-side group visible when search opens, and use lower-left and center groups to continue the composition. On narrow screens, retain the right circle and triangle while simplifying the extra groups.
+- Use five angled rules across the banner plus two angled rules through the lower-left group, with restrained vertical rules forming an open grid. Remove isolated mini ornaments. Keep the lower-left circle-and-triangle group visibly tilted and irregular, with the rules passing behind it and stopping at a clear banner-colored gap around each form. Leave the same visible gap around text and controls. Keep circles whole. Keep the main right-side group visible when search opens, and use lower-left and center groups to continue the composition. On narrow screens, retain the right circle and triangle while simplifying the extra groups.
 - Focusing/clicking the main query lifts the right-side group clear before the filter tray unfolds from the banner’s lower edge. Clicking outside or pressing Escape retracts the tray before returning the group. Keep the motion tied to that interaction and honor reduced-motion preferences.
 - Bauhaus history does not mandate one color per shape. Use deep navy, light lavender, and cool green as contemporary choices; avoid yellow and warm accents.
 - Keep geometry motion subtle and coordinated as one layer. The banner has no purple focus border and the search field has no outline on focus. Match the search and clear-filter buttons: blue outlined at rest, then invert to cream and dark ink when hovered, pressed, or focused. Center the wordmark and distinguish one segment with an accent color; keep the un-underlined privacy link at the bottom.
@@ -69,12 +69,18 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 
 - Draw every banner shape as a transparent cutout with a consistent 3px full-strength outline. Use the lavender right circle as the reference. Keep the lavender, mint, pale-blue, and muted-gold strokes clear and consistent.
 - Reserve separate bays for the left shapes, search copy, right group, and lower forms. Keep the headline and inputs unobstructed, preserve complete circles, and fit every outline inside the banner.
-- Show the angled rules inside the transparent shapes, but leave a small navy clearance on both sides of each outline. Keep the two lower-left rules parallel as they cross the tilted circle-and-triangle group, and fade the right-side vertical rules before the filter controls open across them.
+- Show the angled rules inside the transparent shapes, but leave navy clearance on both sides of each outline. Keep the two lower-left rules parallel as they cross the tilted circle-and-triangle group. Keep vertical rules visible when filters open, with navy space between the rules and controls.
 - Use porcelain search and filter fields with dark text, a restrained gold edge, and mint focus treatment. Give every view tab a visible top stripe and larger geometric lettering, including Browse.
 - Keep the open/close movement short and eased, with the right group lifting before the filter tray appears. Honor reduced-motion preferences.
 
 ## Background geometry clearance (2026-09-23)
 
 - The heading and porcelain inputs lead the banner. Keep the geometric strokes behind them and use slightly quieter full-opacity stroke colors so the shapes read as background objects.
-- Leave roughly 6px of navy between an outline and any rule or other outline it crosses. Transparent shape interiors can still reveal rules between those gaps. Preserve whole shapes, including during filter-tray motion and at narrow widths.
-- Keep the current search input styling and text layout while refining this background composition.
+- Leave navy between an outline and any rule or other outline it crosses. Transparent shape interiors can still reveal rules between those gaps. Preserve whole shapes, including during filter-tray motion and at narrow widths.
+- Keep the search input text layout and porcelain fill while refining the background composition.
+
+## Grid and input frames (2026-09-23)
+
+- Use five restrained vertical rules with the existing angled horizontal rules to form an open background grid. The rules should remain behind the headline, search bar, and filter fields, with clean navy breaks around those controls.
+- Widen the navy clearance around geometric outlines to 10px. Keep rules visible through transparent interiors between those gaps.
+- Frame the whole search input and button as one box. Give each filter field one border. Focus changes that existing border from muted gold to mint; do not stack an inset highlight or another outline on the input.
