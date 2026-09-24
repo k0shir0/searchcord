@@ -2,6 +2,18 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Production promotion (2026-09-23)
+
+- The approved trial now supplies the real home page. `static/bauhaus.css` is
+  shared by production and trials; `static/home.css` adapts the existing app shell.
+- Home geometry and input frames use cool lavender, mint, and pale blue only.
+  This supersedes earlier muted-gold geometry directions below. Secondary page
+  drafts may use restrained gold alongside deep navy, green, and porcelain.
+- Keep search on Browse, with indexed autocomplete, stable IDs to disambiguate
+  duplicate names, inclusive UTC dates, and compact previous/next controls.
+- Archive channel management belongs in an expandable section, not a server rail.
+- Keep outline shapes complete and separated, including their clearance masks.
+
 ## Non-negotiables
 
 - Searchcord is a developer application. Functionality comes before decoration.

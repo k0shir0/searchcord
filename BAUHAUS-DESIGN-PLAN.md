@@ -1,6 +1,6 @@
 # Searchcord Bauhaus web direction
 
-Status: research complete, local visual trials only
+Status: approved home promoted to production; secondary designs remain local drafts
 
 Working preferences: read [BAUHAUS-DESIGN-PREFERENCES.md](BAUHAUS-DESIGN-PREFERENCES.md) before making further visual changes.
 

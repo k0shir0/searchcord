@@ -1,43 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="blue-purple">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>searchcord</title>
+  <meta name="description" content="Search and explore your local Discord archive.">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="bauhaus.css">
+  <link rel="stylesheet" href="home.css">
 </head>
 <body>
 
-<!-- ── Header ─────────────────────────────────────────── -->
-<header class="header">
-  <span class="wordmark">searchcord</span>
-  <div class="header-right">
-    <div class="scrape-pill" id="scrapePill">
-      <span class="pulse-dot"></span>
-      <span id="scrapeStatus">scraping…</span>
-    </div>
-    <button class="hamburger" id="menuBtn" aria-label="Settings">
-      <span></span><span></span><span></span>
-    </button>
-  </div>
-</header>
-
+<header class="topline"><h1><span>search</span><span class="wordmark-accent">cord</span></h1></header>
+<div class="utility-bar"><span id="connectionStatus" role="status">Your local archive</span>
+<div class="scrape-pill" id="scrapePill"><span class="pulse-dot"></span><span id="scrapeStatus">scraping…</span></div>
+<button class="btn-ghost" id="menuBtn" aria-controls="settingsPanel" aria-expanded="false">settings</button></div>
 <!-- ── Settings overlay + panel ───────────────────────── -->
 <div class="overlay" id="overlay"></div>
-<aside class="settings-panel" id="settingsPanel">
+<aside class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-label="Settings" inert>
   <div class="sp-head">
     <span class="sp-title">settings</span>
-    <button class="sp-close" id="closeSettings">&#x2715;</button>
+    <button class="sp-close" id="closeSettings" aria-label="Close settings">&#x2715;</button>
   </div>
   <div class="sp-body">
 
     <div class="sg">
-      <label class="sg-label">discord token</label>
+      <label class="sg-label" for="tokenInput">discord token</label>
       <div class="token-row">
         <input type="password" id="tokenInput" placeholder="Paste your token here…" autocomplete="off" spellcheck="false">
         <button class="token-toggle" id="tokenToggle">show</button>
       </div>
-      <p class="sg-hint">Stored locally in <code>data/searchcord.db</code>. Never sent anywhere except Discord's API.</p>
+      <p class="sg-hint">Stored in your configured local database. Never sent anywhere except Discord's API.</p>
       <button class="btn-mint" id="saveToken">Save &amp; Verify</button>
       <div class="token-status" id="tokenStatus"></div>
     </div>
@@ -51,36 +44,81 @@
   </div>
 </aside>
 
-<!-- ── Tab nav ────────────────────────────────────────── -->
-<nav class="tabnav">
-  <button class="tab active" data-view="browse">browse</button>
-  <button class="tab" data-view="dms">dms</button>
-  <button class="tab" data-view="search">search</button>
-  <button class="tab" data-view="live">live <span class="live-badge" id="liveBadge"></span></button>
-  <button class="tab" data-view="stats">stats</button>
-</nav>
-
+      <section class="composition" id="homeOverview" aria-label="Search overview">
+        <div class="query-block" id="queryBlock">
+          <div class="bauhaus-geometry" aria-hidden="true">
+            <div class="geometry-ornaments">
+              <span class="ornament-rule ornament-rule-a"></span>
+              <span class="ornament-rule ornament-rule-b"></span>
+              <span class="ornament-rule ornament-rule-c"></span>
+              <span class="ornament-rule ornament-rule-d"></span>
+              <span class="ornament-rule ornament-rule-e"></span>
+              <span class="ornament-rule ornament-rule-f"></span>
+              <span class="ornament-rule ornament-rule-g"></span>
+              <span class="ornament-rule ornament-rule-h"></span>
+              <span class="ornament-rule ornament-rule-i"></span>
+              <span class="ornament-rule ornament-rule-j"></span>
+            </div>
+            <div class="geometry-forms geometry-forms-backdrop">
+              <span class="geometry-backdrop-disk"></span>
+              <span class="geometry-backdrop-square"></span>
+            </div>
+            <div class="geometry-forms geometry-forms-right">
+              <span class="geometry-ring"></span><span class="geometry-square"></span>
+              <span class="geometry-bar"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+            <div class="geometry-forms geometry-forms-left">
+              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+            <div class="geometry-forms geometry-forms-center">
+              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+          </div>
+          <div class="query-copy">
+            <h2>What are you looking for?</h2>
+            <form class="query-form" id="queryForm">
+              <label for="searchInput">Search messages</label>
+              <input id="searchInput" type="search" placeholder="try “release notes”" aria-controls="filterTray" aria-expanded="false">
+              <button id="searchBtn" type="submit">search</button>
+            </form>
+          </div>
+          <div class="filter-tray" id="filterTray" inert>
+            <form class="filter-form" id="filterForm">
+              <label>server<input id="fGuild" name="server" type="text" list="dl-guilds" autocomplete="off" placeholder="server name"></label>
+              <label>channel<input id="fChannel" name="channel" type="text" list="dl-channels" autocomplete="off" placeholder="channel name"></label>
+              <label>author<input id="fUser" name="author" type="text" list="dl-users" autocomplete="off" placeholder="user name"></label>
+              <label>from<input id="fDateFrom" name="from" type="date" title="From date (UTC)"></label>
+              <label>to<input id="fDateTo" name="to" type="date" title="To date (UTC, inclusive)"></label>
+              <button type="reset">clear filters</button>
+              <datalist id="dl-guilds"></datalist>
+              <datalist id="dl-channels"></datalist>
+              <datalist id="dl-users"></datalist>
+            </form>
+          </div>
+        </div>
+        <div class="index-block" aria-label="Archive totals">
+          <div class="index-stat"><span class="index-number" id="homeMessages">…</span><span class="index-caption">messages indexed</span></div>
+          <div class="index-stat"><span class="index-number" id="homeServers">…</span><span class="index-caption">indexed servers</span></div>
+        </div>
+      </section>
+<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">browse</button><button class="surface-tab tab" type="button" data-view="dms" aria-pressed="false" aria-controls="view-dms">dms</button><button class="surface-tab tab" type="button" data-view="live" aria-pressed="false" aria-controls="view-live">live <span class="live-badge" id="liveBadge"></span></button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">stats</button></nav>
 <!-- ── Main ──────────────────────────────────────────── -->
 <main class="main">
 
-  <!-- Browse view -->
-  <section class="view active" id="view-browse">
-    <div class="sidebar">
-      <div class="sidebar-label">servers</div>
-      <div class="server-list" id="serverList">
-        <div class="placeholder-msg">loading…</div>
+  <section class="view active" id="view-browse" aria-label="Browse archive">
+    <section id="resultsSection" aria-labelledby="results-title" hidden>
+      <div class="section-head"><h2 id="results-title">results</h2><p id="resultsStatus" role="status"></p></div>
+      <div class="result-list" id="searchResults"></div>
+      <nav class="pagination" id="pagination" aria-label="Results pages" hidden></nav>
+    </section>
+    <details class="archive-tools" id="archiveTools"><summary>Archive channels</summary>
+      <p class="sg-hint">Connect Discord to choose channels for scraping or live monitoring.</p>
+      <button class="btn-ghost" id="connectDiscord">connect Discord</button>
+      <div class="server-list" id="serverList"><p class="placeholder-msg">Server list loads when you connect.</p></div>
+      <div class="content" id="content"><div class="empty-state" id="emptyState"><p>Select a server to browse channels</p></div>
+        <div class="channels-pane" id="channelsPane"><div class="cp-head" id="cpHead"></div><div class="cp-body" id="cpBody"></div></div>
       </div>
-    </div>
-    <div class="content" id="content">
-      <div class="empty-state" id="emptyState">
-        <div class="empty-icon">⌗</div>
-        <p>Select a server to browse channels</p>
-      </div>
-      <div class="channels-pane" id="channelsPane">
-        <div class="cp-head" id="cpHead"></div>
-        <div class="cp-body" id="cpBody"></div>
-      </div>
-    </div>
+    </details>
   </section>
 
   <!-- DMs view -->
@@ -117,32 +155,6 @@
     </div>
   </section>
 
-  <!-- Search view -->
-  <section class="view" id="view-search">
-    <div class="search-wrap">
-      <div class="search-top">
-        <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="Search messages…" autocomplete="off">
-          <button id="searchBtn">search</button>
-        </div>
-        <div class="search-filters" id="searchFilters">
-          <input type="text" id="fGuild"   list="dl-guilds"   placeholder="Server…"       autocomplete="off">
-          <input type="text" id="fChannel" list="dl-channels" placeholder="Channel…"      autocomplete="off">
-          <input type="text" id="fUser"    list="dl-users"    placeholder="User or ID…"   autocomplete="off">
-          <datalist id="dl-guilds"></datalist>
-          <datalist id="dl-channels"></datalist>
-          <datalist id="dl-users"></datalist>
-          <input type="date" id="fDateFrom" title="From">
-          <input type="date" id="fDateTo" title="To">
-        </div>
-      </div>
-      <div class="search-results" id="searchResults">
-        <div class="empty-state-search">search your scraped messages</div>
-      </div>
-      <div class="pagination" id="pagination"></div>
-    </div>
-  </section>
-
 <!-- ── Scrape queue bar ───────────────────────────────── -->
 <div class="queue-bar" id="queueBar">
   <div class="qb-left">
@@ -154,6 +166,7 @@
     <input type="number" id="scrapeLimit" placeholder="∞" min="0" step="100" title="Messages to scrape back (blank = all)">
     <span class="qb-limit-label">msgs back</span>
   </div>
+  <label><input type="checkbox" id="harvestProfiles"> fetch profiles</label>
   <div class="qb-right">
     <button class="btn-ghost" id="clearQueue">clear</button>
     <button class="btn-mint" id="startScrape">start scraping</button>
@@ -264,12 +277,8 @@
   </section>
 
 </main>
+<footer class="site-footer"><a href="privacy.html">privacy &amp; data</a></footer>
 
-<script
-  src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
-  integrity="sha256-DiMmxoaAcr7BWSdgxnKQQ8ruopYKK0bO5qIZKqxqv/A="
-  crossorigin="anonymous"
-  referrerpolicy="no-referrer"></script>
 <script src="app.js"></script>
 </body>
 </html>

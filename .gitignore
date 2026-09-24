@@ -45,6 +45,9 @@ token.txt
 
 # ─── Editor / OS ─────────────────────────────────────────────
 .claude/
+/agents/
+graphify-out/
+graph.json
 .vscode/
 .idea/
 *.swp

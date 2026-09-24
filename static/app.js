@@ -34,33 +34,49 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function boot() {
-  const v = await api('/api/token/validate');
-  if (!v.valid) {
-    openSettings();
-    setTokenStatus('No token — paste yours in settings.', 'fail');
-  } else {
-    loadGuilds();
+  await loadSearchFilters();
+  const params = new URLSearchParams(location.search);
+  for (const [key, id] of Object.entries(searchFields)) $(id).value = params.get(key) || '';
+  populateChannelFilter(resolveFilter(S.guildMap, $('fGuild').value));
+  const view = location.hash.slice(1) || 'browse';
+  if (params.has('search') || [...Object.keys(searchFields)].some(key => params.has(key))) {
+    await doSearch(Math.max(1, Number(params.get('page')) || 1), false);
   }
+  switchView(view);
 }
 
-// ── Nav tabs ─────────────────────────────────────────────────
 function initNav() {
   document.querySelectorAll('.tab').forEach(t =>
     t.addEventListener('click', () => switchView(t.dataset.view))
   );
+  window.addEventListener('hashchange', () => switchView(location.hash.slice(1), false));
+  $('connectDiscord').addEventListener('click', connectDiscord);
 }
 
-function switchView(name) {
-  document.querySelectorAll('.tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.view === name)
-  );
-  document.querySelectorAll('.view').forEach(v =>
-    v.classList.toggle('active', v.id === `view-${name}`)
-  );
-  if (name === 'search') loadSearchFilters();
-  if (name === 'live')   connectLiveSSE();
-  if (name === 'stats')  loadStats();
-  if (name === 'dms')    loadDms();
+function switchView(name, updateUrl = true) {
+  if (!['browse', 'dms', 'live', 'stats'].includes(name)) name = 'browse';
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === name);
+    t.setAttribute('aria-pressed', String(t.dataset.view === name));
+  });
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
+  $('homeOverview').hidden = name !== 'browse';
+  if (updateUrl) history.replaceState(null, '', `${location.pathname}${location.search}#${name}`);
+  if (name === 'live') connectLiveSSE();
+  if (name === 'stats') loadStats();
+  if (name === 'dms') loadDms();
+}
+
+async function connectDiscord() {
+  $('connectDiscord').disabled = true;
+  try {
+    const v = await api('/api/token/validate');
+    if (!v.valid) { openSettings(); setTokenStatus('Paste your Discord token to connect.', 'fail'); return; }
+    $('connectionStatus').textContent = `Connected as ${v.username}`;
+    await loadGuilds();
+  } catch (error) {
+    $('connectionStatus').textContent = error.message;
+  } finally { $('connectDiscord').disabled = false; }
 }
 
 // ── Settings panel ───────────────────────────────────────────
@@ -72,6 +88,15 @@ function initSettings() {
   btn.addEventListener('click',     () => panel.classList.contains('open') ? closeSettings() : openSettings());
   overlay.addEventListener('click', closeSettings);
   $('closeSettings').addEventListener('click', closeSettings);
+  panel.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
+    if (e.key === 'Tab') {
+      const items = [...panel.querySelectorAll('button, input')].filter(el => !el.disabled);
+      const first = items[0], last = items.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
 
   // Token show/hide
   const inp = $('tokenInput');
@@ -101,8 +126,13 @@ function initSettings() {
 
   $('clearDb').addEventListener('click', async () => {
     if (!confirm('Delete all scraped data? This cannot be undone.')) return;
-    await api('/api/messages', { method: 'DELETE' });
-    loadDbStats();
+    try {
+      await api('/api/messages', { method: 'DELETE' });
+      searchController?.abort(); ++searchRequest;
+      $('searchResults').replaceChildren(); $('resultsStatus').textContent = 'Archive cleared';
+      $('pagination').hidden = true;
+      await Promise.all([loadDbStats(), loadSearchFilters()]);
+    } catch (error) { $('dbStats').textContent = `Could not clear archive: ${error.message}`; }
   });
 }
 
@@ -110,12 +140,18 @@ function openSettings() {
   $('menuBtn').classList.add('open');
   $('overlay').classList.add('visible');
   $('settingsPanel').classList.add('open');
+  $('settingsPanel').inert = false;
+  $('menuBtn').setAttribute('aria-expanded', 'true');
+  $('tokenInput').focus();
   loadDbStats();
 }
 function closeSettings() {
   $('menuBtn').classList.remove('open');
   $('overlay').classList.remove('visible');
   $('settingsPanel').classList.remove('open');
+  $('settingsPanel').inert = true;
+  $('menuBtn').setAttribute('aria-expanded', 'false');
+  $('menuBtn').focus();
 }
 function setTokenStatus(msg, cls) {
   const el = $('tokenStatus');
@@ -124,7 +160,7 @@ function setTokenStatus(msg, cls) {
 }
 async function loadDbStats() {
   try {
-    const f = await api('/api/search/filters');
+    const f = await api('/api/search/filters?include_users=false');
     $('dbStats').textContent =
       `${n(f.total_messages)} messages · ${f.guilds.length} servers · ${f.channels.length} channels`;
   } catch { $('dbStats').textContent = '—'; }
@@ -146,7 +182,8 @@ function renderGuilds() {
   const list = $('serverList');
   list.innerHTML = '';
   S.guilds.forEach(g => {
-    const el = ce('div', 'server-item');
+    const el = ce('button', 'server-item');
+    el.type = 'button';
     el.dataset.id = g.id;
 
     const icon = ce('div', 'server-icon');
@@ -231,7 +268,13 @@ function renderDmList(dms, body) {
     exportBtn.title = 'Export to ChatML JSONL';
     exportBtn.textContent = '⇩';
 
-    el.append(hash, name, btn, exportBtn);
+    // DM clear button (trash icon)
+    const clearBtn = ce('button', 'ch-btn ch-clear-btn');
+    clearBtn.setAttribute('aria-label', 'Delete your messages in this DM');
+    clearBtn.title = 'Delete your messages in this DM';
+    clearBtn.textContent = '🗑';
+
+    el.append(hash, name, btn, exportBtn, clearBtn);
 
     // Whole row toggles the scrape queue, matching how server channel rows
     // behave. guild_id/guild_name are synthetic since DMs have no guild.
@@ -244,9 +287,147 @@ function renderDmList(dms, body) {
       e.stopPropagation();
       openExportModal(dm);
     });
+    clearBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      handleDmClearClick(dm, el, clearBtn);
+    });
 
     body.appendChild(el);
   });
+}
+
+// DM Clear state
+let dmClearPending = null; // { dm, el, clearBtn, confirmed: boolean }
+
+function handleDmClearClick(dm, el, clearBtn) {
+  if (dmClearPending && dmClearPending.dm.id === dm.id && dmClearPending.confirmed) {
+    // Already confirmed and running — do nothing (progress modal is open)
+    return;
+  }
+
+  if (dmClearPending && dmClearPending.dm.id === dm.id && !dmClearPending.confirmed) {
+    // Second click = confirm
+    dmClearPending.confirmed = true;
+    clearBtn.textContent = '⏳';
+    clearBtn.disabled = true;
+    clearBtn.title = 'Starting…';
+    startDmClear(dm);
+    return;
+  }
+
+  // First click on this DM (or different DM) — show inline confirm
+  if (dmClearPending) {
+    // Reset previous pending DM's button
+    dmClearPending.clearBtn.textContent = '🗑';
+    dmClearPending.clearBtn.disabled = false;
+    dmClearPending.clearBtn.title = 'Delete your messages in this DM';
+  }
+
+  dmClearPending = { dm, el, clearBtn, confirmed: false };
+  clearBtn.textContent = '✕';
+  clearBtn.title = 'Click again to confirm deletion';
+  clearBtn.classList.add('pending-confirm');
+
+  // Auto-cancel after 5 seconds
+  setTimeout(() => {
+    if (dmClearPending && dmClearPending.dm.id === dm.id && !dmClearPending.confirmed) {
+      clearBtn.textContent = '🗑';
+      clearBtn.disabled = false;
+      clearBtn.title = 'Delete your messages in this DM';
+      clearBtn.classList.remove('pending-confirm');
+      dmClearPending = null;
+    }
+  }, 5000);
+}
+
+async function startDmClear(dm) {
+  const modal = $('modalBg');
+  const modalTitle = modal.querySelector('.modal-title');
+  modalTitle.textContent = 'deleting your messages';
+  modal.classList.add('visible');
+  $('modalFoot').classList.remove('visible');
+  $('stopScrapeBtn').disabled = false;
+  $('moLog').innerHTML = '';
+  $('moBar').style.width = '0%';
+  $('moStats').textContent = `Deleting your messages in ${esc(dm.name)}…`;
+  $('moChannel').textContent = 'Starting…';
+
+  $('scrapePill').classList.add('visible');
+
+  let resp;
+  try {
+    resp = await api('/api/dm-clear/start', { method: 'POST', body: { channel_id: dm.id } });
+  } catch (e) {
+    finishDmClear(`Failed to start: ${e.message}`);
+    return;
+  }
+
+  const { job_id } = resp;
+  S.activeJobId = job_id;
+
+  const es = new EventSource(`/api/dm-clear/progress/${job_id}`);
+
+  es.onmessage = e => {
+    const ev = JSON.parse(e.data);
+    const log = $('moLog');
+
+    switch (ev.type) {
+      case 'progress':
+        $('moChannel').textContent = `Deleted ${n(ev.deleted)} messages…`;
+        $('moStats').textContent = `${n(ev.deleted)} deleted · ${n(ev.scanned)} scanned`;
+        break;
+
+      case 'warning':
+        logLine(log, `⚠ ${ev.message}`, 'err');
+        break;
+
+      case 'complete':
+        es.close();
+        $('moBar').style.width = '100%';
+        $('moChannel').textContent = 'Done.';
+        $('moStats').textContent = `Deleted ${n(ev.deleted)} messages`;
+        logLine(log, `✓ Complete — ${n(ev.deleted)} messages deleted`, 'ok');
+        finishDmClear();
+        break;
+
+      case 'cancelled':
+        es.close();
+        $('moChannel').textContent = 'Stopped.';
+        $('moStats').textContent = `Deleted ${n(ev.deleted)} messages before stopping`;
+        logLine(log, `⏹ Stopped — ${n(ev.deleted)} messages deleted`, 'ok');
+        finishDmClear();
+        break;
+
+      case 'error':
+        es.close();
+        logLine(log, `✗ ${ev.message}`, 'err');
+        finishDmClear(ev.message);
+        break;
+    }
+  };
+
+  es.onerror = () => {
+    es.close();
+    finishDmClear('Connection lost');
+  };
+}
+
+function finishDmClear(errMsg) {
+  $('modalFoot').classList.add('visible');
+  $('stopScrapeBtn').disabled = true;
+  $('scrapePill').classList.remove('visible');
+  S.activeJobId = null;
+
+  // Reset the DM clear button
+  if (dmClearPending) {
+    dmClearPending.clearBtn.textContent = '🗑';
+    dmClearPending.clearBtn.disabled = false;
+    dmClearPending.clearBtn.title = 'Delete your messages in this DM';
+    dmClearPending.clearBtn.classList.remove('pending-confirm');
+    dmClearPending = null;
+  }
+
+  if (errMsg) logLine($('moLog'), `Error: ${errMsg}`, 'err');
 }
 
 // ── Channels ─────────────────────────────────────────────────
@@ -394,7 +575,9 @@ async function startScraping() {
 
   let resp;
   try {
-    resp = await api('/api/scrape/start', { method: 'POST', body: { channels: S.queue, limit } });
+    resp = await api('/api/scrape/start', { method: 'POST', body: {
+      channels: S.queue, limit, harvest_profiles: $('harvestProfiles').checked,
+    } });
   } catch {
     finishScrape('Failed to start job');
     return;
@@ -429,6 +612,18 @@ async function startScraping() {
         done++;
         $('moBar').style.width = `${(done / total) * 100}%`;
         logLine(log, `✓ #${ev.channel}: ${n(ev.messages)} msgs`, 'ok');
+        break;
+
+      case 'profiles':
+        logLine(log, `✓ #${ev.channel}: ${n(ev.saved)} new profiles`, 'ok');
+        break;
+
+      case 'profile_progress':
+        $('moStats').textContent = `${n(ev.saved)} new profiles saved`;
+        break;
+
+      case 'profile_warning':
+        logLine(log, `⚠ ${ev.message}`, 'err');
         break;
 
       case 'channel_error':
@@ -477,6 +672,7 @@ function finishScrape(errMsg) {
   if (errMsg) logLine($('moLog'), `Error: ${errMsg}`, 'err');
   S.queue = [];
   renderQueue();
+  loadSearchFilters();
 }
 
 function initModal() {
@@ -486,8 +682,15 @@ function initModal() {
     $('stopScrapeBtn').disabled = true;
     $('moChannel').textContent = 'Stopping…';
     try {
+      // The same modal is reused for both scrape and DM clear jobs.
+      // Check if it's a DM clear job by seeing if the job exists in delete_jobs (can't from here).
+      // We'll just try both - one will 404, the other will succeed.
       await api(`/api/scrape/${S.activeJobId}/stop`, { method: 'POST' });
-    } catch { /* SSE will still fire cancelled event */ }
+    } catch {
+      try {
+        await api(`/api/dm-clear/${S.activeJobId}/stop`, { method: 'POST' });
+      } catch { /* SSE will still fire cancelled event */ }
+    }
   });
 }
 
@@ -499,202 +702,237 @@ function logLine(container, text, cls = '') {
 }
 
 // ── Search ────────────────────────────────────────────────────
+const searchFields = {q: 'searchInput', guild_id: 'fGuild', channel_id: 'fChannel', author_id: 'fUser', date_from: 'fDateFrom', date_to: 'fDateTo'};
+let searchController;
+let searchRequest = 0;
+let submittedSearch = new URLSearchParams();
+
+function setFilterTrayExpanded(expanded) {
+  $('queryBlock').classList.toggle('is-expanded', expanded);
+  $('searchInput').setAttribute('aria-expanded', String(expanded));
+  $('filterTray').inert = !expanded;
+}
+
 function initSearch() {
-  $('searchBtn').addEventListener('click', () => doSearch(1));
-  $('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(1); });
-
-  // text inputs fire on 'input'; date inputs fire on 'change'
-  ['fGuild', 'fChannel', 'fUser'].forEach(id =>
-    $(id).addEventListener('input', () => doSearch(1))
-  );
-  ['fDateFrom', 'fDateTo'].forEach(id =>
-    $(id).addEventListener('change', () => doSearch(1))
-  );
-
-  // When guild filter changes, refresh channel datalist
-  $('fGuild').addEventListener('input', e => {
-    const gid = S.guildMap.get(e.target.value.trim()) || '';
-    populateChannelFilter(gid);
+  $('queryForm').addEventListener('submit', e => { e.preventDefault(); doSearch(1, true); });
+  $('filterForm').addEventListener('submit', e => { e.preventDefault(); doSearch(1, true); });
+  $('searchInput').addEventListener('focus', () => setFilterTrayExpanded(true));
+  $('searchInput').addEventListener('click', () => setFilterTrayExpanded(true));
+  $('queryBlock').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { $('searchInput').focus(); setFilterTrayExpanded(false); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!$('queryBlock').contains(e.target)) setFilterTrayExpanded(false);
+  });
+  $('queryBlock').addEventListener('focusout', e => {
+    if (e.relatedTarget && !$('queryBlock').contains(e.relatedTarget)) setFilterTrayExpanded(false);
+  });
+  $('filterForm').addEventListener('reset', () => {
+    queueMicrotask(() => {
+      document.querySelectorAll('.filter-form input').forEach(el => { el.setCustomValidity(''); el.removeAttribute('aria-invalid'); });
+      populateChannelFilter('');
+      doSearch(1);
+    });
+  });
+  document.querySelectorAll('.filter-form input').forEach(input => {
+    input.addEventListener('input', () => { input.setCustomValidity(''); input.removeAttribute('aria-invalid'); });
+    input.addEventListener('change', () => {
+      if (input.id === 'fGuild') {
+        $('fChannel').value = '';
+        populateChannelFilter(resolveFilter(S.guildMap, input.value));
+      }
+      doSearch(1);
+    });
+  });
+  let authorTimer;
+  let authorRequest = 0;
+  $('fUser').addEventListener('input', e => {
+    clearTimeout(authorTimer);
+    const query = e.target.value.trim();
+    const request = ++authorRequest;
+    if (query.length < 2 || S.userMap.has(query) || /^\d{1,20}$/.test(query)) return;
+    authorTimer = setTimeout(async () => {
+      try {
+        const users = await api(`/api/search/authors?q=${encodeURIComponent(query)}`);
+        if (request !== authorRequest || $('fUser').value.trim() !== query) return;
+        const dl = $('dl-users');
+        dl.replaceChildren();
+        S.userMap.clear();
+        users.forEach(u => {
+          const display = `${u.author_name} · ${u.author_id}`;
+          S.userMap.set(display, u.author_id);
+          const option = document.createElement('option');
+          option.value = display;
+          dl.appendChild(option);
+        });
+      } catch { /* Raw IDs remain usable when suggestions are unavailable. */ }
+    }, 150);
   });
 }
 
 async function loadSearchFilters() {
   try {
-    const f = await api('/api/search/filters');
+    const f = await api('/api/search/filters?include_users=false');
     S.filterChans = f.channels;
     S.guildMap.clear();
-    S.channelMap.clear();
-    S.userMap.clear();
-
-    // Guilds datalist
-    const gdl = $('dl-guilds');
-    gdl.innerHTML = '';
+    $('dl-guilds').replaceChildren();
     f.guilds.forEach(g => {
-      S.guildMap.set(g.guild_name, g.guild_id);
-      S.guildMap.set(g.guild_id,   g.guild_id);
-      const o = document.createElement('option');
-      o.value = g.guild_name;
-      gdl.appendChild(o);
+      const display = `${g.guild_name} · ${g.guild_id}`;
+      S.guildMap.set(display, g.guild_id);
+      const option = document.createElement('option');
+      option.value = display;
+      $('dl-guilds').appendChild(option);
     });
-
-    // Users datalist — searchable by name OR raw ID
-    const udl = $('dl-users');
-    udl.innerHTML = '';
-    f.users.forEach(u => {
-      const display = `${u.author_name}  ·  ${u.author_id}`;
-      S.userMap.set(display,       u.author_id);
-      S.userMap.set(u.author_name, u.author_id);
-      S.userMap.set(u.author_id,   u.author_id);
-      const o = document.createElement('option');
-      o.value = display;
-      udl.appendChild(o);
-    });
-
-    // Rebuild channel list (respect current guild filter if any)
-    const gid = S.guildMap.get($('fGuild').value.trim()) || '';
-    populateChannelFilter(gid);
-  } catch {}
+    const compact = value => Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(value);
+    $('homeMessages').textContent = compact(f.total_messages);
+    $('homeMessages').title = n(f.total_messages);
+    $('homeServers').textContent = compact(f.guilds.length);
+    $('homeServers').title = n(f.guilds.length);
+    populateChannelFilter(resolveFilter(S.guildMap, $('fGuild').value));
+    $('connectionStatus').textContent = 'Local archive ready';
+  } catch {
+    $('connectionStatus').textContent = 'Archive unavailable. Check the server, then reload.';
+    $('homeMessages').textContent = '—'; $('homeServers').textContent = '—';
+  }
 }
 
 function populateChannelFilter(guildId) {
   const dl = $('dl-channels');
-  dl.innerHTML = '';
+  dl.replaceChildren();
   S.channelMap.clear();
-  const list = guildId
-    ? S.filterChans.filter(c => c.guild_id === guildId)
-    : S.filterChans;
+  const list = guildId ? S.filterChans.filter(c => c.guild_id === guildId) : S.filterChans;
   list.forEach(c => {
-    const display = `#${c.channel_name}`;
-    S.channelMap.set(display,     c.channel_id);
-    S.channelMap.set(c.channel_id, c.channel_id);
-    const o = document.createElement('option');
-    o.value = display;
-    dl.appendChild(o);
+    const display = `#${c.channel_name} · ${c.channel_id}`;
+    S.channelMap.set(display, c.channel_id);
+    const option = document.createElement('option');
+    option.value = display;
+    dl.appendChild(option);
   });
 }
 
-// Resolve a free-text filter value to the ID the API expects
 function resolveFilter(map, rawValue) {
-  const v = rawValue.trim();
-  if (!v) return '';
-  return map.get(v) || (/^\d{17,20}$/.test(v) ? v : '');
+  const value = rawValue.trim();
+  return map.get(value) || (/^\d{1,20}$/.test(value) ? value : '');
 }
 
-async function doSearch(page) {
+async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
+  searchController?.abort();
+  const request = ++searchRequest;
+  $('searchResults').removeAttribute('aria-busy');
+  const params = reuseSubmitted ? new URLSearchParams(submittedSearch) : new URLSearchParams();
+  $('pagination').hidden = true;
+  if (!reuseSubmitted) {
+    for (const [key, id] of Object.entries(searchFields)) {
+      const input = $(id);
+      input.setCustomValidity(''); input.removeAttribute('aria-invalid');
+      let value = input.value.trim();
+      const map = {guild_id: S.guildMap, channel_id: S.channelMap, author_id: S.userMap}[key];
+      if (map && value) {
+        value = resolveFilter(map, value);
+        if (!value) {
+          input.setCustomValidity('Choose an indexed suggestion or enter a Discord ID.');
+          input.setAttribute('aria-invalid', 'true');
+          setFilterTrayExpanded(true);
+          $('resultsSection').hidden = false;
+          $('resultsStatus').textContent = 'Choose a suggestion or enter an ID for each filter.';
+          $('searchResults').replaceChildren();
+          input.focus();
+          return;
+        }
+      }
+      if (value) params.set(key, value);
+    }
+    if ($('fDateFrom').value && $('fDateTo').value && $('fDateFrom').value > $('fDateTo').value) {
+      setFilterTrayExpanded(true);
+      $('fDateTo').setCustomValidity('To date must be on or after the from date.');
+      $('fDateTo').setAttribute('aria-invalid', 'true');
+      $('fDateTo').reportValidity();
+      $('resultsSection').hidden = false;
+      $('resultsStatus').textContent = 'To date must be on or after the from date.';
+      $('searchResults').replaceChildren();
+      return;
+    }
+  }
+  params.set('page', page); params.set('limit', 50);
+  submittedSearch = new URLSearchParams(params);
   S.searchPage = page;
-  const q          = $('searchInput').value.trim();
-  const guild_id   = resolveFilter(S.guildMap,   $('fGuild').value);
-  const channel_id = resolveFilter(S.channelMap, $('fChannel').value);
-  const author_id  = resolveFilter(S.userMap,    $('fUser').value);
-  const date_from  = $('fDateFrom').value;
-  const date_to    = $('fDateTo').value;
-
-  const p = new URLSearchParams({ page, limit: 50 });
-  if (q)          p.set('q',          q);
-  if (guild_id)   p.set('guild_id',   guild_id);
-  if (channel_id) p.set('channel_id', channel_id);
-  if (author_id)  p.set('author_id',  author_id);
-  if (date_from)  p.set('date_from',  date_from + 'T00:00:00');
-  if (date_to)    p.set('date_to',    date_to   + 'T23:59:59');
-
-  const results = $('searchResults');
-  results.innerHTML = spinnerHTML();
-
+  switchView('browse');
+  $('resultsSection').hidden = false;
+  $('resultsStatus').textContent = 'Searching…';
+  $('searchResults').setAttribute('aria-busy', 'true');
+  $('searchResults').innerHTML = spinnerHTML();
+  const url = new URLSearchParams(params); url.delete('limit'); url.set('search', '1');
+  history.replaceState(null, '', `${location.pathname}?${url}#browse`);
+  searchController = new AbortController();
   try {
-    const data = await api(`/api/search?${p}`);
-    renderResults(data, q);
-  } catch {
-    results.innerHTML = '<div class="no-results">Search failed</div>';
+    const data = await api(`/api/search?${params}`, {signal: searchController.signal});
+    if (request !== searchRequest) return;
+    renderResults(data, params.get('q') || '');
+    if (shouldScroll) $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+  } catch (error) {
+    if (error.name === 'AbortError' || request !== searchRequest) return;
+    $('resultsStatus').textContent = `Search failed: ${error.message}`;
+    $('searchResults').innerHTML = '<p class="no-results">Search is unavailable. Submit again to retry.</p>';
+  } finally {
+    if (request === searchRequest) $('searchResults').removeAttribute('aria-busy');
   }
 }
 
 function renderResults(data, query) {
   const results = $('searchResults');
-  const pag     = $('pagination');
-
-  if (!data.messages.length) {
-    results.innerHTML = '<div class="no-results">No results found</div>';
-    pag.classList.remove('visible');
-    return;
-  }
-
-  results.innerHTML = `<div class="result-count">${n(data.total)} result${data.total !== 1 ? 's' : ''}</div>`;
-
+  results.replaceChildren();
+  $('resultsStatus').textContent = data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
+  if (!data.messages.length) results.innerHTML = '<p class="no-results">No results found. Try another query or clear the filters.</p>';
   data.messages.forEach(msg => {
-    const card = ce('div', 'result-card');
-    const ts   = new Date(msg.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-    const body = msg.content || '';
-    const hi   = query ? highlight(body, query) : esc(body);
-
-    let attsHtml = '';
+    const row = ce('article', 'result-row');
+    let hash = 0;
+    for (const char of String(msg.author_id)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    const avatar = ce('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
+    avatar.setAttribute('aria-hidden', 'true');
+    const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
+    fallback();
+    if (msg.avatar_url) {
+      const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+      img.onload = () => avatar.replaceChildren(img);
+      img.onerror = fallback; img.src = msg.avatar_url;
+    }
+    const content = ce('div');
+    const text = ce('p', 'result-copy');
+    text.innerHTML = msg.content ? (query ? highlight(msg.content, query) : esc(msg.content)) : '(no text content)';
+    content.appendChild(text);
     if (msg.attachments?.length) {
-      const links = msg.attachments.map(url => {
-        const isImg = /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(url);
-        return `<a href="${esc(url)}" target="_blank" rel="noopener" class="rc-att">${isImg ? '🖼 image' : '📎 file'}</a>`;
-      }).join('');
-      attsHtml = `<div class="rc-attachments">${links}</div>`;
+      const attachments = ce('div', 'rc-attachments');
+      msg.attachments.forEach((url, i) => {
+        const link = ce('a', 'rc-att'); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = `image ${i + 1}`;
+        attachments.appendChild(link);
+      });
+      content.appendChild(attachments);
     }
-
-    card.innerHTML = `
-      <div class="rc-meta">
-        <span class="rc-author">${esc(msg.author_name)}</span>
-        <span class="rc-loc"><span class="srv">${esc(msg.guild_name)}</span> / #${esc(msg.channel_name)}</span>
-        <span class="rc-ts">${ts}</span>
-      </div>
-      <div class="rc-meta" style="margin-bottom:0;margin-top:-3px">
-        <span class="rc-uid">uid: ${esc(msg.author_id)}</span>
-      </div>
-      <div class="rc-body ${!body ? 'empty' : ''}" style="margin-top:6px">${hi || '(no text content)'}</div>
-      ${attsHtml}
-    `;
-    results.appendChild(card);
+    const meta = ce('div', 'result-meta');
+    meta.innerHTML = `<strong>${esc(msg.author_name)}</strong><span>${esc(msg.guild_name || 'Direct messages')} · #${esc(msg.channel_name)}</span><span>id: ${esc(msg.author_id)}</span>`;
+    const time = ce('time'); time.dateTime = msg.timestamp;
+    time.textContent = new Date(msg.timestamp).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+    meta.appendChild(time);
+    row.append(avatar, content, meta); results.appendChild(row);
   });
+  renderPagination(data.page, data.pages);
+}
 
-  if (data.pages > 1) {
-    renderPagination(data.page, data.pages);
-    pag.classList.add('visible');
-  } else {
-    pag.classList.remove('visible');
+function renderPagination(page, pages) {
+  const pagination = $('pagination');
+  pagination.replaceChildren(); pagination.hidden = pages <= 1;
+  for (const [label, target, disabled] of [['previous', page - 1, page === 1], ['next', page + 1, page >= pages]]) {
+    const button = ce('button', 'page-control'); button.type = 'button'; button.textContent = label; button.disabled = disabled;
+    button.addEventListener('click', () => doSearch(target, true, true));
+    if (label === 'next') {
+      const readout = ce('div', 'page-readout');
+      readout.innerHTML = `<span class="page-current">page ${n(page)}</span><span class="page-rule" aria-hidden="true"></span><span>${n(pages)} pages</span>`;
+      pagination.appendChild(readout);
+    }
+    pagination.appendChild(button);
   }
 }
 
-function renderPagination(cur, total) {
-  const pag = $('pagination');
-  pag.innerHTML = '';
-
-  const btn = (label, page, disabled = false) => {
-    const b = ce('button', `pg-btn${page === cur ? ' active' : ''}`);
-    b.innerHTML = label;
-    b.disabled  = disabled;
-    if (!disabled && page !== cur) b.addEventListener('click', () => doSearch(page));
-    return b;
-  };
-
-  pag.appendChild(btn('&#8592;', cur - 1, cur === 1));
-
-  let pages;
-  if (total <= 7) {
-    pages = Array.from({ length: total }, (_, i) => i + 1);
-  } else {
-    pages = [1];
-    if (cur > 3)        pages.push('…');
-    for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) pages.push(i);
-    if (cur < total - 2) pages.push('…');
-    pages.push(total);
-  }
-
-  pages.forEach(p => {
-    if (p === '…') {
-      const s = ce('span', 'pg-ellipsis');
-      s.textContent = '…';
-      pag.appendChild(s);
-    } else {
-      pag.appendChild(btn(p, p));
-    }
-  });
-
-  pag.appendChild(btn('&#8594;', cur + 1, cur === total));
-}
 
 // ── Stats / data visualisation ───────────────────────────────
 
@@ -710,7 +948,7 @@ async function loadStats() {
   });
 
   try {
-    const d = await api('/api/stats');
+    const [d] = await Promise.all([api('/api/stats'), loadChartLibrary()]);
     renderStats(d);
   } catch {
     // silent fail — DB might be empty
@@ -830,7 +1068,34 @@ function renderStats(d) {
   });
 }
 
+let chartLibraryPromise;
+function loadChartLibrary() {
+  if (typeof Chart !== 'undefined') return Promise.resolve();
+  if (!chartLibraryPromise) chartLibraryPromise = new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+    script.integrity = 'sha256-DiMmxoaAcr7BWSdgxnKQQ8ruopYKK0bO5qIZKqxqv/A=';
+    script.crossOrigin = 'anonymous'; script.referrerPolicy = 'no-referrer';
+    script.onload = () => resolve();
+    script.onerror = () => { chartLibraryPromise = null; script.remove(); resolve(); };
+    document.head.appendChild(script);
+  });
+  return chartLibraryPromise;
+}
+
 function renderChart(id, type, data, extraOpts = {}) {
+  if (typeof Chart === 'undefined') {
+    $(id).hidden = true;
+    const box = $(id).parentElement;
+    if (!box.querySelector('.chart-error')) {
+      const note = ce('p', 'chart-error');
+      note.textContent = 'Chart library unavailable. Reconnect and refresh to load charts.';
+      box.appendChild(note);
+    }
+    return;
+  }
+  $(id).hidden = false;
+  $(id).parentElement.querySelector('.chart-error')?.remove();
   if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
   const canvas = $(id);
   if (!canvas) return;
@@ -1019,10 +1284,9 @@ function appendLiveMessage(ev) {
 
   let attsHtml = '';
   if (ev.attachments?.length) {
-    const links = ev.attachments.map(url => {
-      const isImg = /\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(url);
-      return `<a href="${esc(url)}" target="_blank" rel="noopener" class="rc-att">${isImg ? '🖼 image' : '📎 file'}</a>`;
-    }).join('');
+    const links = ev.attachments.map(url =>
+      `<a href="${esc(url)}" target="_blank" rel="noopener" class="rc-att">🖼 image</a>`
+    ).join('');
     attsHtml = `<div class="live-msg-atts">${links}</div>`;
   }
 
@@ -1185,7 +1449,7 @@ function highlight(raw, query) {
 }
 
 async function api(url, opts = {}) {
-  const init = { method: opts.method || 'GET', headers: {} };
+  const init = { method: opts.method || 'GET', headers: {}, signal: opts.signal };
   if (opts.body) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(opts.body);

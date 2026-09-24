@@ -388,6 +388,36 @@ body {
 }
 .ch-btn:hover { background: var(--mint) !important; border-color: var(--mint) !important; color: #000 !important; }
 
+/* DM clear button (trash icon) */
+.ch-clear-btn {
+  color: var(--text-3) !important;
+}
+.ch-item:hover .ch-clear-btn,
+.ch-item.queued .ch-clear-btn {
+  opacity: 1;
+  border-color: var(--danger);
+  color: var(--danger) !important;
+  background: var(--danger-faint);
+}
+.ch-clear-btn:hover {
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+  color: #fff !important;
+}
+
+/* Pending confirmation state */
+.ch-clear-btn.pending-confirm {
+  opacity: 1 !important;
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+  background: var(--danger-faint) !important;
+  animation: pulseDanger 1s ease-in-out infinite;
+}
+@keyframes pulseDanger {
+  0%, 100% { box-shadow: 0 0 0 0 var(--danger-faint); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 77, 77, 0); }
+}
+
 /* ── Queue bar ──────────────────────────────────────────── */
 .queue-bar {
   display: none;
