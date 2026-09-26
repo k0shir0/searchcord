@@ -28,20 +28,24 @@
   <div class="sp-body">
 
     <div class="sg">
-      <label class="sg-label" for="tokenInput">discord token</label>
+      <label class="sg-label" for="savedTokenSelect">saved tokens</label>
+      <select id="savedTokenSelect" disabled><option value="">no saved tokens</option></select>
+      <label class="sg-label" for="tokenName">name for new token</label>
+      <input id="tokenName" type="text" maxlength="40" placeholder="e.g. personal" autocomplete="off">
+      <label class="sg-label" for="tokenInput">new discord token</label>
       <div class="token-row">
         <input type="password" id="tokenInput" placeholder="Paste your token here…" autocomplete="off" spellcheck="false">
-        <button class="token-toggle" id="tokenToggle">show</button>
+        <button class="token-toggle" id="tokenToggle" aria-label="Show new token">show</button>
       </div>
-      <p class="sg-hint">Stored in your configured local database. Never sent anywhere except Discord's API.</p>
-      <button class="btn-mint" id="saveToken">Save &amp; Verify</button>
+      <p class="sg-hint">Stored in your configured local database. Sent externally only to Discord's API.</p>
+      <button class="btn-mint" id="saveToken">save &amp; use token</button>
       <div class="token-status" id="tokenStatus" role="status"></div>
     </div>
 
     <div class="sg">
       <label class="sg-label">database</label>
       <p class="sg-hint" id="dbStats">—</p>
-      <button class="btn-danger" id="clearDb">Clear All Data</button>
+      <button class="btn-danger" id="clearDb" aria-live="polite">Clear All Data</button>
     </div>
 
   </div>

@@ -86,9 +86,10 @@ Discord. Select server, channel, and author suggestions or paste their IDs.
 Date filters use UTC and include the entire selected end date. Clear filters
 keeps the text query. Queries and filter IDs appear in the browser URL.
 
-For collection, use the outline gear beside the wordmark, paste
-your token, and hit **Save & Verify**. Open **Scrape** and use **connect Discord**
-to load servers with an already saved token. Switch between **channels** and
+For collection, use the outline gear beside the wordmark, give each Discord
+token a name, and choose **save & use token**. The saved-token menu lets you
+switch accounts without re-entering credentials. Open **Scrape** and use
+**connect Discord** to load servers with the selected token. Switch between **channels** and
 **direct messages**, filter by name, and use the labeled queue/monitor/export
 controls. Live monitoring and its incoming feed remain in the same workspace.
 
@@ -151,8 +152,10 @@ searchcord/
 
 ## Data & privacy
 
-`data/searchcord.db` contains **your Discord token in plaintext** in the
-`settings` table, alongside every message you have scraped. A one-time schema
+`data/searchcord.db` contains **your saved Discord tokens in plaintext** in the
+`settings` table, alongside every message you have scraped. Only token names
+and IDs are returned to the browser for the saved-token menu; new tokens are
+sent to the local app when you save them. A one-time schema
 migration creates a recovery backup named
 `data/searchcord.db.pre-compact-*.bak.gz` (or `.bak` if compression fails)
 that also contains the token and archived messages. The backup stays in place
@@ -160,9 +163,13 @@ after verification; remove it only after checking the upgraded archive and
 keeping any recovery copy you need. Decompress `.bak.gz` before opening it with
 SQLite. The `data/`
 directory is gitignored for that reason. Do not commit it, do not share it,
-and delete it when you are done. **Clear All Data** in the settings panel
-wipes archived messages and derived metadata; deleting the file removes everything including the
-token.
+and delete it when you are done. **Clear All Data** asks for a second click
+inside the button before it wipes archived messages and derived metadata.
+Saved tokens remain; deleting the database file removes them too.
+
+The in-app **privacy & data** page currently contains only its title and a
+return link. This README holds the current data-handling details; the page is
+not a completed privacy policy.
 
 The first start after upgrading makes the backup and assigns small internal row
 numbers to reduce search-index storage. Discord message IDs stay unchanged and

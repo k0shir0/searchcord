@@ -1,14 +1,30 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>searchcord · privacy &amp; data</title><link rel="stylesheet" href="bauhaus.css"></head>
-<body><div class="shell"><main class="workspace">
-<header class="topline"><h1>search<span class="wordmark-accent">cord</span></h1></header>
-<article class="policy-sheet"><p class="eyebrow">local archive</p><h2>Privacy &amp; data</h2>
-<p>Searchcord stores your archived message text, image links, server and channel names, author identities, and scrape progress in your configured local SQLite database. Expanded profile collection is optional. Your Discord token, if saved, is stored in that database too.</p>
-<div class="policy-note">Treat your database, exports, and backups as private files. Searchcord does not encrypt them or provide account authentication.</div>
-<h3>Network connections</h3><p>Connecting Discord, scraping, and live monitoring use Discord’s API. Search works on the local archive without a token. Available profile and live-message avatars load from Discord’s CDN. Opening an image can refresh its link through Discord before redirecting your browser. Charts use a bundled local copy of Chart.js and make no CDN request.</p>
-<h3>Retention &amp; deletion</h3><p>Archived data remains until you remove it. Settings → Clear All Data deletes archived messages and associated index and profile records from the active database, retaining settings such as your saved token. It does not remove exports, backups, or copies. Deleting messages from Discord is a separate, confirmed action under Scrape → direct messages.</p>
-<p>Storage upgrades preserve historical per-message names and exact timestamp values. The active archive keeps image links but drops older raw attachment metadata. A recovery backup is created before conversion, compressed and verified when possible, and kept on disk; remove it separately when you no longer need it.</p>
-<h3>Local access</h3><p>The server binds to loopback by default. Anyone with access to the server or database can access private archive data. Browser search URLs include the query and selected filters; avoid sharing them if those details are private.</p>
-<p class="policy-note">These notes describe the local application. They are not a policy for a hosted service.</p>
-<p><a href="/">Return to searchcord</a></p></article></main></div></body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>searchcord · privacy &amp; data</title>
+  <link rel="stylesheet" href="bauhaus.css">
+  <link rel="stylesheet" href="privacy.css">
+</head>
+<body class="privacy-page">
+  <main class="privacy-stage">
+    <div class="privacy-geometry" aria-hidden="true">
+      <span class="privacy-rule rule-one"></span>
+      <span class="privacy-rule rule-two"></span>
+      <span class="privacy-rule rule-three"></span>
+      <span class="privacy-rule rule-four"></span>
+      <span class="privacy-rule rule-five"></span>
+      <span class="privacy-circle circle-one"></span>
+      <span class="privacy-circle circle-two"></span>
+      <span class="privacy-square"></span>
+      <span class="privacy-bar"></span>
+      <svg class="privacy-triangle" viewBox="0 0 100 100"><path d="M50 2 L98 98 H2 Z"></path></svg>
+    </div>
+    <article class="policy-sheet" aria-labelledby="privacyTitle">
+      <h1 id="privacyTitle">privacy <span>&amp;</span> data</h1>
+    </article>
+  </main>
+  <footer class="privacy-footer"><a href="/">return to searchcord</a></footer>
+</body>
+</html>

@@ -186,7 +186,7 @@ function initSettings() {
   panel.addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
     if (e.key === 'Tab') {
-      const items = [...panel.querySelectorAll('button, input')].filter(el => !el.disabled);
+      const items = [...panel.querySelectorAll('button, input, select')].filter(el => !el.disabled);
       const first = items[0], last = items.at(-1);
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
@@ -200,30 +200,54 @@ function initSettings() {
     const hide = inp.type === 'text';
     inp.type = hide ? 'password' : 'text';
     tog.textContent = hide ? 'show' : 'hide';
+    tog.setAttribute('aria-label', hide ? 'Show new token' : 'Hide new token');
   });
 
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') $('saveToken').click(); });
 
+  $('savedTokenSelect').addEventListener('change', async e => {
+    const select = e.currentTarget;
+    const previous = select.dataset.activeId;
+    select.disabled = true;
+    setTokenStatus('switching token…', '');
+    try {
+      const saved = await api('/api/settings', { method: 'POST', body: { active_token_id: select.value } });
+      renderSavedTokens(saved);
+      await verifyActiveToken();
+    } catch (error) {
+      select.value = previous;
+      setTokenStatus(`Could not switch token: ${error.message}`, 'fail');
+    } finally { select.disabled = false; }
+  });
+
   $('saveToken').addEventListener('click', async () => {
     const token = inp.value.trim();
-    if (!token) return;
-    setTokenStatus('verifying…', '');
+    if (!token) { setTokenStatus('Enter a token to save.', 'fail'); return; }
+    setTokenStatus('saving token…', '');
     $('saveToken').disabled = true;
     try {
-      await api('/api/settings', { method: 'POST', body: { token } });
-      const v = await api('/api/token/validate');
-      if (v.valid) {
-        setTokenStatus(`connected as ${v.username}`, 'ok');
-        $('connectionStatus').textContent = `Connected as ${v.username}`;
-        inp.value = '';
-        setTimeout(() => { closeSettings(); loadGuilds(); }, 600);
-      } else setTokenStatus('Invalid token. Check it and try again.', 'fail');
-    } catch (error) { setTokenStatus(`Connection failed: ${error.message}`, 'fail'); }
+      const saved = await api('/api/settings', { method: 'POST', body: { token, token_label: $('tokenName').value.trim() } });
+      renderSavedTokens(saved);
+      inp.value = '';
+      $('tokenName').value = '';
+      inp.type = 'password';
+      tog.textContent = 'show';
+      tog.setAttribute('aria-label', 'Show new token');
+      await verifyActiveToken();
+    } catch (error) { setTokenStatus(`Could not save token: ${error.message}`, 'fail'); }
     finally { $('saveToken').disabled = false; }
   });
 
   $('clearDb').addEventListener('click', async () => {
-    if (!confirm('Delete all scraped data? This cannot be undone.')) return;
+    const clear = $('clearDb');
+    if (!clear.classList.contains('pending-confirm')) {
+      clear.classList.add('pending-confirm');
+      clear.textContent = 'You really want to delete your data?';
+      return;
+    }
+    clear.classList.remove('pending-confirm');
+    clear.textContent = 'deleting…';
+    clear.disabled = true;
     try {
       await api('/api/messages', { method: 'DELETE' });
       searchController?.abort(); ++searchRequest;
@@ -231,7 +255,47 @@ function initSettings() {
       $('pagination').hidden = true;
       await Promise.all([loadDbStats(), loadSearchFilters()]);
     } catch (error) { $('dbStats').textContent = `Could not clear archive: ${error.message}`; }
+    finally { clear.disabled = false; clear.textContent = 'Clear All Data'; }
   });
+}
+
+function renderSavedTokens(saved) {
+  const select = $('savedTokenSelect');
+  select.replaceChildren();
+  if (!saved.tokens.length) {
+    select.add(new Option('no saved tokens', ''));
+    select.disabled = true;
+  } else {
+    saved.tokens.forEach(token => select.add(new Option(token.label, token.id)));
+    select.disabled = false;
+    select.value = saved.active_token_id;
+  }
+  select.dataset.activeId = saved.active_token_id || '';
+}
+
+async function loadSavedTokens() {
+  try { renderSavedTokens(await api('/api/settings')); }
+  catch (error) { setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail'); }
+}
+
+async function verifyActiveToken() {
+  try {
+    const verified = await api('/api/token/validate');
+    if (!verified.valid) {
+      setTokenStatus('Selected token could not be verified by Discord.', 'fail');
+      $('connectionStatus').textContent = 'Selected token could not connect to Discord.';
+      return;
+    }
+    setTokenStatus(`connected as ${verified.username}`, 'ok');
+    $('connectionStatus').textContent = `Connected as ${verified.username}`;
+    if (!S.scraping) { S.queue = []; renderQueue(); }
+    S.guild = null;
+    $('channelsPane').classList.remove('visible');
+    $('emptyState').style.display = '';
+    $('cpBody').replaceChildren();
+    $('dmBody').innerHTML = '<p class="placeholder-msg">Open direct messages to load conversations.</p>';
+    loadGuilds();
+  } catch (error) { setTokenStatus(`Could not verify selected token: ${error.message}`, 'fail'); }
 }
 
 function openSettings() {
@@ -241,9 +305,12 @@ function openSettings() {
   $('settingsPanel').inert = false;
   $('menuBtn').setAttribute('aria-expanded', 'true');
   $('tokenInput').focus();
+  loadSavedTokens();
   loadDbStats();
 }
 function closeSettings() {
+  $('clearDb').classList.remove('pending-confirm');
+  if (!$('clearDb').disabled) $('clearDb').textContent = 'Clear All Data';
   $('menuBtn').classList.remove('open');
   $('overlay').classList.remove('visible');
   $('settingsPanel').classList.remove('open');

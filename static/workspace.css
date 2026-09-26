@@ -37,6 +37,11 @@
 input:not([type="checkbox"]):focus-visible, textarea:focus-visible { outline: none; }
 input[type="checkbox"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .token-row input:focus, .export-field input:focus, .export-field textarea:focus { border-color: var(--border2); }
+.sg > input, .sg > select { min-height: 42px; width: 100%; padding: 9px 10px; border: 1px solid var(--border2); border-radius: 0; background: var(--paper-deep); color: var(--ink); }
+.sg > input:focus { border-color: var(--border2); }
+.sg > input::placeholder { color: var(--ink-soft); }
+.sg > select:disabled { opacity: .55; }
+.btn-danger.pending-confirm { background: var(--danger); color: #fff; text-transform: none; }
 .qb-limit input:focus { border-color: var(--ice); }
 .server-list { grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); max-height: 180px; }
 .server-item { padding: 10px; min-height: 48px; border-radius: 0; }

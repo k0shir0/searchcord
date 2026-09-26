@@ -141,11 +141,37 @@ def open_browser_when_ready(host: str, port: int):
 
 async def get_token() -> str:
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT value FROM settings WHERE key='token'") as cur:
-            row = await cur.fetchone()
-    if not row:
+        settings = await _token_settings(db)
+    tokens = _saved_tokens(settings)
+    active = settings.get("active_token_id") or (tokens[0]["id"] if tokens else None)
+    token = next((item["token"] for item in tokens if item["id"] == active), None)
+    if not token:
         raise HTTPException(401, "No token configured")
-    return row[0]
+    return token
+
+
+async def _token_settings(db) -> dict:
+    async with db.execute("""SELECT key, value FROM settings
+        WHERE key IN ('token', 'saved_tokens', 'active_token_id')""") as cur:
+        return dict(await cur.fetchall())
+
+
+def _saved_tokens(settings: dict) -> list[dict]:
+    raw = settings.get("saved_tokens")
+    if raw is None:
+        legacy = settings.get("token")
+        return [{"id": "legacy", "label": "Saved token", "token": legacy}] if legacy else []
+    try:
+        tokens = json.loads(raw)
+        if not isinstance(tokens, list) or any(
+            not isinstance(item, dict) or
+            not all(isinstance(item.get(key), str) and item[key] for key in ("id", "label", "token"))
+            for item in tokens
+        ):
+            raise ValueError
+        return tokens
+    except (ValueError, TypeError):
+        raise HTTPException(500, "Saved token settings are invalid") from None
 
 
 def _retry_after(response) -> float:
@@ -1341,30 +1367,59 @@ async def search_authors(q: str = ""):
 @app.get("/api/settings")
 async def get_settings():
     async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
         async with db.execute("SELECT key, value FROM settings") as cur:
-            rows = {r["key"]: r["value"] for r in await cur.fetchall()}
-    result = dict(rows)
-    if "token" in result:
-        t = result.pop("token")
-        result["token_set"] = True
-        result["token_preview"] = (t[:8] + "…" + t[-4:]) if len(t) > 12 else "••••••••"
+            rows = dict(await cur.fetchall())
+    tokens = _saved_tokens(rows)
+    result = {key: value for key, value in rows.items()
+              if key not in {"token", "saved_tokens", "active_token_id"}}
+    result["tokens"] = [{"id": item["id"], "label": item["label"]} for item in tokens]
+    result["active_token_id"] = rows.get("active_token_id") or (
+        tokens[0]["id"] if tokens else None)
+    result["token_set"] = bool(tokens)
     return result
 
 
 class SettingsIn(BaseModel):
     token: Optional[str] = None
+    token_label: Optional[str] = None
+    active_token_id: Optional[str] = None
 
 
 @app.post("/api/settings")
 async def update_settings(s: SettingsIn):
+    if (s.token is None) == (s.active_token_id is None):
+        raise HTTPException(400, "Provide a token or a saved token ID")
+    token = s.token.strip() if s.token is not None else None
+    label = (s.token_label or "").strip()
+    if token is not None and (not token or len(token) > 4096):
+        raise HTTPException(400, "Token must contain 1 to 4096 characters")
+    if len(label) > 40:
+        raise HTTPException(400, "Token name must be at most 40 characters")
     async with aiosqlite.connect(DB_PATH) as db:
-        if s.token is not None:
-            await db.execute(
-                "INSERT OR REPLACE INTO settings (key, value) VALUES ('token', ?)", (s.token,)
-            )
+        await db.execute("BEGIN IMMEDIATE")
+        settings = await _token_settings(db)
+        tokens = _saved_tokens(settings)
+        if token is not None:
+            existing = next((item for item in tokens if item["token"] == token), None)
+            if existing:
+                active_id = existing["id"]
+                if label:
+                    existing["label"] = label
+            else:
+                active_id = uuid.uuid4().hex
+                tokens.append({"id": active_id, "label": label or f"Token {len(tokens) + 1}", "token": token})
+        else:
+            if not any(item["id"] == s.active_token_id for item in tokens):
+                raise HTTPException(404, "Saved token not found")
+            active_id = s.active_token_id
+        await db.executemany(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            [("saved_tokens", json.dumps(tokens)), ("active_token_id", active_id)],
+        )
+        await db.execute("DELETE FROM settings WHERE key='token'")
         await db.commit()
-    return {"ok": True}
+    return {"ok": True, "active_token_id": active_id,
+            "tokens": [{"id": item["id"], "label": item["label"]} for item in tokens]}
 
 
 @app.delete("/api/messages")

@@ -1,0 +1,86 @@
+.privacy-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.privacy-stage {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-height: 620px;
+  overflow: hidden;
+  position: relative;
+}
+
+.privacy-geometry {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+}
+
+.privacy-rule {
+  background: rgba(209, 197, 255, .42);
+  height: 2px;
+  left: -6%;
+  position: absolute;
+  transform-origin: left center;
+  width: 112%;
+}
+.rule-one { top: 12%; transform: rotate(2deg); }
+.rule-two { background: rgba(141, 216, 176, .35); top: 30%; transform: rotate(-3deg); }
+.rule-three { background: rgba(174, 207, 231, .38); top: 67%; transform: rotate(3deg); }
+.rule-four { background: rgba(209, 197, 255, .32); top: 85%; transform: rotate(-2deg); }
+.rule-five { background: rgba(141, 216, 176, .32); height: 115%; left: 80%; top: -8%; transform: rotate(8deg); width: 2px; }
+
+.privacy-circle, .privacy-square, .privacy-bar, .privacy-triangle { position: absolute; }
+.privacy-circle, .privacy-square { background: transparent; border: 3px solid var(--signal); }
+.privacy-circle { border-radius: 50%; }
+.circle-one { height: 240px; left: -45px; top: 9%; width: 240px; }
+.circle-two { border-color: var(--cool-accent); bottom: 9%; height: 180px; right: -34px; width: 180px; }
+.privacy-square { border-color: var(--ice); bottom: 7%; height: 116px; left: 9%; transform: rotate(16deg); width: 116px; }
+.privacy-bar { background: var(--ice); height: 11px; right: 10%; top: 16%; transform: rotate(-7deg); width: 112px; }
+.privacy-triangle { bottom: 20%; fill: none; height: 174px; right: 7%; stroke: var(--signal); stroke-width: 2; transform: rotate(-11deg); width: 174px; }
+
+.privacy-page .policy-sheet {
+  align-items: center;
+  background: #071a32;
+  border: 1px solid rgba(237, 243, 248, .48);
+  display: flex;
+  justify-content: center;
+  margin: 30px;
+  max-width: none;
+  min-height: min(60vh, 560px);
+  padding: 36px;
+  position: relative;
+  text-align: center;
+  width: min(760px, calc(100% - 60px));
+}
+.privacy-page .policy-sheet h1 {
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: clamp(42px, 6vw, 80px);
+  letter-spacing: -.035em;
+  line-height: 1;
+  margin: 0;
+}
+.privacy-page .policy-sheet h1 span { color: var(--cool-accent); }
+.privacy-footer { padding: 24px; text-align: center; }
+.privacy-footer a { color: var(--ink); font-family: var(--display); font-size: 16px; font-weight: 700; letter-spacing: .06em; text-decoration: none; }
+.privacy-footer a:hover { color: var(--cool-accent); }
+.privacy-footer a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
+
+@media (max-width: 700px) {
+  .privacy-stage { min-height: 560px; }
+  .privacy-page .policy-sheet { min-height: 390px; padding: 20px; width: calc(100% - 44px); }
+  .privacy-page .policy-sheet h1 { font-size: clamp(38px, 11vw, 64px); }
+  .circle-one { height: 150px; left: -75px; top: 4%; width: 150px; }
+  .circle-two { bottom: 3%; height: 140px; right: -60px; width: 140px; }
+  .privacy-square { bottom: 3%; height: 75px; left: -18px; width: 75px; }
+  .privacy-bar { right: 4%; top: 8%; width: 76px; }
+  .privacy-triangle { bottom: 6%; height: 110px; right: 2%; width: 110px; }
+}

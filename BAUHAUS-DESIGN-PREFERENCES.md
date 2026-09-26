@@ -2,6 +2,18 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Settings and privacy page refinement (2026-09-26)
+
+- Settings lists locally saved token names and lets the user add and select
+  another token. Never expose stored token values in the settings response.
+- Archive clearing is confirmed by a second click on the same button; the
+  question replaces the button label after the first click.
+- The production privacy page shows only a centered `privacy & data` title and
+  a bottom-centered return link. Place angled rules and outlined circles,
+  triangle, square, and bar in the surrounding margins, using the Browse banner's
+  cool palette. The page is a visual placeholder while data-handling details
+  remain in the README.
+
 ## Production input and navigation refinement (2026-09-26)
 
 - Production text fields use a muted navy fill and light text, including Browse

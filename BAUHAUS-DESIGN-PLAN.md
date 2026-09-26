@@ -21,7 +21,8 @@ and squares sit in separate bays with detached rules. Transitions are short and
 respect reduced motion. The production secondary views remain functional while
 these replacements are reviewed and iterated.
 
-The old privacy placeholder links to the production privacy and data notes.
+The old privacy draft links to the production title-only placeholder. Current
+data-handling details are in the README.
 See [the integration report](docs/bauhaus-diff-report.md) for page links and
 validation evidence.
 

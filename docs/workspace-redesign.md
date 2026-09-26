@@ -14,6 +14,20 @@ other text fields keep a steady border. Settings uses a simple outline gear.
 The masthead stays on its own paint layer while navigation animates only the
 entering workspace content and resets the scroll position to the top.
 
+The later Settings update stores multiple named tokens in the existing local
+settings table and exposes only their labels and IDs to the browser. Selecting
+a token changes the credential for new Discord requests. Clearing the archive
+requires two clicks on the same button and retains saved tokens. The production
+privacy page is now a title-only visual placeholder with a centered return link;
+current data-handling details remain in the README.
+
+Verification for this update used a disposable database with synthetic tokens
+and one synthetic message. The token contract retained the legacy credential,
+selected the new one, withheld raw values from API responses, and kept both
+after archive clearing. Chromium checked the first delete click made no delete
+request and the second removed the fixture message; desktop and 375px privacy
+captures showed centered text and no horizontal overflow.
+
 ## Pages and controls
 
 Routes are relative to a running Searchcord server. Production views share one
@@ -25,10 +39,10 @@ path or archive content is embedded in the application.
 | Browse home | `/#browse` | [index.html](../static/index.html) | Integrated search, full-width equal totals with exact numbers, then the navigation boxes and compact message results |
 | Scrape | `/#scrape` | [index.html](../static/index.html) | Channel and DM source tabs, name filter, shared queue and live monitor without a separate hero banner |
 | Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Archive totals, paginated contributors and six interactive charts without a separate hero banner |
-| Settings | Gear button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Simple outline gear, keyboard focus, token errors |
+| Settings | Gear button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Named saved-token selector, add-and-use flow, two-click archive clear |
 | Collection progress | Scrape, start or view progress | [index.html](../static/index.html), [app.js](../static/app.js) | Shared accessible dialog, explicit scrape/deletion job routing |
 | ChatML export | Scrape, direct messages, export | [index.html](../static/index.html), [app.js](../static/app.js) | Keyboard-selectable participant, themed dialog |
-| Privacy & data | `/privacy.html` | [privacy.html](../static/privacy.html) | Documents local Chart.js and combined collection workspace |
+| Privacy & data | `/privacy.html` | [privacy.html](../static/privacy.html) | Centered title and return link with geometric margin decoration |
 | Progress draft | `/trials/progress.html` | [progress.html](../static/trials/progress.html) | Replaces checkmark controls with numbered steps |
 | Earlier draft gallery | `/trials/` | [index.html](../static/trials/index.html) | Existing independent drafts remain available for iteration |
 
@@ -170,7 +184,7 @@ authorized push. Publication is a normal merge/push, without forcing remote refs
 | [workspace.css](../static/workspace.css) | New responsive production layout and motion |
 | [chart.umd.min.js](../static/vendor/chart.umd.min.js) | Pinned local Chart.js 4.4.0 |
 | [chart.LICENSE.md](../static/vendor/chart.LICENSE.md) | Dependency license |
-| [privacy.html](../static/privacy.html) | Current network and deletion descriptions |
+| [privacy.html](../static/privacy.html) | Title-only placeholder; current data-handling details are in the README |
 | [progress.html](../static/trials/progress.html) | Text step markers in the earlier draft |
 | [audit_history.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/benchmarks/audit_history.py) | Reproducible privacy audit without secret output |
 | [test_stats.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/test_stats.py) | Pagination, filters, bounds, sparse dates, empty archive |
