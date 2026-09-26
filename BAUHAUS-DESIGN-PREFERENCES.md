@@ -2,6 +2,16 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Stats and queue refinement (2026-09-26)
+
+- Stats keeps archive totals above two internal pages: scrollable server and
+  contributor rankings, then activity charts with visible data tables. Server
+  ranking shows messages and each server's share of the entire archive.
+- Remove the chart `View data` toggles. The tables stay available beneath the
+  charts, with the same search drilldowns as chart selections.
+- Starting a scrape keeps the user in Scrape. Put live message counts per channel,
+  the total, progress, and stop control inside the collection queue.
+
 ## Settings and privacy page refinement (2026-09-26)
 
 - Settings lists locally saved token names and lets the user add and select

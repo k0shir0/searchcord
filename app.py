@@ -1321,6 +1321,31 @@ async def contributors(
             "offset": offset, "limit": limit}
 
 
+@app.get("/api/stats/servers")
+async def ranked_servers(
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    q: Annotated[str, Query(max_length=100)] = "",
+):
+    """Page through all archived servers using cached message counts."""
+    query = q.strip().replace('!', '!!').replace('%', '!%').replace('_', '!_')
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""SELECT count FROM stats_counts
+            WHERE kind='total' AND key=''""") as cur:
+            row = await cur.fetchone()
+            total_messages = row[0] if row else 0
+        async with db.execute("""SELECT counts.key AS guild_id, guilds.name AS guild_name,
+            counts.count FROM stats_counts counts LEFT JOIN guilds ON guilds.id=counts.key
+            WHERE counts.kind='guild' AND counts.key<>'' AND counts.count>0
+            AND (?='' OR guilds.name LIKE ? ESCAPE '!' OR counts.key=?)
+            ORDER BY counts.count DESC, counts.key LIMIT ? OFFSET ?""",
+            (query, f'%{query}%', q.strip(), limit + 1, offset)) as cur:
+            rows = [dict(row) for row in await cur.fetchall()]
+    return {"servers": rows[:limit], "has_more": len(rows) > limit,
+            "offset": offset, "limit": limit, "total_messages": total_messages}
+
+
 @app.get("/api/search/filters")
 async def search_filters(include_users: bool = True):
     async with aiosqlite.connect(DB_PATH) as db:

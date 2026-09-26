@@ -17,7 +17,7 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Three workspaces**: Browse for local search, Scrape for channels, DMs,
   a shared collection queue and live monitoring, and Stats for archive exploration.
 - **Queue and scrape** any number of channels at once, with an optional
-  per-channel message cap, live progress, a stop button, and an optional
+  per-channel message cap, live per-channel counts and stopping in the queue, and an optional
   expanded-profile fetch for message authors.
 - **Resume and update** channel archives from saved message cursors, without
   re-reading completed history on later scrape jobs.
@@ -28,10 +28,11 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Bauhaus home** with an integrated search and expanding filter tray, indexed
   archive totals, cool outline geometry, and compact previous/next pagination.
   Search URLs preserve filters and page selection across reloads.
-- **Stats**: searchable, scrollable contributor rankings; server and channel
-  charts; daily, monthly, weekday, and hourly activity. Select a contributor,
+- **Stats**: separate rankings and activity pages, with searchable, scrollable
+  server and contributor leaderboards; server and channel charts; daily,
+  monthly, weekday, and hourly activity. Select a contributor,
   server, channel, date, or month to search its messages. Accessible data tables
-  accompany every chart. Timeline windows end at the latest archived message.
+  are always visible beneath every chart. Timeline windows end at the latest archived message.
 - **ChatML export** — turn a conversation into a `.jsonl` file in the
   OpenAI/ChatML message format.
 
@@ -112,11 +113,14 @@ exports out of version control.
 
 To scrape: use **queue** beside a channel or conversation, optionally set a
 **Messages per channel** limit, then **start scraping**. Leave the limit blank to pull the
-full history. Later jobs fetch only messages newer than each channel's saved
-cursor. If a first run is limited or stopped, a later job can resume the
-remaining older history. Check **fetch profiles** to request expanded Discord
-user records for authors missing from the local profile table. The toggle is
-off by default; known profiles are not fetched again. Searchcord stores the
+full history. The queue shows the current channel, messages saved per channel,
+the total, and a stop button while the job runs. You can keep using the rest of
+the workspace without closing a progress dialog. Later jobs fetch only messages
+newer than each channel's saved cursor. If a first run is limited or stopped, a
+later job can resume the remaining older history. Check **fetch expanded
+profiles** to request expanded Discord user records for authors missing from
+the local profile table. The toggle is off by default; known profiles are not
+fetched again. Searchcord stores the
 documented public user fields needed for identity and appearance, including
 username, display name, avatar/banner hashes, accent color, bot flag, and
 public flags.

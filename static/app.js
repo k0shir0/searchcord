@@ -8,6 +8,7 @@ const S = {
   scraping:      false,
   activeJobId:   null,
   activeJobKind: null,
+  scrapeRun:     null,
   searchPage:    1,
   filterChans:   [],
   liveChannels:  new Set(),
@@ -254,6 +255,7 @@ function initSettings() {
       $('searchResults').replaceChildren(); $('resultsStatus').textContent = 'Archive cleared';
       $('pagination').hidden = true;
       await Promise.all([loadDbStats(), loadSearchFilters()]);
+      if (activeView === 'stats') await loadStats(true);
     } catch (error) { $('dbStats').textContent = `Could not clear archive: ${error.message}`; }
     finally { clear.disabled = false; clear.textContent = 'Clear All Data'; }
   });
@@ -468,7 +470,11 @@ function renderDmList(dms, body) {
 let dmClearPending = null; // { dm, el, clearBtn, confirmed: boolean }
 
 function handleDmClearClick(dm, el, clearBtn) {
-  if (S.activeJobKind) { $('modalBg').classList.add('visible'); return; }
+  if (S.activeJobKind) {
+    if (S.activeJobKind === 'dm-clear') $('modalBg').classList.add('visible');
+    else $('queueProgress').scrollIntoView({block: 'nearest'});
+    return;
+  }
   if (dmClearPending && dmClearPending.dm.id === dm.id && dmClearPending.confirmed) {
     // Already confirmed and running — do nothing (progress modal is open)
     return;
@@ -525,6 +531,8 @@ async function startDmClear(dm) {
   $('moChannel').textContent = 'Starting…';
 
   $('scrapePill').classList.add('visible');
+  $('scrapeStatus').textContent = 'deleting messages…';
+  $('showScrapeProgress').textContent = 'view deletion';
 
   let resp;
   try {
@@ -588,6 +596,7 @@ function finishDmClear(errMsg) {
   $('modalFoot').classList.add('visible');
   $('stopScrapeBtn').disabled = true;
   $('scrapePill').classList.remove('visible');
+  $('showScrapeProgress').textContent = 'view progress';
   S.activeJobId = null;
   S.activeJobKind = null;
   renderQueue();
@@ -700,6 +709,11 @@ function initQueue() {
     });
   });
   $('startScrape').addEventListener('click', startScraping);
+  $('stopQueueScrape').addEventListener('click', stopQueueScrape);
+  $('dismissQueueProgress').addEventListener('click', () => {
+    $('queueProgress').hidden = true;
+    renderQueue();
+  });
   renderQueue();
 }
 
@@ -707,6 +721,10 @@ function renderQueue() {
   const bar   = $('queueBar');
   const chips = $('queueChips');
   $('queueCount').textContent = S.queue.length;
+  const showSetup = !S.scraping && S.queue.length > 0;
+  bar.querySelector('.queue-controls').hidden = !showSetup;
+  bar.querySelector('.queue-hint').hidden = !showSetup;
+  chips.hidden = S.queue.length === 0 && !$('queueProgress').hidden;
   document.querySelectorAll('.ch-item').forEach(row => {
     const queued = S.queue.some(ch => ch.id === row.dataset.id);
     row.classList.toggle('queued', queued);
@@ -718,7 +736,7 @@ function renderQueue() {
   $('harvestProfiles').disabled = S.scraping;
   $('startScrape').disabled = !!S.activeJobKind || S.queue.length === 0;
   if (S.queue.length === 0) {
-    bar.classList.remove('visible');
+    bar.classList.toggle('visible', !$('queueProgress').hidden);
     chips.innerHTML = '<p class="queue-empty">Select channels or conversations to build a queue.</p>';
     return;
   }
@@ -750,121 +768,140 @@ async function startScraping() {
 
   const limitVal = parseInt($('scrapeLimit').value, 10);
   const limit = (!isNaN(limitVal) && limitVal > 0) ? limitVal : 0;
-
-  // Show modal
-  const modal = $('modalBg');
-  modal.querySelector('.modal-title').textContent = 'scraping in progress';
-  modal.classList.add('visible');
-  $('modalFoot').classList.remove('visible');
-  $('stopScrapeBtn').disabled = false;
-  $('moLog').innerHTML = '';
-  $('moBar').style.width = '0%';
-  $('moStats').textContent = limit ? `Limit: ${n(limit)} msgs per channel` : '';
-  $('moChannel').textContent = 'Initializing…';
-
-  $('scrapePill').classList.add('visible');
+  S.scrapeRun = {index: -1, total: 0, completed: 0};
+  $('queueProgress').hidden = false;
+  $('queueProgressTitle').textContent = 'Starting scrape…';
+  $('queueProgressSummary').textContent = limit ? `Limit: ${n(limit)} messages per channel` : 'Waiting for the first channel.';
+  $('queueProgressBar').max = S.queue.length;
+  $('queueProgressBar').value = 0;
+  $('stopQueueScrape').hidden = false;
+  $('stopQueueScrape').disabled = true;
+  $('dismissQueueProgress').hidden = true;
+  const rows = $('queueProgressRows'); rows.replaceChildren();
+  S.queue.forEach((channel, index) => {
+    const row = ce('div', 'queue-progress-row'); row.dataset.index = index;
+    const name = ce('span'); name.textContent = `${channel.guild_name || 'Direct messages'} · #${channel.name}`;
+    const count = ce('strong'); count.textContent = 'waiting';
+    row.append(name, count); rows.appendChild(row);
+  });
+  renderQueue();
 
   let resp;
   try {
     resp = await api('/api/scrape/start', { method: 'POST', body: {
       channels: S.queue, limit, harvest_profiles: $('harvestProfiles').checked,
     } });
-  } catch {
-    finishScrape('Failed to start job');
+  } catch (error) {
+    finishScrape(`Could not start: ${error.message}`, 'Scrape could not start', false);
     return;
   }
 
   const { job_id } = resp;
   S.activeJobId = job_id;
+  $('stopQueueScrape').disabled = false;
 
   const es = new EventSource(`/api/scrape/progress/${job_id}`);
   const total = S.queue.length;
-  let done = 0;
-  let totalMsgs = 0;
 
   es.onmessage = e => {
     const ev = JSON.parse(e.data);
-    const log = $('moLog');
+    const run = S.scrapeRun;
+    const row = () => $('queueProgressRows').querySelector(`[data-index="${run.index}"]`);
 
     switch (ev.type) {
       case 'channel_start':
-        $('moChannel').textContent = `Scraping #${ev.channel} in ${ev.guild}…`;
-        logLine(log, `→ #${ev.channel}  (${ev.guild})`);
+        run.index = ev.index - 1;
+        $('queueProgressTitle').textContent = `Scraping #${ev.channel}`;
+        row().querySelector('strong').textContent = 'scraping…';
         break;
 
       case 'progress':
-        totalMsgs = ev.total_messages;
-        $('moStats').textContent =
-          `${n(ev.messages)} msgs from #${ev.channel}  ·  ${n(totalMsgs)} total`;
-        $('scrapeStatus').textContent = `${n(totalMsgs)} msgs`;
+        run.total = ev.total_messages;
+        row().querySelector('strong').textContent = `${n(ev.messages)} messages`;
+        $('queueProgressSummary').textContent = `${n(run.total)} messages saved across ${total} queued channels`;
         break;
 
       case 'channel_complete':
-        done++;
-        $('moBar').style.width = `${(done / total) * 100}%`;
-        logLine(log, `Saved #${ev.channel}: ${n(ev.messages)} msgs`, 'ok');
+        run.completed++;
+        $('queueProgressBar').value = run.completed;
+        if (!row().classList.contains('failed')) row().querySelector('strong').textContent = `${n(ev.messages)} saved`;
         break;
 
       case 'profiles':
-        logLine(log, `Saved #${ev.channel}: ${n(ev.saved)} new profiles`, 'ok');
+        $('queueProgressSummary').textContent = `${n(run.total)} messages · ${n(ev.saved)} new profiles saved in #${ev.channel}`;
         break;
 
       case 'profile_progress':
-        $('moStats').textContent = `${n(ev.saved)} new profiles saved`;
+        $('queueProgressSummary').textContent = `${n(run.total)} messages · ${n(ev.saved)} new profiles saved`;
         break;
 
       case 'profile_warning':
-        logLine(log, `Notice: ${ev.message}`, 'err');
+        $('queueProgressSummary').textContent = `Profile notice: ${ev.message}`;
         break;
 
       case 'channel_error':
-        done++;
-        logLine(log, `#${ev.channel}: ${ev.message}`, 'err');
+        row().classList.add('failed');
+        row().querySelector('strong').textContent = 'error';
+        row().title = ev.message;
+        $('queueProgressSummary').textContent = `#${ev.channel}: ${ev.message}`;
         break;
 
       case 'complete':
         es.close();
-        $('moBar').style.width = '100%';
-        $('moChannel').textContent = 'Done.';
-        $('moStats').textContent =
-          `${n(ev.total_messages)} messages scraped across ${ev.channels} channels`;
-        logLine(log, `Complete — ${n(ev.total_messages)} total`, 'ok');
-        finishScrape();
+        $('queueProgressBar').value = total;
+        finishScrape(`${n(ev.total_messages)} messages saved across ${ev.channels} ${ev.channels === 1 ? 'channel' : 'channels'}.`);
         break;
 
       case 'cancelled':
         es.close();
-        $('moChannel').textContent = 'Stopped.';
-        $('moStats').textContent = `Scraped ${n(ev.total_messages)} messages before stopping`;
-        logLine(log, `Stopped — ${n(ev.total_messages)} msgs saved`, 'ok');
-        finishScrape();
+        $('queueProgressRows').querySelectorAll('strong').forEach(count => {
+          if (count.textContent === 'scraping…') count.textContent = '0 saved';
+          else if (count.textContent.endsWith(' messages')) count.textContent = count.textContent.replace(' messages', ' saved');
+          else if (count.textContent === 'waiting') count.textContent = 'not started';
+        });
+        finishScrape(`Stopped. ${n(ev.total_messages)} messages saved.`, 'Scrape stopped');
         break;
 
       case 'error':
         es.close();
-        logLine(log, `${ev.message}`, 'err');
-        finishScrape(ev.message);
+        finishScrape(ev.message, 'Scrape failed');
         break;
     }
   };
 
   es.onerror = () => {
     es.close();
-    finishScrape('Connection lost');
+    finishScrape('Progress connection lost. The scrape may still be running.', 'Progress disconnected');
   };
 }
 
-function finishScrape(errMsg) {
+function finishScrape(message, title = 'Scrape finished', started = true) {
   S.scraping = false;
   S.activeJobId = null;
   S.activeJobKind = null;
-  $('scrapePill').classList.remove('visible');
-  $('stopScrapeBtn').disabled = true;
-  $('modalFoot').classList.add('visible');
-  if (errMsg) logLine($('moLog'), `Error: ${errMsg}`, 'err');
-  S.queue = [];
+  $('queueProgressTitle').textContent = title;
+  $('queueProgressSummary').textContent = message;
+  $('stopQueueScrape').hidden = true;
+  $('dismissQueueProgress').hidden = false;
+  if (started) S.queue = [];
   renderQueue();
-  loadSearchFilters();
+  if (started) {
+    loadSearchFilters();
+    if (activeView === 'stats') loadStats(true);
+  }
+}
+
+async function stopQueueScrape() {
+  if (!S.activeJobId || S.activeJobKind !== 'scrape') return;
+  $('stopQueueScrape').disabled = true;
+  $('queueProgressTitle').textContent = 'Stopping scrape…';
+  try {
+    await api(`/api/scrape/${S.activeJobId}/stop`, {method: 'POST'});
+  } catch (error) {
+    $('queueProgressTitle').textContent = 'Scraping';
+    $('queueProgressSummary').textContent = `Could not stop: ${error.message}. Try again.`;
+    $('stopQueueScrape').disabled = false;
+  }
 }
 
 function initModal() {

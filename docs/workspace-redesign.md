@@ -38,9 +38,10 @@ path or archive content is embedded in the application.
 | --- | --- | --- | --- |
 | Browse home | `/#browse` | [index.html](../static/index.html) | Integrated search, full-width equal totals with exact numbers, then the navigation boxes and compact message results |
 | Scrape | `/#scrape` | [index.html](../static/index.html) | Channel and DM source tabs, name filter, shared queue and live monitor without a separate hero banner |
-| Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Archive totals, paginated contributors and six interactive charts without a separate hero banner |
+| Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Archive totals, server and contributor ranking pages, and an activity page with six interactive charts |
 | Settings | Gear button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Named saved-token selector, add-and-use flow, two-click archive clear |
-| Collection progress | Scrape, start or view progress | [index.html](../static/index.html), [app.js](../static/app.js) | Shared accessible dialog, explicit scrape/deletion job routing |
+| Collection progress | Scrape queue | [index.html](../static/index.html), [app.js](../static/app.js) | Inline per-channel counts, total messages, completion progress, and stop control |
+| DM deletion progress | Scrape, delete your messages | [index.html](../static/index.html), [app.js](../static/app.js) | Accessible progress dialog with explicit deletion job routing |
 | ChatML export | Scrape, direct messages, export | [index.html](../static/index.html), [app.js](../static/app.js) | Keyboard-selectable participant, themed dialog |
 | Privacy & data | `/privacy.html` | [privacy.html](../static/privacy.html) | Centered title and return link with geometric margin decoration |
 | Progress draft | `/trials/progress.html` | [progress.html](../static/trials/progress.html) | Replaces checkmark controls with numbered steps |
@@ -56,12 +57,18 @@ remain visible. Archived message content and names are preserved verbatim.
 
 Scrape retains per-channel limits, optional profile harvesting, incremental
 cursors, stopping, live monitoring, export, and explicitly confirmed deletion.
-Queue selections reset after a run, and the shared progress dialog cannot be
-claimed by a second collection/deletion job. Stopping routes to the active job's
-endpoint, with a visible retry state when a stop request fails.
+Scrape progress lives in the queue with per-channel saved counts and a running
+total; it does not open the full-screen dialog. Queue selections reset after a
+run, while the final counts remain until dismissed. The DM deletion dialog and
+inline scrape progress cannot be claimed by a second job. Stopping routes to the
+active job's endpoint, with a visible retry state when a stop request fails.
 
 ## Statistics
 
+- The rankings page contains server and contributor leaderboards. Both load 50
+  rows at a time. Scroll to fetch more or use **load more**. Server rows show
+  each server's share of all archived messages, including direct messages in
+  the denominator. A name/ID search works across all indexed servers.
 - Contributor pages contain 50 senders. Scroll to fetch more or use **load more**.
   A name/ID search works across the archive, not just the currently loaded page.
   Selecting a sender opens Browse with its author ID.
@@ -72,8 +79,8 @@ endpoint, with a visible retry state when a stop request fails.
   Missing days render as zero. Selecting a date searches that complete UTC day.
 - Hourly, weekday and monthly charts show all-time activity. Selecting a month
   searches its inclusive UTC date range. Hover reveals exact counts.
-- Every chart includes an accessible data table with equivalent drilldown
-  buttons. If the chart script fails, tables open automatically and totals remain.
+- The activity page shows an accessible data table beneath every chart with
+  equivalent drilldown buttons. Tables are visible even if charts fail to load.
 
 `GET /api/stats?days=90` adds channel, weekday and month aggregates plus timeline
 boundaries. `days=0` means all history. Calculations use cached `stats_counts`,
@@ -82,6 +89,9 @@ without scanning all messages. `GET /api/stats/contributors` accepts `offset`,
 `has_more`. Ranking is deterministic by count descending, then author ID. Literal
 wildcards in contributor names are escaped. Offsets describe the current archive;
 rankings can move while live collection is adding messages.
+`GET /api/stats/servers` uses the same bounded paging and escaped name/ID search,
+returns server counts and the archive-wide message total, and ranks by count then
+server ID. Direct messages do not appear as server rows.
 
 Chart.js 4.4.0 is now served locally, with its MIT license. The vendored build
 matches the SHA-256 of the previously pinned CDN dependency:

@@ -4,14 +4,21 @@ let statsData;
 let statsRequest = 0;
 let statsController;
 const contributorState = {offset: 0, more: true, busy: false, request: 0, peak: 1, controller: null};
+const serverState = {offset: 0, more: true, busy: false, request: 0, peak: 1, controller: null};
 const chartPalette = ['#8abde8', '#8dd8b0', '#c2b5ec', '#7c9fb8', '#68ab97', '#a39ac4'];
 
 function initStats() {
+  document.querySelectorAll('[data-stats-page]').forEach(button => button.addEventListener('click', () => switchStatsPage(button.dataset.statsPage)));
   $('refreshStats').addEventListener('click', () => loadStats(true));
   $('statsRange').addEventListener('change', () => loadStats(false));
   $('timelineType').addEventListener('change', () => { if (statsData) renderStatsCharts(statsData); });
   $('serverChartType').addEventListener('change', () => { if (statsData) renderStatsCharts(statsData); });
   $('moreContributors').addEventListener('click', () => loadContributors(false));
+  $('moreServers').addEventListener('click', () => loadServers(false));
+  $('serverLeaderboard').addEventListener('scroll', () => {
+    const list = $('serverLeaderboard');
+    if (list.scrollHeight - list.scrollTop - list.clientHeight < 80) loadServers(false);
+  }, {passive: true});
   $('leaderboard').addEventListener('scroll', () => {
     const list = $('leaderboard');
     if (list.scrollHeight - list.scrollTop - list.clientHeight < 80) loadContributors(false);
@@ -25,6 +32,22 @@ function initStats() {
     contributorState.more = false;
     timer = setTimeout(() => loadContributors(true), 220);
   });
+  let serverTimer;
+  $('serverSearch').addEventListener('input', () => {
+    clearTimeout(serverTimer);
+    serverState.controller?.abort();
+    ++serverState.request;
+    serverState.busy = false;
+    serverState.more = false;
+    serverTimer = setTimeout(() => loadServers(true), 220);
+  });
+}
+
+function switchStatsPage(page) {
+  for (const button of document.querySelectorAll('[data-stats-page]')) button.setAttribute('aria-pressed', String(button.dataset.statsPage === page));
+  $('statsPageRankings').hidden = page !== 'rankings';
+  $('statsPageActivity').hidden = page !== 'activity';
+  if (page === 'activity' && statsData) renderStatsCharts(statsData);
 }
 
 async function loadStats(resetContributors = true) {
@@ -33,7 +56,7 @@ async function loadStats(resetContributors = true) {
   const request = ++statsRequest;
   $('statsStatus').textContent = 'Loading archive statistics…';
   $('view-stats').setAttribute('aria-busy', 'true');
-  if (resetContributors) loadContributors(true);
+  if (resetContributors) { loadContributors(true); loadServers(true); }
   try {
     const data = await api(`/api/stats?days=${encodeURIComponent($('statsRange').value)}`, {signal: statsController.signal});
     if (request !== statsRequest) return;
@@ -43,12 +66,52 @@ async function loadStats(resetContributors = true) {
       $(id).title = n(data[key]);
     }
     $('sDbSize').textContent = fmtBytes(data.db_size_bytes);
-    renderStatsCharts(data);
-    $('statsStatus').textContent = typeof Chart === 'undefined' ? 'Charts could not load. The data tables below remain available.' : '';
+    if (!$('statsPageActivity').hidden) renderStatsCharts(data);
+    $('statsStatus').textContent = typeof Chart === 'undefined' ? 'Charts could not load. Open Activity to use the data tables.' : '';
   } catch (error) {
     if (error.name !== 'AbortError' && request === statsRequest) $('statsStatus').textContent = `Statistics unavailable: ${error.message}. Use refresh to retry.`;
   } finally {
     if (request === statsRequest) $('view-stats').removeAttribute('aria-busy');
+  }
+}
+
+async function loadServers(reset = false) {
+  if (!reset && (serverState.busy || !serverState.more)) return;
+  if (reset) {
+    serverState.controller?.abort();
+    serverState.offset = 0; serverState.more = true;
+    $('serverLeaderboard').replaceChildren(); $('serverLeaderboard').scrollTop = 0;
+  }
+  const request = ++serverState.request;
+  serverState.busy = true;
+  serverState.controller = new AbortController();
+  $('moreServers').disabled = true;
+  $('serverStatus').textContent = 'Loading servers…';
+  const params = new URLSearchParams({offset: serverState.offset, limit: 50, q: $('serverSearch').value.trim()});
+  try {
+    const data = await api(`/api/stats/servers?${params}`, {signal: serverState.controller.signal});
+    if (request !== serverState.request) return;
+    if (reset) serverState.peak = data.servers[0]?.count || 1;
+    data.servers.forEach((server, index) => {
+      const row = ce('button', 'lb-item'); row.type = 'button';
+      row.title = `Search messages in ${server.guild_name || server.guild_id}`;
+      const share = data.total_messages ? 100 * server.count / data.total_messages : 0;
+      const shareLabel = share > 0 && share < 0.1 ? '&lt;0.1%' : `${share.toFixed(1)}%`;
+      row.innerHTML = `<span class="lb-rank">${n(serverState.offset + index + 1)}</span><span class="lb-info"><span class="lb-name">${esc(server.guild_name || 'Unknown server')}</span><span class="lb-uid">${esc(server.guild_id)}</span></span><span class="lb-bar-wrap" aria-hidden="true"><span class="lb-bar" style="display:block;width:${Math.min(100, 100 * server.count / serverState.peak)}%"></span></span><span class="lb-count">${n(server.count)}<small>${shareLabel} of archive</small></span>`;
+      row.addEventListener('click', () => statsDrilldown({guild_id: server.guild_id}));
+      $('serverLeaderboard').appendChild(row);
+    });
+    serverState.offset += data.servers.length;
+    serverState.more = data.has_more;
+    $('serverStatus').textContent = serverState.offset ? `${n(serverState.offset)} servers loaded${data.has_more ? ' · scroll for more' : ' · all shown'}` : 'No matching servers';
+    $('moreServers').hidden = !data.has_more;
+  } catch (error) {
+    if (error.name !== 'AbortError' && request === serverState.request) {
+      $('serverStatus').textContent = 'Could not load servers. Try again.';
+      $('moreServers').hidden = false;
+    }
+  } finally {
+    if (request === serverState.request) { serverState.busy = false; $('moreServers').disabled = false; }
   }
 }
 
@@ -143,7 +206,7 @@ function drawStatsChart(id, type, labels, counts, {horizontal = false, actions =
   });
   table.appendChild(body); container.replaceChildren(table);
   if (!labels.length) container.textContent = 'No archived messages in this group.';
-  if (typeof Chart === 'undefined') { container.parentElement.open = true; return; }
+  if (typeof Chart === 'undefined') return;
   if (_charts[id]) _charts[id].destroy();
   const ring = type === 'doughnut';
   const axis = {border:{display:false},grid:{color:'#253a4e'},ticks:{color:'#aab9c8',font:{family:'Arial',size:11},maxTicksLimit:8},beginAtZero:true};
