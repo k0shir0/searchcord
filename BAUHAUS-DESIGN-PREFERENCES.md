@@ -4,9 +4,9 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 
 ## Stats and queue refinement (2026-09-26)
 
-- Stats keeps archive totals above two internal pages: scrollable server and
-  contributor rankings, then activity charts with visible data tables. Server
-  ranking shows messages and each server's share of the entire archive.
+- Stats is one continuous view. Put scrollable server and contributor rankings
+  first, then archive totals and the activity charts with visible data tables.
+  Server ranking shows messages and each server's share of the entire archive.
 - Remove the chart `View data` toggles. The tables stay available beneath the
   charts, with the same search drilldowns as chart selections.
 - Starting a scrape keeps the user in Scrape. Put live message counts per channel,
@@ -19,7 +19,8 @@ Read this before changing the Searchcord visual trials or proposing a new visual
 - Archive clearing is confirmed by a second click on the same button; the
   question replaces the button label after the first click.
 - The production privacy page shows only a centered `privacy & data` title and
-  a bottom-centered return link. Place angled rules and outlined circles,
+  a bottom-centered relative return link that works from a local file and the
+  served app. Place angled rules and outlined circles,
   triangle, square, and bar in the surrounding margins, using the Browse banner's
   cool palette. The page is a visual placeholder while data-handling details
   remain in the README.

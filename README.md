@@ -28,11 +28,11 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Bauhaus home** with an integrated search and expanding filter tray, indexed
   archive totals, cool outline geometry, and compact previous/next pagination.
   Search URLs preserve filters and page selection across reloads.
-- **Stats**: separate rankings and activity pages, with searchable, scrollable
-  server and contributor leaderboards; server and channel charts; daily,
-  monthly, weekday, and hourly activity. Select a contributor,
-  server, channel, date, or month to search its messages. Accessible data tables
-  are always visible beneath every chart. Timeline windows end at the latest archived message.
+- **Stats**: one scrollable view, starting with searchable server and contributor
+  leaderboards, then archive totals, server and channel charts, and daily,
+  monthly, weekday, and hourly activity. Select a contributor, server, channel,
+  date, or month to search its messages. Accessible data tables stay visible
+  beneath every chart. Timeline windows end at the latest archived message.
 - **ChatML export** — turn a conversation into a `.jsonl` file in the
   OpenAI/ChatML message format.
 
@@ -172,7 +172,8 @@ inside the button before it wipes archived messages and derived metadata.
 Saved tokens remain; deleting the database file removes them too.
 
 The in-app **privacy & data** page currently contains only its title and a
-return link. This README holds the current data-handling details; the page is
+return link to the Searchcord home page that also works when opened as a local
+file. This README holds the current data-handling details; the page is
 not a completed privacy policy.
 
 The first start after upgrading makes the backup and assigns small internal row

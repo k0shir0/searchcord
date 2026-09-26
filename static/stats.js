@@ -8,7 +8,6 @@ const serverState = {offset: 0, more: true, busy: false, request: 0, peak: 1, co
 const chartPalette = ['#8abde8', '#8dd8b0', '#c2b5ec', '#7c9fb8', '#68ab97', '#a39ac4'];
 
 function initStats() {
-  document.querySelectorAll('[data-stats-page]').forEach(button => button.addEventListener('click', () => switchStatsPage(button.dataset.statsPage)));
   $('refreshStats').addEventListener('click', () => loadStats(true));
   $('statsRange').addEventListener('change', () => loadStats(false));
   $('timelineType').addEventListener('change', () => { if (statsData) renderStatsCharts(statsData); });
@@ -43,13 +42,6 @@ function initStats() {
   });
 }
 
-function switchStatsPage(page) {
-  for (const button of document.querySelectorAll('[data-stats-page]')) button.setAttribute('aria-pressed', String(button.dataset.statsPage === page));
-  $('statsPageRankings').hidden = page !== 'rankings';
-  $('statsPageActivity').hidden = page !== 'activity';
-  if (page === 'activity' && statsData) renderStatsCharts(statsData);
-}
-
 async function loadStats(resetContributors = true) {
   statsController?.abort();
   statsController = new AbortController();
@@ -66,8 +58,8 @@ async function loadStats(resetContributors = true) {
       $(id).title = n(data[key]);
     }
     $('sDbSize').textContent = fmtBytes(data.db_size_bytes);
-    if (!$('statsPageActivity').hidden) renderStatsCharts(data);
-    $('statsStatus').textContent = typeof Chart === 'undefined' ? 'Charts could not load. Open Activity to use the data tables.' : '';
+    renderStatsCharts(data);
+    $('statsStatus').textContent = typeof Chart === 'undefined' ? 'Charts could not load. The data tables below remain available.' : '';
   } catch (error) {
     if (error.name !== 'AbortError' && request === statsRequest) $('statsStatus').textContent = `Statistics unavailable: ${error.message}. Use refresh to retry.`;
   } finally {

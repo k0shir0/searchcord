@@ -30,15 +30,16 @@ captures showed centered text and no horizontal overflow.
 
 ## Pages and controls
 
-Routes are relative to a running Searchcord server. Production views share one
-HTML document and retain the configured local database path. No private machine
-path or archive content is embedded in the application.
+API-backed routes require a running Searchcord server. The privacy return link
+is relative to `index.html`, so it also works from a local file. Production
+views share one HTML document and retain the configured local database path.
+No private machine path or archive content is embedded in the application.
 
 | Page or surface | Route / access | Source | Result |
 | --- | --- | --- | --- |
 | Browse home | `/#browse` | [index.html](../static/index.html) | Integrated search, full-width equal totals with exact numbers, then the navigation boxes and compact message results |
 | Scrape | `/#scrape` | [index.html](../static/index.html) | Channel and DM source tabs, name filter, shared queue and live monitor without a separate hero banner |
-| Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Archive totals, server and contributor ranking pages, and an activity page with six interactive charts |
+| Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | One continuous view: server and contributor leaderboards, archive totals, then six interactive charts |
 | Settings | Gear button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Named saved-token selector, add-and-use flow, two-click archive clear |
 | Collection progress | Scrape queue | [index.html](../static/index.html), [app.js](../static/app.js) | Inline per-channel counts, total messages, completion progress, and stop control |
 | DM deletion progress | Scrape, delete your messages | [index.html](../static/index.html), [app.js](../static/app.js) | Accessible progress dialog with explicit deletion job routing |
@@ -65,7 +66,7 @@ active job's endpoint, with a visible retry state when a stop request fails.
 
 ## Statistics
 
-- The rankings page contains server and contributor leaderboards. Both load 50
+- The top of Stats contains server and contributor leaderboards. Both load 50
   rows at a time. Scroll to fetch more or use **load more**. Server rows show
   each server's share of all archived messages, including direct messages in
   the denominator. A name/ID search works across all indexed servers.
@@ -79,7 +80,7 @@ active job's endpoint, with a visible retry state when a stop request fails.
   Missing days render as zero. Selecting a date searches that complete UTC day.
 - Hourly, weekday and monthly charts show all-time activity. Selecting a month
   searches its inclusive UTC date range. Hover reveals exact counts.
-- The activity page shows an accessible data table beneath every chart with
+- The charts below the rankings show an accessible data table beneath each with
   equivalent drilldown buttons. Tables are visible even if charts fail to load.
 
 `GET /api/stats?days=90` adds channel, weekday and month aggregates plus timeline
