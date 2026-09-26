@@ -61,8 +61,10 @@ pip install -r requirements.txt
 python app.py
 ```
 
-The app starts on <http://127.0.0.1:8000> and opens your browser. On Windows
-you can double-click `start.bat` instead.
+The app starts on <http://127.0.0.1:8000> and opens your browser when it is
+ready. On Windows you can double-click `start.bat` instead. A first database
+upgrade can take several minutes for a large archive; the console reports
+progress every 30 seconds, and the port opens after the upgrade completes.
 
 The three production workspaces share the Bauhaus design. Earlier standalone
 drafts remain at `/trials/`, with synthetic data and local preview interactions.

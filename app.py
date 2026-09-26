@@ -3,6 +3,8 @@ import json
 import asyncio
 import uuid
 import time
+import webbrowser
+from http.client import HTTPConnection, HTTPException as HTTPClientException
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Optional
@@ -59,9 +61,17 @@ last_discord_request = 0.0
 # ─── DB ──────────────────────────────────────────────────────
 
 async def init_db():
-    result = await asyncio.to_thread(init_database, DB_PATH)
+    print("Preparing local database. A first upgrade of a large archive may take several minutes.", flush=True)
+    task = asyncio.create_task(asyncio.to_thread(init_database, DB_PATH))
+    while True:
+        try:
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=30)
+            break
+        except asyncio.TimeoutError:
+            print("Still preparing local database; the web port opens when it is ready.", flush=True)
     if result["backup"]:
-        print(f"Verified storage migration; recovery backup retained: {result['backup']}")
+        print(f"Verified storage migration; recovery backup retained: {result['backup']}", flush=True)
+    print("Local database ready.", flush=True)
 
 
 @asynccontextmanager
@@ -95,6 +105,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+
+
+@app.get("/api/health", include_in_schema=False)
+async def health():
+    return Response(content="searchcord-ready", media_type="text/plain")
+
+
+def open_browser_when_ready(host: str, port: int):
+    """Open this app only after its startup has completed and it answers HTTP."""
+    browser_host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    url_host = f"[{browser_host}]" if ":" in browser_host else browser_host
+    while True:
+        connection = HTTPConnection(browser_host, port, timeout=1)
+        try:
+            connection.request("GET", "/api/health")
+            response = connection.getresponse()
+            if response.status == 200 and response.read() == b"searchcord-ready":
+                webbrowser.open(f"http://{url_host}:{port}")
+                return
+        except (OSError, HTTPClientException):
+            pass
+        finally:
+            connection.close()
+        time.sleep(0.5)
 
 
 # ─── Discord helpers ─────────────────────────────────────────
@@ -1345,7 +1379,6 @@ async def clear_messages():
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 if __name__ == "__main__":
-    import webbrowser
     import threading
     import uvicorn
 
@@ -1355,10 +1388,5 @@ if __name__ == "__main__":
     host = os.environ.get("SEARCHCORD_HOST", "127.0.0.1")
     port = int(os.environ.get("SEARCHCORD_PORT", "8000"))
 
-    def _open():
-        import time
-        time.sleep(1.2)
-        webbrowser.open(f"http://localhost:{port}")
-
-    threading.Thread(target=_open, daemon=True).start()
+    threading.Thread(target=open_browser_when_ready, args=(host, port), daemon=True).start()
     uvicorn.run(app, host=host, port=port)
