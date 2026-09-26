@@ -17,6 +17,7 @@
 }
 
 .privacy-geometry {
+  --geometry-clearance: 10px;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
@@ -38,13 +39,19 @@
 .rule-five { background: rgba(141, 216, 176, .32); height: 115%; left: 80%; top: -8%; transform: rotate(8deg); width: 2px; }
 
 .privacy-circle, .privacy-square, .privacy-bar, .privacy-triangle { position: absolute; }
-.privacy-circle, .privacy-square { background: transparent; border: 3px solid var(--signal); }
+.privacy-circle, .privacy-square {
+  background: transparent;
+  border: var(--geometry-stroke) solid var(--signal);
+  box-shadow: 0 0 0 var(--geometry-clearance) var(--paper), inset 0 0 0 var(--geometry-clearance) var(--paper);
+}
 .privacy-circle { border-radius: 50%; }
 .circle-one { height: 240px; left: -45px; top: 9%; width: 240px; }
 .circle-two { border-color: var(--cool-accent); bottom: 9%; height: 180px; right: -34px; width: 180px; }
 .privacy-square { border-color: var(--ice); bottom: 7%; height: 116px; left: 9%; transform: rotate(16deg); width: 116px; }
-.privacy-bar { background: var(--ice); height: 11px; right: 10%; top: 16%; transform: rotate(-7deg); width: 112px; }
-.privacy-triangle { bottom: 20%; fill: none; height: 174px; right: 7%; stroke: var(--signal); stroke-width: 2; transform: rotate(-11deg); width: 174px; }
+.privacy-bar { background: var(--ice); box-shadow: 0 0 0 var(--geometry-clearance) var(--paper); height: 11px; right: 10%; top: 16%; transform: rotate(-7deg); width: 112px; }
+.privacy-triangle { bottom: 20%; fill: none; height: 174px; right: 7%; transform: rotate(-11deg); width: 174px; }
+.privacy-triangle path { stroke: var(--signal); stroke-width: var(--geometry-stroke); vector-effect: non-scaling-stroke; }
+.privacy-triangle .privacy-clearance-path { stroke: var(--paper); stroke-width: 23px; }
 
 .privacy-page .policy-sheet {
   align-items: center;

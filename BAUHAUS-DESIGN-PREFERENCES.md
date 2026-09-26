@@ -22,8 +22,9 @@ Read this before changing the Searchcord visual trials or proposing a new visual
   a bottom-centered relative return link that works from a local file and the
   served app. Place angled rules and outlined circles,
   triangle, square, and bar in the surrounding margins, using the Browse banner's
-  cool palette. The page is a visual placeholder while data-handling details
-  remain in the README.
+  cool palette. Give each shape the Browse banner's 10px navy clearance around
+  its edges, including the triangle's SVG outline. The page is a visual
+  placeholder while data-handling details remain in the README.
 
 ## Production input and navigation refinement (2026-09-26)
 
