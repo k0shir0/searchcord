@@ -1,11 +1,16 @@
 # Scrape and storage throughput audit
 
+Historical report. The root `benchmarks/` and `tests/` directories were removed
+on 2026-09-25. Commands below describe the earlier verification runs. See the
+[current storage audit](storage-audit.md) for the schema and measurements.
+
 Measured on 2026-09-22 using disposable synthetic data and the current Windows
 Python environment. Reproduce the write measurements with
 `python benchmarks/throughput.py` after installing the existing requirements.
 No private message bodies or token values were read for this audit.
 The 2026-09-22 and early 2026-09-23 after-state measurements below are historical
-snapshots. The compact storage measurements at the end describe the current schema.
+snapshots. The compact storage measurements at the end describe the earlier v7
+schema, superseded by the v9 migration in the current storage audit.
 
 ## Before state
 

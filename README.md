@@ -151,24 +151,29 @@ searchcord/
 
 `data/searchcord.db` contains **your Discord token in plaintext** in the
 `settings` table, alongside every message you have scraped. A one-time schema
-migration temporarily creates a `data/searchcord.db.pre-compact-*.bak` backup
-that also contains the token and archived messages. After the compact database
-passes SQLite integrity checking, the app removes that backup. If migration or
-backup removal fails, the backup remains for recovery. The `data/`
+migration creates a recovery backup named
+`data/searchcord.db.pre-compact-*.bak.gz` (or `.bak` if compression fails)
+that also contains the token and archived messages. The backup stays in place
+after verification; remove it only after checking the upgraded archive and
+keeping any recovery copy you need. Decompress `.bak.gz` before opening it with
+SQLite. The `data/`
 directory is gitignored for that reason. Do not commit it, do not share it,
 and delete it when you are done. **Clear All Data** in the settings panel
 wipes archived messages and derived metadata; deleting the file removes everything including the
 token.
 
-The first start after upgrading makes the backup, converts message IDs and
-related IDs to compact integers, removes repeated per-message names and text
-timestamps, keeps image attachment URLs only, and builds the search index and
-cached stats. Message IDs encode the timestamp used by search and charts. A
-3.69-million-message archive took about 3 minutes to migrate on the tested
-machine. Allow several gigabytes of temporary disk headroom while the original,
-backup, migration journal, and compact file coexist. Later starts skip migration.
-If a backup remains after a successful startup, check the startup message and
-remove it only after confirming that the compact archive works for you.
+The first start after upgrading makes the backup and assigns small internal row
+numbers to reduce search-index storage. Discord message IDs stay unchanged and
+still order results correctly when older history is collected later. Message
+text, IDs, and historical per-message names are checked before the old table is
+replaced. Original timestamps are reproduced exactly from message IDs where
+possible; exceptions remain stored. Older raw attachment metadata is removed
+from the active database, while image links used by the app remain available.
+SQLite and full-text-index integrity checks run after migration. Allow several
+gigabytes of temporary disk headroom while the original, backup, migration
+journal, and compact file coexist. Later starts skip migration. Historical
+names or attachment fields already discarded by an earlier compact migration
+can only be recovered from an original archive or older backup.
 
 Search results and the live feed send short local image links. Opening an image
 redirects to its stored Discord URL; if its signature has expired, Searchcord
@@ -179,9 +184,14 @@ unavailable. Non-image attachments are not stored in new archives.
 
 The browser receives gzip-compressed API responses when supported. Message
 text remains exact and searchable; per-message compression or truncation would
-add decode work and break the current substring index. The measured compact
-archive is 1,065,906,176 bytes, down 35.97% from 1,664,700,416 bytes. See the
-[throughput audit](docs/throughput-audit.md) for the full measurement.
+add decode work and break the current substring index. The measured
+3.69-million-message legacy archive shrank from 1,664,700,416 to 843,780,096
+bytes (49.31%) in the active database, while retaining historical names and
+exact timestamp values. Its verified compressed recovery copy is 333,110,734
+bytes. An archive already converted to v7 shrank from 1,065,906,176 to
+777,445,376 bytes (27.06%); v7 had already discarded its historical names.
+See the [storage audit](docs/storage-audit.md) for the full timeline, field
+checks, and throughput measurements.
 
 If you ever push this database anywhere by accident, treat your token as
 compromised and reset it immediately by changing your Discord password.
@@ -197,9 +207,42 @@ compromised and reset it immediately by changing your Discord password.
   characters; shorter queries still scan message content.
 - Stats are maintained as small counts when messages are saved; they do not
   rescan the message table each time the stats view opens.
-- See [throughput audit](docs/throughput-audit.md) for the measured write and
-  storage trade-offs, DB engine decision, and scale limits.
+- See [storage audit](docs/storage-audit.md) for current storage measurements and
+  [throughput audit](docs/throughput-audit.md) for earlier performance research.
 
 ## License
 
 MIT, with a wrongful use warning — see [LICENSE](LICENSE).
+
+## Release timeline
+
+### 2026-09-25
+
+- Reduced full-archive storage by packing the search index, reconstructing exact
+  timestamps, compressing verified recovery backups, and removing unused raw
+  attachment metadata while retaining historical per-message names, IDs, text,
+  and image links.
+
+### 2026-09-24
+
+- Unified channels, DMs, the collection queue, and live monitoring in the new
+  Bauhaus Scrape workspace.
+- Added searchable contributor rankings and six interactive, offline-ready
+  charts with search drilldowns and accessible data tables.
+
+### 2026-09-23
+
+- Promoted the Bauhaus home design with integrated search, expanding filters,
+  real archive totals, and shareable search URLs.
+- Added resumable incremental collection, optional profile harvesting, indexed
+  substring search, and cached statistics for large archives.
+
+### 2026-07-23
+
+- Replaced the separate scraper and search scripts with one self-hosted FastAPI
+  application and SQLite archive, including live monitoring and ChatML export.
+
+### 2025-09-20
+
+- Introduced the Discord scraper and Flask search interface for per-channel
+  JSON datasets, message search, and paginated conversation results.

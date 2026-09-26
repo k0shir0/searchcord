@@ -1,5 +1,9 @@
 # Bauhaus home integration
 
+Historical report. The root `benchmarks/` and `tests/` directories were removed
+on 2026-09-25. Commands below describe the earlier verification runs. See the
+[current storage audit](storage-audit.md) for the schema and measurements.
+
 The approved trial is now the application home. Search, filters, counts, results,
 settings, and navigation use the existing FastAPI service. Trial sample messages
 are not part of the production page. The normalized storage, cursor recovery,

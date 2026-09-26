@@ -1,5 +1,9 @@
 # Browse, Scrape, and Stats
 
+Historical report. The root `benchmarks/` and `tests/` directories were removed
+on 2026-09-25. Commands below describe the earlier verification runs. See the
+[current storage audit](storage-audit.md) for the schema and measurements.
+
 This report covers the production workspace redesign after `3106e93`. The
 [original integration report](bauhaus-diff-report.md) covers the home promotion,
 storage foundation, and every standalone page draft created before this change.
@@ -159,11 +163,11 @@ authorized push. Publication is a normal merge/push, without forcing remote refs
 | [chart.LICENSE.md](../static/vendor/chart.LICENSE.md) | Dependency license |
 | [privacy.html](../static/privacy.html) | Current network and deletion descriptions |
 | [progress.html](../static/trials/progress.html) | Text step markers in the earlier draft |
-| [audit_history.py](../benchmarks/audit_history.py) | Reproducible privacy audit without secret output |
-| [test_stats.py](../tests/test_stats.py) | Pagination, filters, bounds, sparse dates, empty archive |
-| [test_history_audit.py](../tests/test_history_audit.py) | Detection fixtures in temporary repositories |
-| [browser_home.mjs](../tests/browser_home.mjs) | Expanded real-data browser checks |
-| [browser_scrape.mjs](../tests/browser_scrape.mjs) | Synthetic collection and event-stream checks |
+| [audit_history.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/benchmarks/audit_history.py) | Reproducible privacy audit without secret output |
+| [test_stats.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/test_stats.py) | Pagination, filters, bounds, sparse dates, empty archive |
+| [test_history_audit.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/test_history_audit.py) | Detection fixtures in temporary repositories |
+| [browser_home.mjs](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/browser_home.mjs) | Expanded real-data browser checks |
+| [browser_scrape.mjs](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/browser_scrape.mjs) | Synthetic collection and event-stream checks |
 | [README.md](../README.md) | Current navigation, workflow and local chart dependency |
 | [Design preferences](../BAUHAUS-DESIGN-PREFERENCES.md) | Current three-view, full-width, cool-geometry direction |
 | [Design plan](../BAUHAUS-DESIGN-PLAN.md) | Updated production status |

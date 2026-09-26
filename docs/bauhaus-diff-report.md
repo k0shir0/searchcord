@@ -1,5 +1,9 @@
 # Bauhaus integration and page drafts
 
+Historical report. The root `benchmarks/` and `tests/` directories were removed
+on 2026-09-25. Commands below describe the earlier verification runs. See the
+[current storage audit](storage-audit.md) for the schema and measurements.
+
 Historical report for the initial home promotion. The subsequent
 [workspace redesign report](workspace-redesign.md) documents the current
 three-view application, local charts, additional verification, and publication.
@@ -139,9 +143,9 @@ File-by-file accounting follows below.
 | [BAUHAUS-DESIGN-PREFERENCES.md](../BAUHAUS-DESIGN-PREFERENCES.md) | 12 | 0 | Current cool home palette and production control requirements. |
 | [README.md](../README.md) | 95 | 12 | Current workflows, relative data configuration, and draft discovery. |
 | [app.py](../app.py) | 621 | 152 | Retained backend foundation; data-directory configuration, bounded search pagination, date validation, profile avatar lookup. |
-| [benchmarks/compact_archive.py](../benchmarks/compact_archive.py) | 113 | 0 | Existing disposable-copy migration and aggregate performance probe. |
-| [benchmarks/large_readonly.py](../benchmarks/large_readonly.py) | 110 | 0 | Existing read-only aggregate archive benchmark. |
-| [benchmarks/throughput.py](../benchmarks/throughput.py) | 145 | 0 | Existing synthetic write-throughput benchmark. |
+| [benchmarks/compact_archive.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/benchmarks/compact_archive.py) | 113 | 0 | Existing disposable-copy migration and aggregate performance probe. |
+| [benchmarks/large_readonly.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/benchmarks/large_readonly.py) | 110 | 0 | Existing read-only aggregate archive benchmark. |
+| [benchmarks/throughput.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/benchmarks/throughput.py) | 145 | 0 | Existing synthetic write-throughput benchmark. |
 | [docs/bauhaus-diff-report.md](../docs/bauhaus-diff-report.md) | 166 | 0 | This full linked change and validation report. |
 | [docs/home-integration.md](../docs/home-integration.md) | 62 | 0 | Home control contracts, test evidence, reproduction notes. |
 | [docs/throughput-audit.md](../docs/throughput-audit.md) | 200 | 0 | Retained storage and performance audit from earlier backend work. |
@@ -164,8 +168,8 @@ File-by-file accounting follows below.
 | [static/trials/workspace-drafts.css](../static/trials/workspace-drafts.css) | 103 | 0 | Shared secondary draft theme, separated forms, responsive layouts, reduced motion. |
 | [static/trials/workspace-drafts.js](../static/trials/workspace-drafts.js) | 58 | 0 | Synthetic local interactions only; no network or persistence. |
 | [storage.py](../storage.py) | 268 | 0 | Retained compact schema, FTS, migration, historical names, counts, and cursor foundation. |
-| [tests/browser_home.mjs](../tests/browser_home.mjs) | 141 | 0 | Reproducible browser test on an isolated archive; aggregate output only. |
-| [tests/test_backend.py](../tests/test_backend.py) | 449 | 0 | Retained storage, scrape, search, export, and migration regression coverage. |
-| [tests/test_home.py](../tests/test_home.py) | 59 | 0 | New HTTP boundary, date, avatar, home, and privacy coverage. |
+| [tests/browser_home.mjs](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/browser_home.mjs) | 141 | 0 | Reproducible browser test on an isolated archive; aggregate output only. |
+| [tests/test_backend.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/test_backend.py) | 449 | 0 | Retained storage, scrape, search, export, and migration regression coverage. |
+| [tests/test_home.py](https://github.com/k0shir0/searchcord/blob/8669d6264e7cb1f983620a68e67acd976f699df4/tests/test_home.py) | 59 | 0 | New HTTP boundary, date, avatar, home, and privacy coverage. |
 
 Counts compare the final files against `bb33b9b`; they include retained pre-existing work.

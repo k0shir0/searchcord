@@ -61,7 +61,7 @@ last_discord_request = 0.0
 async def init_db():
     result = await asyncio.to_thread(init_database, DB_PATH)
     if result["backup"]:
-        print(f"Verified migration backup could not be removed: {result['backup']}")
+        print(f"Verified storage migration; recovery backup retained: {result['backup']}")
 
 
 @asynccontextmanager
@@ -1038,8 +1038,7 @@ async def search(
     conditions, params = [], []
     if q:
         if len(q) >= 3:
-            conditions.append("""id IN (SELECT id FROM messages WHERE rowid IN
-                (SELECT rowid FROM messages_fts WHERE content LIKE ?))""")
+            conditions.append("rowid IN (SELECT rowid FROM messages_fts WHERE content LIKE ?)")
         else:
             conditions.append("content LIKE ?")
         params.append(f"%{q}%")
@@ -1062,12 +1061,7 @@ async def search(
         raise HTTPException(400, "From date must be on or before the to date")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    count_conditions = conditions.copy()
-    if q and len(q) >= 3:
-        # The count runs on messages itself, so keep FTS hits as rowids and
-        # avoid a rowid -> text ID -> rowid round trip per match.
-        count_conditions[0] = "rowid IN (SELECT rowid FROM messages_fts WHERE content LIKE ?)"
-    count_where = ("WHERE " + " AND ".join(count_conditions)) if count_conditions else ""
+    count_where = where
     offset = (page - 1) * limit
     cached_count = None
     if not q and not date_from and not date_to:
@@ -1338,8 +1332,9 @@ async def update_settings(s: SettingsIn):
 @app.delete("/api/messages")
 async def clear_messages():
     async with aiosqlite.connect(DB_PATH) as db:
-        for table in ("messages", "stats_counts", "scrape_cursors", "channel_authors", "profiles",
-                      "authors", "channels", "guilds"):
+        for table in ("messages", "message_history", "name_values", "stats_counts",
+                      "scrape_cursors", "channel_authors", "profiles", "authors",
+                      "channels", "guilds"):
             await db.execute(f"DELETE FROM {table}")
         await db.commit()
     return {"ok": True}
