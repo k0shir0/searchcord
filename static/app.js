@@ -104,16 +104,12 @@ function initNav() {
 }
 
 let activeView = 'browse';
-let navigationVersion = 0;
-let viewTransition;
 async function switchView(name, updateUrl = true, animate = true) {
   const source = name === 'dms' ? 'dms' : null;
   if (name === 'dms' || name === 'live') name = 'scrape';
   if (!['browse', 'scrape', 'stats'].includes(name)) name = 'browse';
-  const version = ++navigationVersion;
   const changed = activeView !== name;
   const apply = () => {
-    if (version !== navigationVersion) return;
     activeView = name;
     document.querySelectorAll('.tab').forEach(t => {
       t.classList.toggle('active', t.dataset.view === name);
@@ -121,6 +117,7 @@ async function switchView(name, updateUrl = true, animate = true) {
     });
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
     $('homeOverview').hidden = name !== 'browse';
+    if (changed) window.scrollTo(0, 0);
     if (updateUrl) history.replaceState(null, '', `${location.pathname}${location.search}#${name}`);
     if (name === 'stats') loadStats();
     if (name === 'scrape') {
@@ -128,23 +125,14 @@ async function switchView(name, updateUrl = true, animate = true) {
       if (source) switchSource(source);
     }
   };
-  viewTransition?.skipTransition();
+  document.querySelectorAll('.view, #homeOverview').forEach(element =>
+    element.getAnimations().forEach(animation => animation.cancel())
+  );
+  apply();
   if (changed && animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    if (document.startViewTransition) {
-      viewTransition = document.startViewTransition(apply);
-      // Superseded navigation rejects ready even when finished resolves.
-      viewTransition.ready.catch(() => {});
-      await viewTransition.finished.catch(() => {});
-    } else {
-      const stage = $('pageStage');
-      stage.getAnimations().forEach(animation => animation.cancel());
-      await stage.animate([{opacity:1},{opacity:0}], {duration:100,fill:'forwards'}).finished.catch(() => {});
-      if (version !== navigationVersion) return;
-      apply();
-      stage.getAnimations().forEach(animation => animation.cancel());
-      if (version === navigationVersion) stage.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}], {duration:220,easing:'ease-out'});
-    }
-  } else apply();
+    const entering = name === 'browse' ? $('homeOverview') : $(`view-${name}`);
+    entering.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}], {duration:180,easing:'ease-out'});
+  }
 }
 
 function switchSource(source) {

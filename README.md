@@ -86,7 +86,7 @@ Discord. Select server, channel, and author suggestions or paste their IDs.
 Date filters use UTC and include the entire selected end date. Clear filters
 keeps the text query. Queries and filter IDs appear in the browser URL.
 
-For collection, use the geometric settings button beside the wordmark, paste
+For collection, use the outline gear beside the wordmark, paste
 your token, and hit **Save & Verify**. Open **Scrape** and use **connect Discord**
 to load servers with an already saved token. Switch between **channels** and
 **direct messages**, filter by name, and use the labeled queue/monitor/export

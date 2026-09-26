@@ -8,6 +8,12 @@ This report covers the production workspace redesign after `3106e93`. The
 [original integration report](bauhaus-diff-report.md) covers the home promotion,
 storage foundation, and every standalone page draft created before this change.
 
+The 2026-09-26 production refinement gives search and other text fields a muted
+navy fill with light text. Browse search controls keep their mint border focus;
+other text fields keep a steady border. Settings uses a simple outline gear.
+The masthead stays on its own paint layer while navigation animates only the
+entering workspace content and resets the scroll position to the top.
+
 ## Pages and controls
 
 Routes are relative to a running Searchcord server. Production views share one
@@ -19,7 +25,7 @@ path or archive content is embedded in the application.
 | Browse home | `/#browse` | [index.html](../static/index.html) | Integrated search, full-width equal totals with exact numbers, then the navigation boxes and compact message results |
 | Scrape | `/#scrape` | [index.html](../static/index.html) | Channel and DM source tabs, name filter, shared queue and live monitor without a separate hero banner |
 | Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Archive totals, paginated contributors and six interactive charts without a separate hero banner |
-| Settings | Geometric button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Outline slider motif, keyboard focus, token errors |
+| Settings | Gear button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Simple outline gear, keyboard focus, token errors |
 | Collection progress | Scrape, start or view progress | [index.html](../static/index.html), [app.js](../static/app.js) | Shared accessible dialog, explicit scrape/deletion job routing |
 | ChatML export | Scrape, direct messages, export | [index.html](../static/index.html), [app.js](../static/app.js) | Keyboard-selectable participant, themed dialog |
 | Privacy & data | `/privacy.html` | [privacy.html](../static/privacy.html) | Documents local Chart.js and combined collection workspace |
@@ -80,14 +86,14 @@ The secondary banners balance a large circle against a smaller triangle,
 rotated square, bar, and detached rules. Each decorative outline has navy
 clearance. Headings occupy a separate bay; mobile layouts place the composition
 below the copy. The functional grid carries through source panels, charts and
-full-row totals. Cool navy, lavender, mint, pale blue and porcelain connect all
-three views. Settings uses a purpose-built inline SVG with separated controls.
+full-row totals. Cool navy, lavender, mint, and pale blue connect all three
+views. Settings uses an inline SVG gear.
 
-Page transitions use brief opacity/transform motion, with a Web Animations
-fallback. Superseded navigation settles on the latest requested view. The
-[ViewTransition ready contract](https://developer.mozilla.org/en-US/docs/Web/API/ViewTransition/ready)
-requires handling transitions that cannot start. Reduced motion disables page
-and chart animation. Chart hover and selection use the library's
+Navigation animates the entering content with brief opacity/transform motion.
+The masthead remains in its own paint layer so it does not disappear during
+layout changes. Rapid navigation settles on the latest requested view, and
+reduced motion disables page and chart animation. Chart hover and selection use
+the library's
 [interaction configuration](https://www.chartjs.org/docs/latest/configuration/interactions.html).
 
 ## Verification

@@ -2,6 +2,18 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Production input and navigation refinement (2026-09-26)
+
+- Production text fields use a muted navy fill and light text, including Browse
+  search and filters, Scrape collection search, queue limit, and Stats contributor
+  search. Keep the standalone trial palette independent.
+- Browse's primary search frame and filter fields retain their mint border focus.
+  Other text fields do not add a focus outline or change their border. Keep
+  checkbox and button keyboard focus visible.
+- Use a simple outline gear for settings. Keep the wordmark painted steadily
+  while only the entering workspace content receives brief motion. Navigation
+  starts at the top of each workspace and reduced motion skips the animation.
+
 ## Production layout revision (2026-09-25)
 
 - On Browse, place the three navigation boxes below the two archive totals.
