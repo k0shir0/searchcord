@@ -17,8 +17,6 @@ body { display: block; padding-top: 24px; }
 .view.active { display: block; }
 #resultsSection { margin: 0; scroll-margin-top: 24px; }
 .result-copy { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
-.result-meta { overflow-wrap: anywhere; }
-.result-meta time { display: block; }
 .message-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .result-row mark { background: var(--signal); color: var(--paper); }
 .rc-attachments { margin-top: 8px; }

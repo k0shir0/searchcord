@@ -2,6 +2,18 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Production layout revision (2026-09-25)
+
+- On Browse, place the three navigation boxes below the two archive totals.
+  On Scrape and Stats, put those boxes directly below the main wordmark.
+- Keep the blue search composition on Browse because it contains the search
+  controls. Remove the separate decorative hero banners and slogan copy from
+  Scrape and Stats; start those views with their working controls and totals.
+- Display search results and incoming messages like compact Discord messages:
+  avatar on the left, username and timestamp above the text, and source details
+  kept secondary. Use a real avatar when available and geometric fallback
+  otherwise, without making rows taller or wider than needed.
+
 ## Production workspaces (2026-09-24)
 
 - Use exactly three centered navigation boxes: Browse in lavender, Scrape in
@@ -12,10 +24,9 @@ Read this before changing the Searchcord visual trials or proposing a new visual
   This supersedes earlier compact-counter directions.
 - Use a geometric outline settings control beside the wordmark. No emoji
   controls or redundant local-ready banner. Keep actual errors and job status.
-- Compose the secondary banners on an asymmetric grid: a large circle balances
-  a smaller triangle, rotated square, bar and detached rule segments. Leave
-  navy clearance between every decorative line and shape. Decoration must stay
-  subordinate to headings and controls, including at mobile widths.
+- Retained standalone banner drafts may use an asymmetric grid: a large circle
+  balances a smaller triangle, rotated square, bar and detached rule segments.
+  Production Scrape and Stats no longer use those banners.
 - Transitions use short opacity/transform motion. Rapid navigation must settle
   on the latest requested view; reduced motion disables page and chart animation.
 - Contributor rankings scroll and load further bounded pages. Every chart has

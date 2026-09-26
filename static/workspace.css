@@ -28,20 +28,9 @@
 .view { margin-top: 0; margin-bottom: 40px; }
 #view-browse { margin-top: 24px; }
 .archive-error { margin: 20px var(--space-page); color: var(--signal); }
-.workspace-banner { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(220px,1fr); gap: clamp(20px,4vw,60px); align-items: center; background: #06172f; padding: 28px clamp(22px,3vw,44px); margin-bottom: 28px; min-height: 250px; }
-.workspace-banner h2 { font-family: var(--display); font-size: clamp(34px,4.3vw,66px); line-height: 1.02; letter-spacing: -.045em; margin: 12px 0 18px; max-width: 720px; }
-.workspace-banner p:not(.eyebrow) { color: var(--ink-soft); max-width: 530px; font-size: 14px; line-height: 1.65; }
-.workspace-banner .eyebrow { color: var(--ice); }
-#view-stats .workspace-banner .eyebrow { color: var(--cool-accent); }
-.workspace-art { width: 100%; max-width: 420px; height: auto; justify-self: end; }
-.workspace-art circle, .workspace-art path, .workspace-art rect { fill: none; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.workspace-art .art-circle { stroke: var(--signal); }
-.workspace-art .art-triangle { stroke: var(--cool-accent); }
-.workspace-art .art-square, .workspace-art .art-bar { stroke: var(--ice); }
-.workspace-art .art-rules path { stroke: #55718c; stroke-width: 1.2; }
 .collection-toolbar, .stats-toolbar, .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .collection-toolbar { margin-bottom: 24px; }
-.collection-toolbar h3, .panel-heading h3 { font-family: var(--display); font-size: 22px; line-height: 1.25; margin: 0; }
+.collection-toolbar h2, .stats-toolbar h2, .panel-heading h3 { font-family: var(--display); font-size: 22px; line-height: 1.25; margin: 0; }
 .collection-toolbar p, .panel-heading p, .stats-toolbar p { color: var(--ink-soft); font-size: 12px; margin-top: 8px; line-height: 1.5; }
 .collection-grid { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(280px,1fr); gap: 24px; align-items: start; }
 .collection-panel, .chart-card, .queue-bar { background: var(--panel); border: 1px solid var(--rule); border-radius: 0; padding: 24px; min-width: 0; }
@@ -75,7 +64,9 @@ button:disabled { cursor: default; opacity: .45; }
 .lm-stop { width: auto; height: auto; border: 1px solid var(--rule); }
 .feed-heading { margin-top: 24px; border-top: none; }
 .live-feed { height: 290px; padding: 0; overflow-y: auto; scrollbar-gutter: stable; }
-.live-msg { border-radius: 0; padding: 12px; background: var(--paper-deep); border-color: var(--rule); }
+.live-msg { align-items: start; background: var(--paper-deep); border-color: var(--rule); border-radius: 0; display: grid; gap: 10px; grid-template-columns: 32px minmax(0,1fr); padding: 10px 12px; }
+.live-msg .message-heading { margin-bottom: 2px; }
+.live-msg .message-author { font-size: 12px; }
 .live-msg-body { overflow-wrap: anywhere; }
 .live-empty-msg, .live-feed-empty, .placeholder-msg, .empty-state { font-size: 13px; line-height: 1.6; color: var(--ink-soft); }
 .queue-bar, .queue-bar.visible { position: static; display: block; height: auto; margin-top: 24px; animation: none; }
@@ -139,7 +130,6 @@ button:disabled { cursor: default; opacity: .45; }
   .collection-grid { grid-template-columns: minmax(0,1fr); }
   .stat-cards { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .stats-grid { grid-template-columns: minmax(0,1fr); }
-  .workspace-banner h2 { font-size: 40px; }
   .app-masthead h1 { font-size: clamp(60px,11vw,126px); }
   .app-masthead { padding-right: 110px; }
 }
@@ -152,9 +142,6 @@ button:disabled { cursor: default; opacity: .45; }
   .surface-tab { min-height: 57px; padding: 14px 6px 10px; font-size: 13px; }
   .index-block { gap: 10px; }
   .index-stat { min-height: 110px; padding: 18px 12px; gap: 14px; }
-  .workspace-banner { grid-template-columns: 1fr; gap: 12px; padding: 24px; }
-  .workspace-banner h2 { font-size: clamp(30px,8.5vw,46px); }
-  .workspace-art { width: 240px; justify-self: end; }
   .collection-toolbar { align-items: start; flex-wrap: wrap; }
   .collection-panel, .chart-card, .queue-bar { padding: 18px; }
   .ch-name { min-width: calc(100% - 42px); }

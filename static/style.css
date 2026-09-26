@@ -1225,17 +1225,6 @@ mark {
   transition: border-color var(--t);
 }
 .live-msg:hover { border-color: var(--border2); background: var(--surf); }
-.live-msg-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-  flex-wrap: wrap;
-}
-.live-msg-author { font-size: 12px; font-weight: 600; color: var(--mint); }
-.live-msg-loc { font-size: 10px; color: var(--text-3); }
-.live-msg-loc .srv { color: var(--text-2); }
-.live-msg-ts { font-size: 10px; color: var(--text-3); margin-left: auto; font-variant-numeric: tabular-nums; }
 .live-msg-body {
   font-size: 12.5px;
   color: var(--text);

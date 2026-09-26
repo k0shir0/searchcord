@@ -58,6 +58,12 @@ discord_request_lock = asyncio.Lock()
 last_discord_request = 0.0
 
 
+def discord_avatar_url(user_id: str, avatar_hash: Optional[str]) -> Optional[str]:
+    if not isinstance(avatar_hash, str) or not str(user_id).isdigit() or not avatar_hash.removeprefix("a_").isalnum():
+        return None
+    return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=64"
+
+
 # ─── DB ──────────────────────────────────────────────────────
 
 async def init_db():
@@ -850,6 +856,8 @@ async def poll_channel(channel_id: str, channel_name: str, guild_id: str, guild_
                         "guild": guild_name,
                         "author_id": m["author"]["id"],
                         "author": m["author"].get("global_name") or m["author"]["username"],
+                        "avatar_url": discord_avatar_url(
+                            m["author"]["id"], m["author"].get("avatar")),
                         "content": m.get("content", ""),
                         "timestamp": m["timestamp"],
                         "attachments": [f"/api/images/{m['id']}/{i}" for i, _ in
@@ -1140,11 +1148,7 @@ async def search(
     for r in rows:
         r["id"] = str(r["id"])
         avatar = avatars.get(r["author_id"])
-        r["avatar_url"] = (
-            f"https://cdn.discordapp.com/avatars/{r['author_id']}/{avatar}.png?size=64"
-            if avatar and r["author_id"].isdigit() and avatar.removeprefix("a_").isalnum()
-            else None
-        )
+        r["avatar_url"] = discord_avatar_url(r["author_id"], avatar)
         urls = r.pop("image_urls")
         r["attachments"] = [f"/api/images/{r['id']}/{i}" for i, _ in
                             enumerate(urls.splitlines())] if urls else []

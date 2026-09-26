@@ -16,9 +16,9 @@ path or archive content is embedded in the application.
 
 | Page or surface | Route / access | Source | Result |
 | --- | --- | --- | --- |
-| Browse home | `/#browse` | [index.html](../static/index.html) | Full-width equal totals, exact numbers that shrink to fit, integrated search |
-| Scrape | `/#scrape` | [index.html](../static/index.html) | Channel and DM source tabs, name filter, shared queue and live monitor |
-| Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Paginated contributors and six interactive charts |
+| Browse home | `/#browse` | [index.html](../static/index.html) | Integrated search, full-width equal totals with exact numbers, then the navigation boxes and compact message results |
+| Scrape | `/#scrape` | [index.html](../static/index.html) | Channel and DM source tabs, name filter, shared queue and live monitor without a separate hero banner |
+| Stats | `/#stats` | [index.html](../static/index.html), [stats.js](../static/stats.js) | Archive totals, paginated contributors and six interactive charts without a separate hero banner |
 | Settings | Geometric button beside wordmark | [index.html](../static/index.html), [app.js](../static/app.js) | Outline slider motif, keyboard focus, token errors |
 | Collection progress | Scrape, start or view progress | [index.html](../static/index.html), [app.js](../static/app.js) | Shared accessible dialog, explicit scrape/deletion job routing |
 | ChatML export | Scrape, direct messages, export | [index.html](../static/index.html), [app.js](../static/app.js) | Keyboard-selectable participant, themed dialog |
@@ -26,8 +26,11 @@ path or archive content is embedded in the application.
 | Progress draft | `/trials/progress.html` | [progress.html](../static/trials/progress.html) | Replaces checkmark controls with numbered steps |
 | Earlier draft gallery | `/trials/` | [index.html](../static/trials/index.html) | Existing independent drafts remain available for iteration |
 
-Old `#dms` and `#live` links resolve to Scrape. The three navigation boxes are
-centered and have distinct lavender, blue and mint accents. UI emoji and the
+Old `#dms` and `#live` links resolve to Scrape. The three navigation boxes sit
+below the Browse archive totals and directly below the wordmark on other views.
+They have distinct lavender, blue and mint accents. Search results and incoming
+messages use an avatar-left, username-and-timestamp-first layout while keeping
+server and channel context visible in the same compact row. UI emoji and the
 redundant local-ready message are removed; actual failures and running-job status
 remain visible. Archived message content and names are preserved verbatim.
 

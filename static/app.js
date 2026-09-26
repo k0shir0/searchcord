@@ -1014,6 +1014,21 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   }
 }
 
+function messageAvatar(authorId, avatarUrl) {
+  let hash = 0;
+  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const avatar = ce('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
+  avatar.setAttribute('aria-hidden', 'true');
+  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
+  fallback();
+  if (avatarUrl) {
+    const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+    img.onload = () => avatar.replaceChildren(img);
+    img.onerror = fallback; img.src = avatarUrl;
+  }
+  return avatar;
+}
+
 function renderResults(data, query) {
   const results = $('searchResults');
   results.replaceChildren();
@@ -1021,21 +1036,18 @@ function renderResults(data, query) {
   if (!data.messages.length) results.innerHTML = '<p class="no-results">No results found. Try another query or clear the filters.</p>';
   data.messages.forEach(msg => {
     const row = ce('article', 'result-row');
-    let hash = 0;
-    for (const char of String(msg.author_id)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-    const avatar = ce('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
-    avatar.setAttribute('aria-hidden', 'true');
-    const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
-    fallback();
-    if (msg.avatar_url) {
-      const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
-      img.onload = () => avatar.replaceChildren(img);
-      img.onerror = fallback; img.src = msg.avatar_url;
-    }
-    const content = ce('div');
+    const content = ce('div', 'message-body');
+    const heading = ce('div', 'message-heading');
+    const author = ce('strong', 'message-author'); author.textContent = msg.author_name || msg.author_id;
+    const time = ce('time', 'message-time'); time.dateTime = msg.timestamp;
+    time.textContent = new Date(msg.timestamp).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+    const location = ce('span', 'message-location');
+    location.textContent = `${msg.guild_name || 'Direct messages'} · #${msg.channel_name}`;
+    const id = ce('span', 'message-id'); id.textContent = `id: ${msg.author_id}`;
+    heading.append(author, time, location, id);
     const text = ce('p', 'result-copy');
     text.innerHTML = msg.content ? (query ? highlight(msg.content, query) : esc(msg.content)) : '(no text content)';
-    content.appendChild(text);
+    content.append(heading, text);
     if (msg.attachments?.length) {
       const attachments = ce('div', 'rc-attachments');
       msg.attachments.forEach((url, i) => {
@@ -1044,12 +1056,7 @@ function renderResults(data, query) {
       });
       content.appendChild(attachments);
     }
-    const meta = ce('div', 'result-meta');
-    meta.innerHTML = `<strong>${esc(msg.author_name)}</strong><span>${esc(msg.guild_name || 'Direct messages')} · #${esc(msg.channel_name)}</span><span>id: ${esc(msg.author_id)}</span>`;
-    const time = ce('time'); time.dateTime = msg.timestamp;
-    time.textContent = new Date(msg.timestamp).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
-    meta.appendChild(time);
-    row.append(avatar, content, meta); results.appendChild(row);
+    row.append(messageAvatar(msg.author_id, msg.avatar_url), content); results.appendChild(row);
   });
   renderPagination(data.page, data.pages);
 }
@@ -1212,30 +1219,30 @@ function appendLiveMessage(ev) {
   const empty = feed.querySelector('.live-feed-empty');
   if (empty) empty.remove();
 
-  const ts = new Date(ev.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const card = ce('div', 'live-msg');
-
-  let attsHtml = '';
+  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+  const card = ce('article', 'live-msg');
+  const body = ce('div', 'message-body');
+  const heading = ce('div', 'message-heading');
+  const author = ce('strong', 'message-author'); author.textContent = ev.author || ev.author_id;
+  const time = ce('time', 'message-time'); time.dateTime = ev.timestamp;
+  time.textContent = new Date(ev.timestamp).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+  const location = ce('span', 'message-location'); location.textContent = `${ev.guild} · #${ev.channel}`;
+  heading.append(author, time, location);
+  const text = ce('div', `live-msg-body${ev.content ? '' : ' empty'}`);
+  text.textContent = ev.content || '(no text content)';
+  body.append(heading, text);
   if (ev.attachments?.length) {
-    const links = ev.attachments.map(url =>
-      `<a href="${esc(url)}" target="_blank" rel="noopener" class="rc-att">image</a>`
-    ).join('');
-    attsHtml = `<div class="live-msg-atts">${links}</div>`;
+    const attachments = ce('div', 'live-msg-atts');
+    ev.attachments.forEach(url => {
+      const link = ce('a', 'rc-att'); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'image';
+      attachments.appendChild(link);
+    });
+    body.appendChild(attachments);
   }
-
-  card.innerHTML =
-    `<div class="live-msg-meta">` +
-    `<span class="live-msg-author">${esc(ev.author)}</span>` +
-    `<span class="live-msg-loc"><span class="srv">${esc(ev.guild)}</span> / #${esc(ev.channel)}</span>` +
-    `<span class="live-msg-ts">${ts}</span>` +
-    `</div>` +
-    `<div class="live-msg-body ${!ev.content ? 'empty' : ''}">${esc(ev.content) || '(no text content)'}</div>` +
-    attsHtml;
-
+  card.append(messageAvatar(ev.author_id, ev.avatar_url), body);
   feed.appendChild(card);
 
   // Keep scroll anchored to bottom if user hasn't scrolled up
-  const atBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
   if (atBottom) feed.scrollTop = feed.scrollHeight;
 
   // Cap feed at 200 cards to avoid memory bloat

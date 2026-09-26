@@ -47,7 +47,6 @@
   </div>
 </aside>
 
-<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">scrape</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">stats</button></nav>
 <div id="pageStage" class="page-stage">
 <p id="archiveStatus" class="archive-error" role="status" hidden></p>
       <section class="composition" id="homeOverview" aria-label="Search overview">
@@ -108,6 +107,8 @@
         </div>
       </section>
 
+<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">scrape</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">stats</button></nav>
+
 <!-- ── Main ──────────────────────────────────────────── -->
 <main class="main">
 
@@ -120,8 +121,8 @@
 
   </section>
 
-  <section class="view" id="view-scrape" aria-labelledby="scrapeTitle"><header class="workspace-banner"><div><p class="eyebrow">scrape workspace</p><h2>Collect with intention.</h2><p>Channels, conversations, and live monitoring. One queue, one place.</p></div><svg class="workspace-art" viewBox="0 0 420 240" aria-hidden="true"><g class="art-rules"><path d="M24 76L80 62 M132 140L207 126 M220 218L393 187 M211 22L216 89 M34 225L167 225"/></g><circle class="art-circle" cx="310" cy="105" r="80"/><path class="art-triangle" d="M160 18L210 104H110Z"/><rect class="art-square" x="37" y="132" width="66" height="66" transform="rotate(-12 70 165)"/><path class="art-bar" d="M164 159H187V205H164Z"/></svg></header>
-    <div class="collection-toolbar"><div><h3 id="scrapeTitle">Your sources</h3><p id="connectionStatus" role="status">Connect Discord to load your channels and conversations.</p></div><button class="btn-mint" id="connectDiscord">connect Discord</button></div>
+  <section class="view" id="view-scrape" aria-labelledby="scrapeTitle">
+    <div class="collection-toolbar"><div><h2 id="scrapeTitle">Your sources</h2><p id="connectionStatus" role="status">Connect Discord to load your channels and conversations.</p></div><button class="btn-mint" id="connectDiscord">connect Discord</button></div>
     <div class="collection-grid">
       <section class="collection-panel" aria-label="Collection sources">
         <div class="source-tabs" role="tablist" aria-label="Source type"><button id="sourceChannels" role="tab" aria-selected="true" aria-controls="source-channels" data-source="channels">channels</button><button id="sourceDms" role="tab" aria-selected="false" aria-controls="source-dms" tabindex="-1" data-source="dms">direct messages</button></div>
@@ -188,8 +189,8 @@
   </div>
 </div>
 
-  <section class="view" id="view-stats" aria-label="Archive statistics"><header class="workspace-banner"><div><p class="eyebrow">statistics</p><h2>The shape of your archive.</h2><p>Explore the people, places, and rhythms behind the messages.</p></div><svg class="workspace-art" viewBox="0 0 420 240" aria-hidden="true"><g class="art-rules"><path d="M24 76L80 62 M132 140L207 126 M220 218L393 187 M211 22L216 89 M34 225L167 225"/></g><circle class="art-circle" cx="310" cy="105" r="80"/><path class="art-triangle" d="M160 18L210 104H110Z"/><rect class="art-square" x="37" y="132" width="66" height="66" transform="rotate(-12 70 165)"/><path class="art-bar" d="M164 159H187V205H164Z"/></svg></header>
-    <div class="stats-toolbar"><p>Archive totals · all time</p><button class="btn-ghost" id="refreshStats">refresh data</button></div><p id="statsStatus" role="status"></p>
+  <section class="view" id="view-stats" aria-labelledby="statsTitle">
+    <div class="stats-toolbar"><h2 id="statsTitle">Archive totals</h2><button class="btn-ghost" id="refreshStats">refresh data</button></div><p id="statsStatus" role="status"></p>
     <div class="stat-cards"><div class="stat-card"><div class="stat-val" id="sTotal">…</div><div class="stat-lbl">messages</div></div><div class="stat-card"><div class="stat-val" id="sServers">…</div><div class="stat-lbl">servers</div></div><div class="stat-card"><div class="stat-val" id="sChannels">…</div><div class="stat-lbl">channels</div></div><div class="stat-card"><div class="stat-val" id="sUsers">…</div><div class="stat-lbl">contributors</div></div><div class="stat-card"><div class="stat-val" id="sDbSize">…</div><div class="stat-lbl">database</div></div></div>
     <div class="stats-grid">
       <section class="chart-card contributor-card"><div class="panel-heading"><div><h3>Top contributors</h3><p>All senders, ranked by archived messages</p></div></div><label class="contributor-search">Find a contributor<input id="contributorSearch" type="search" placeholder="name or user ID" autocomplete="off"></label><div class="leaderboard" id="leaderboard" tabindex="0" role="region" aria-label="Scrollable top contributors"></div><div class="contributor-foot"><span id="contributorStatus" role="status"></span><button class="btn-ghost" id="moreContributors">load more</button></div></section>
