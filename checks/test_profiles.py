@@ -26,13 +26,15 @@ class ProfilesTest(unittest.TestCase):
             for i,guild in enumerate([10,10,20]):
                 db.execute('INSERT INTO messages(id,author_id,guild_id,channel_id,content) VALUES (?,?,?,?,?)',
                            (1000000000000000000+i,50,guild,30,'hello fixture'))
-        self.status=200;self.calls=[]
+        self.status=200;self.calls=[];self.presence=None
         async def token():return 'synthetic-test-token'
         async def discord(method,path,token,**kwargs):
             self.calls.append(path);uid=path.split('/')[2]
-            return httpx.Response(self.status,json={'user':{'id':uid,'username':'alice','global_name':'Alice','avatar':'abc123'},
+            payload={'user':{'id':uid,'username':'alice','global_name':'Alice','avatar':'abc123'},
                   'user_profile':{'bio':'<script>inert</script>','pronouns':'she/her','banner':'banner123'},
-                  'connected_accounts':[{'type':'github','name':'alice','verified':True}], 'badges':[{'id':'example','description':'Example badge'}]})
+                  'connected_accounts':[{'type':'github','name':'alice','verified':True}], 'badges':[{'id':'example','description':'Example badge'}]}
+            if self.presence is not None:payload['presence']=self.presence
+            return httpx.Response(self.status,json=payload)
         router,self.shutdown=profile_router(str(self.path),token,discord,asyncio.Lock())
         app=FastAPI();app.include_router(router);self.client=TestClient(app);self.client.__enter__()
 
@@ -50,13 +52,20 @@ class ProfilesTest(unittest.TestCase):
         self.assertEqual(self.client.get('/api/profiles/99').status_code,404)
 
     def test_fetch_preserves_extended_fields_and_refuses_errors(self):
+        self.presence={'status':'online','activities':[{'type':4,'state':'Testing custom status'}]}
         r=self.client.post('/api/profiles/50/fetch');self.assertEqual(r.status_code,200,r.text)
         data=r.json();self.assertTrue(data['extended']);self.assertEqual(data['pronouns'],'she/her')
+        self.assertEqual(data['online_status'],'online');self.assertEqual(data['custom_status'],'Testing custom status')
         self.assertIn('/avatars/50/abc123.png',data['avatar_url']);self.assertIn('/banners/50/banner123.png',data['banner_url'])
         self.assertEqual(data['connections'][0]['name'],'alice');self.assertEqual(data['bio'],'<script>inert</script>')
         self.status=403;self.assertEqual(self.client.post('/api/profiles/50/fetch').status_code,403)
         self.assertEqual(self.client.get('/api/profiles/50').json()['bio'],data['bio'])
         self.assertEqual(self.client.post('/api/profiles/99/fetch').status_code,404)
+
+    def test_missing_presence_is_not_inferred(self):
+        self.assertEqual(self.client.post('/api/profiles/50/fetch').status_code,200)
+        data=self.client.get('/api/profiles/50').json()
+        self.assertIsNone(data['online_status']);self.assertIsNone(data['custom_status'])
 
     def test_backfill_resumes_skipping_saved_profiles(self):
         self.assertEqual(self.client.post('/api/profiles/50/fetch').status_code,200)

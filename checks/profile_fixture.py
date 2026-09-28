@@ -28,8 +28,9 @@ def create(directory):
                            (1000000000000000000+i*100+j,channel,guild,50,f'Synthetic message {i}-{j}'))
         db.execute('INSERT INTO messages(id,channel_id,guild_id,author_id,content) VALUES (?,?,?,?,?)',
                    (1000000000000010000,200,100,60,'Synthetic message from Bob'))
-        payload = {'user':{'id':'50','username':'alice.example','global_name':'Alice Example'},
+        payload = {'user':{'id':'50','username':'alice.example','global_name':'Alice Example','avatar':'abc123'},
                    'user_profile':{'bio':'A synthetic profile for local browser checks.','pronouns':'she/her'},
+                   'presence':{'status':'online','activities':[{'type':4,'state':'Synthetic custom status'}]},
                    'badges':[{'id':'example','description':'Example badge'}],
                    'connected_accounts':[{'type':'github','name':'alice-example','verified':True},
                                          {'type':'youtube','name':'Alice Example'}]}
