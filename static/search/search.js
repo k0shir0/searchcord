@@ -12,7 +12,6 @@ let activeProfile = null, profileRequest = 0;
 const suggestionRequests = new Map();
 const suggestionTimers = new Map();
 const profileView = new SearchcordProfile($('#profileHost'), {
-  onMessages: () => { $('#profileMessageForm').hidden=false;$('#profileSearchToggle').setAttribute('aria-expanded','true');$('#profileMessageQuery').focus(); },
   onServer: (uid, guild) => {
     const params=new URLSearchParams({profile:uid,author_id:uid,guild_id:guild});
     if($('#profileMessageQuery').value.trim())params.set('q',$('#profileMessageQuery').value.trim());
@@ -273,8 +272,13 @@ $('#previousPage').addEventListener('click', () => {
   if (page > 1 && current) run(current, {cursor:cursors[page-2],targetPage:page-1});
 });
 function focusSearch() {
-  if(activeProfile){$('#profileMessageForm').hidden=false;$('#profileSearchToggle').setAttribute('aria-expanded','true');$('#profileMessageQuery').focus();}
+  if(activeProfile)setProfileSearch(true);
   else searchInput.focus();
+}
+function setProfileSearch(open) {
+  $('#profileMessageForm').hidden=!open;
+  $('#profileSearchToggle').setAttribute('aria-expanded',String(open));
+  if(open)$('#profileMessageQuery').focus();
 }
 $('#editSearch').addEventListener('click', focusSearch);
 function restore() {
@@ -307,8 +311,7 @@ async function openProfile(uid,{push=true,params=null,cursor=null,targetPage=1,s
   request?.abort();generation++;
   document.body.classList.add('has-profile');$('#profileSection').hidden=false;$('#profileSearchToggle').hidden=false;
   $('#profileMessageQuery').value=params?.get('q')||'';
-  $('#profileMessageForm').hidden=!$('#profileMessageQuery').value;
-  $('#profileSearchToggle').setAttribute('aria-expanded',String(!$('#profileMessageForm').hidden));
+  setProfileSearch(false);
   searchInput.value=`@${uid}`;tray(false);
   if(!params)cursors=[null];
   const query=new URLSearchParams(params||{});query.delete('before');query.delete('search');
@@ -328,12 +331,19 @@ function closeProfile(reset=true) {
 }
 $('#closeProfile').addEventListener('click',()=>closeProfile());
 $('#profileSearchToggle').addEventListener('click',()=>{
-  const open=$('#profileMessageForm').hidden;$('#profileMessageForm').hidden=!open;$('#profileSearchToggle').setAttribute('aria-expanded',String(open));if(open)$('#profileMessageQuery').focus();
+  setProfileSearch($('#profileMessageForm').hidden);
+});
+document.addEventListener('pointerdown',event=>{
+  if(!$('#profileMessageForm').contains(event.target)&&!$('#profileSearchToggle').contains(event.target))setProfileSearch(false);
+});
+$('#profileMessageForm').addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();setProfileSearch(false);$('#profileSearchToggle').focus();}
 });
 $('#profileMessageForm').addEventListener('submit',event=>{
   event.preventDefault();if(!activeProfile)return;
   const params=new URLSearchParams({profile:activeProfile,author_id:activeProfile});
   if($('#profileMessageQuery').value.trim())params.set('q',$('#profileMessageQuery').value.trim());
+  setProfileSearch(false);$('#profileSearchToggle').focus();
   cursors=[null];run(params,{scroll:false});
 });
 let mentionTimer, mentionRequest;

@@ -57,7 +57,9 @@ tokens or live Discord requests are used in automated tests.
 
 The display app resolves `@username` suggestions and `@userID` directly from the
 archive. Submitting one alone opens the shared profile card with newest messages
-below it. The search icon above results opens a query scoped to that author.
+below it. The search icon above results opens a compact query popover scoped to
+that author. Enter submits it; Escape or clicking outside dismisses it. The
+display profile has no duplicate search action underneath its identity.
 Browser Back and reload restore the profile, query and message cursor. Basic
 archives without the extended table still show the saved identity and history.
 No profile collection routes or account credentials are exposed by this app.
