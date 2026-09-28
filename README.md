@@ -197,3 +197,36 @@ compromised and reset it immediately by changing your Discord password.
 ## License
 
 MIT, with a wrongful use warning — see [LICENSE](LICENSE).
+
+## Release timeline
+
+### 2026-09-25
+
+- Reduced full-archive storage by packing the search index, reconstructing exact
+  timestamps, compressing verified recovery backups, and removing unused raw
+  attachment metadata while retaining historical per-message names, IDs, text,
+  and image links.
+
+### 2026-09-24
+
+- Unified channels, DMs, the collection queue, and live monitoring in the new
+  Bauhaus Scrape workspace.
+- Added searchable contributor rankings and six interactive, offline-ready
+  charts with search drilldowns and accessible data tables.
+
+### 2026-09-23
+
+- Promoted the Bauhaus home design with integrated search, expanding filters,
+  real archive totals, and shareable search URLs.
+- Added resumable incremental collection, optional profile harvesting, indexed
+  substring search, and cached statistics for large archives.
+
+### 2026-07-23
+
+- Replaced the separate scraper and search scripts with one self-hosted FastAPI
+  application and SQLite archive, including live monitoring and ChatML export.
+
+### 2025-09-20
+
+- Introduced the Discord scraper and Flask search interface for per-channel
+  JSON datasets, message search, and paginated conversation results.
