@@ -14,6 +14,11 @@ channels into SQLite, then search, filter, and chart what you collected.
 
 ## Features
 
+- **Archived profiles**: click a result author for their saved Discord-style card,
+  avatar, bio, connections and searchable server history. Fetch one extended
+  profile from the card, or use **scrape missing profiles** in Scrape to backfill
+  existing authors with explicit start/stop controls. See [profiles](docs/profiles.md).
+
 - **Three workspaces**: Browse for local search, Scrape for channels, DMs,
   a shared collection queue and live monitoring, and Stats for archive exploration.
 - **Queue and scrape** any number of channels at once, with an optional

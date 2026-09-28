@@ -236,6 +236,8 @@ def init_database(path: str) -> dict:
                 user_id TEXT PRIMARY KEY, username TEXT NOT NULL, global_name TEXT,
                 avatar_hash TEXT, banner_hash TEXT, accent_color INTEGER,
                 bot INTEGER, public_flags INTEGER, fetched_at TEXT NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS profile_details (
+                user_id TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
             db.execute("""CREATE TABLE IF NOT EXISTS channel_authors (
                 channel_id TEXT NOT NULL, author_id TEXT NOT NULL,
                 PRIMARY KEY (channel_id, author_id)) WITHOUT ROWID""")
