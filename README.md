@@ -69,8 +69,7 @@ progress every 30 seconds, and the port opens after the upgrade completes.
 
 The three production workspaces share the Bauhaus design. Earlier standalone
 drafts remain at `/trials/`, with synthetic data and local preview interactions.
-See [the workspace change report](docs/workspace-redesign.md) and the
-[original integration and draft report](docs/bauhaus-diff-report.md).
+See [the workspace change report](docs/workspace-redesign.md).
 
 It binds to loopback only. There is **no authentication** — anyone who can
 reach the port gets your token and your entire archive — so only change the

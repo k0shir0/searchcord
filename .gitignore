@@ -55,3 +55,8 @@ Thumbs.db
 desktop.ini
 .DS_Store
 /tests
+
+# Local Bauhaus design documents
+/BAUHAUS-DESIGN-PLAN.md
+/BAUHAUS-DESIGN-PREFERENCES.md
+/docs/bauhaus-diff-report.md
