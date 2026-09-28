@@ -51,11 +51,11 @@ try {
   await screenshot('desktop-home');
   report.timings.load=await evaluate(`(()=>{const n=performance.getEntriesByType('navigation')[0];return {dom_ms:Math.round(n.domContentLoadedEventEnd),load_ms:Math.round(n.loadEventEnd),resources:performance.getEntriesByType('resource').length}})()`);
   await check('one search surface, no workspace tabs',`document.querySelectorAll('[role=search]').length===1 && !document.querySelector('.surface-tabs')`);
-  await check('hero text preserved',`document.querySelector('h1').textContent==='searchcord' && document.querySelector('h2').textContent==='What are youlooking for?'`);
+  await check('hero text preserved',`document.querySelector('h1').textContent==='searchcord' && document.querySelector('h2').textContent==='What are you looking for?'`);
   await check('requested decorative copy removed',`!document.body.innerText.includes('Search your messages') && !document.body.innerText.includes('Your archive.') && !document.body.innerText.includes('Stored locally.') && !document.body.innerText.includes('3+ characters')`);
   await check('archive counters share the original box and type style',`(()=>{const boxes=[...document.querySelectorAll('.index-stat')], numbers=[...document.querySelectorAll('.index-number')]; return boxes.length===2 && boxes.every(e=>getComputedStyle(e).borderTopWidth==='1px') && numbers.every(e=>getComputedStyle(e).fontWeight==='800')})()`);
   await check('results hidden until search',`document.querySelector('#results').hidden`);
-  await check('desktop has no overflow',`document.documentElement.scrollWidth===innerWidth`);
+  await check('desktop has no overflow',`document.documentElement.scrollWidth<=innerWidth`);
   await click('#searchInput');
   await check('focus opens filters',`!document.querySelector('#filterTray').inert`);
   await key('Escape');

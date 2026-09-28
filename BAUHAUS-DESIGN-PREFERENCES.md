@@ -186,3 +186,10 @@ The older rules still describe the collection frontend and archived trials.
 - Use five restrained vertical rules with the existing angled horizontal rules to form an open background grid. The rules should remain behind the headline, search bar, and filter fields, with clean navy breaks around those controls.
 - Widen the navy clearance around geometric outlines to 10px. Keep rules visible through transparent interiors between those gaps.
 - Frame the whole search input and button as one box. Give each filter field one border. Focus changes that existing border from muted gold to mint; do not stack an inset highlight or another outline on the input.
+
+## Search display and profiles (2026-09-28)
+
+- The Swiss direction is withdrawn. Use the collection page's original bold “What are you looking for?” typography and full geometric composition, with more crossing rules and the same outlined shapes and navy clearance. Preserve the simplified mobile composition.
+- Keep the original search controls, compact message rows and matching typography in both archive-count boxes. Do not restore the removed marketing text or visible result timing/count summary.
+- A standalone `@username` or `@userID` opens a Discord-style archived profile in Searchcord colors. Put searchable, descending observed-server history beside it and newest-first messages below it, with a small control for searching those messages.
+- The collection page owns explicit profile fetch/refresh and missing-profile backfill controls. Reading a profile must never trigger collection.

@@ -74,7 +74,7 @@ python search_app.py --data-dir /path/to/archive-directory
 Open <http://127.0.0.1:8001>. On Windows, `start-search.bat` accepts the same
 arguments. `SEARCHCORD_DATA_DIR` also works. A Discord token is **not** required
 for this frontend. It serves one search page with the existing hero text,
-Swiss-style typography, navy grid and outline geometry, and a compact mobile
+the original bold typography, navy grid and outlined geometry, and a compact mobile
 layout. The collection app below remains separately available.
 
 For a **closed, unchanging test archive**, add `--snapshot`. This explicitly
@@ -85,8 +85,15 @@ Neither mode runs migrations or reads saved tokens. The display service binds
 only to loopback and exposes no collection, settings, deletion or export routes.
 
 Search a literal phrase, or submit an empty search to browse newest messages.
+Enter `@username` or `@userID` and select an author suggestion to open their saved
+profile, observed servers and newest messages. Exact usernames and IDs also work
+without selecting a suggestion. The small search button above their messages
+opens an author-scoped search. Profile URLs survive reloads and browser navigation.
+Profile collection stays in the collection app; the display app reads saved data.
 Focus or click the search box for server,
 channel, author and inclusive UTC dates. Choose a name suggestion or paste an ID.
+Channel suggestions accept plain names even when stored names include emoji or
+decorative separators; selection always uses the channel ID.
 Searches and cursor positions survive reloads and browser navigation. Results
 load 50 at a time; Next and Previous avoid deep offsets and archive-wide result
 counts. Very broad searches have a four-second SQL deadline and ask for a filter.

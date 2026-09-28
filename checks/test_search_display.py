@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from contextlib import closing
 from pathlib import Path
 import sqlite3
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -21,10 +22,14 @@ class DisplayTests(unittest.TestCase):
         cls.base = (int(datetime(2026, 9, 1, tzinfo=timezone.utc).timestamp()*1000)-EPOCH_MS) << 22
         with closing(sqlite3.connect(cls.path)) as db, db:
             db.executemany("INSERT INTO guilds VALUES (?,?)", [('10','Server Alpha'),('20','Server Beta')])
-            db.executemany("INSERT INTO channels VALUES (?,?,?)", [('30','10','general'),('40','20','general')])
+            db.executemany("INSERT INTO channels VALUES (?,?,?)", [('30','10','📢┃general-chat'),('40','20','🌿 general')])
             db.executemany("INSERT INTO authors(id,name) VALUES (?,?)", [('50','Alex'),('60','Alina')])
             db.executemany("INSERT INTO profiles(user_id,username,avatar_hash,fetched_at) VALUES (?,?,?,?)",
                            [('50','Alex','a_abc123','2026-09-01'),('60','Alina','../invalid','2026-09-01')])
+            db.execute('INSERT INTO profile_details VALUES (?,?,?)', ('50',json.dumps({
+                'user': {'id':'50','username':'alex.saved','global_name':'Alex','avatar':'a_abc123'},
+                'user_profile': {'bio':'Saved bio','pronouns':'they/them','banner':'banner123'},
+                'connected_accounts':[{'type':'github','name':'alex'}]}),'2026-09-01'))
             # Backfilled older messages have newer internal rowids. Public IDs
             # must determine order and cursor boundaries on both search paths.
             for i in list(range(40,80)) + list(range(40)):
@@ -109,6 +114,31 @@ class DisplayTests(unittest.TestCase):
         self.assertEqual(len(self.client.get('/api/suggestions/channel?guild_id=10').json()),1)
         self.assertEqual(self.client.get('/api/suggestions/author?q=Al%25').json(),[])
         self.assertEqual(self.client.get('/api/suggestions/settings').status_code,422)
+
+    def test_emoji_channel_suggestions_keep_stable_ids(self):
+        for query in ['general','📢┃general','Ｇｅｎｅｒａｌ']:
+            rows=self.client.get('/api/suggestions/channel',params={'q':query,'guild_id':'10'}).json()
+            self.assertEqual([row['id'] for row in rows],['30'])
+            self.assertEqual(rows[0]['name'],'📢┃general-chat')
+        self.assertEqual(self.client.get('/api/suggestions/channel?q=30').json()[0]['id'],'30')
+        self.assertTrue(all(row['channel_id']=='30' for row in self.get(channel_id='30')['messages']))
+
+    def test_saved_profile_is_readable_without_collection_routes(self):
+        profile=self.client.get('/api/profiles/50').json()
+        self.assertTrue(profile['extended'])
+        self.assertEqual(profile['bio'],'Saved bio')
+        self.assertEqual(profile['pronouns'],'they/them')
+        self.assertEqual(profile['message_count'],40)
+        self.assertIn('/avatars/50/a_abc123.gif',profile['avatar_url'])
+        self.assertEqual(profile['connections'][0]['name'],'alex')
+        self.assertEqual(self.client.get('/api/profiles/50/servers').json()['servers'][0]['messages'],40)
+        self.assertFalse(self.client.get('/api/profiles/60').json()['extended'])
+        self.assertEqual(self.client.get('/api/profiles/99').status_code,404)
+        self.assertEqual(self.client.get('/api/profiles/nope').status_code,400)
+        for path in ['/api/profiles/50/fetch','/api/profile-backfill']:
+            self.assertIn(self.client.post(path).status_code,[404,405])
+        for path in ['/profile-view.js','/profile-view.css']:
+            self.assertEqual(self.client.get(path).status_code,200)
 
     def test_missing_old_and_wal_archives(self):
         missing = TestClient(create_app(self.path.parent/'missing.db',True))

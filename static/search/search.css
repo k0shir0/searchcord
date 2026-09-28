@@ -89,85 +89,31 @@ button {
 .masthead {
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:center;
   padding:38px 0 30px;
   border-bottom:1px solid var(--line);
   gap:24px;
 }
 .masthead h1 {
-  font-size:clamp(54px,7.7vw,112px);
+  font-size:clamp(64px,12.5vw,180px);
+  font-family:var(--display);
   font-weight:700;
-  letter-spacing:-.065em;
+  letter-spacing:-.055em;
   line-height:1;
 }
 .masthead h1 span {
   color:var(--mint);
 }
 
-.search-surface {
-  position:relative;
-  padding:44px 0 28px;
-}
-.search-heading {
-  min-height:198px;
-  position:relative;
-  z-index:1;
-  pointer-events:none;
-}
-
-.search-heading h2 {
-  font-size:clamp(36px,4.2vw,62px);
-  line-height:1.04;
-  font-weight:500;
-  letter-spacing:-.045em;
-  max-width:65%;
-  margin-bottom:40px;
-}
-.geometry {
-  position:absolute;
-  right:0;
-  top:10px;
-  width:44%;
-  max-width:490px;
-  height:240px;
-  overflow:hidden;
-  pointer-events:none;
-}
-.geometry svg {
-  width:100%;
-  height:100%;
-  overflow:visible;
-}
-.grid-lines {
-  stroke:var(--line);
-  stroke-width:1;
-}
-.clearance,.gap {
-  stroke:var(--bg);
-  stroke-width:23px;
-}
-.ring {
-  stroke:var(--purple);
-  stroke-width:3px;
-}
-.ring.gap {
-  stroke:var(--bg);
-  stroke-width:23px;
-}
-.triangle {
-  stroke:var(--blue);
-  stroke-width:3px;
-}
-.square {
-  stroke:var(--mint);
-  stroke-width:3px;
-}
-
 /* Search controls and messages use the collection frontend's component styles. */
-.search-surface { --banner-fill: var(--bg); --gold: var(--ice); --input-fill: #1b3048; --input-ink: #edf3f8; --input-placeholder: #aab9c8; }
+.search-surface { margin:24px 0 16px; --gold: var(--ice); --input-fill: #1b3048; --input-ink: #edf3f8; --input-placeholder: #aab9c8; }
+@media(min-width:901px) {
+  .search-surface { min-height:490px; }
+  .search-surface .query-copy { max-width:46%; }
+}
 form { position: relative; z-index: 2; }
-.query-form { box-shadow: none; }
-.query-form input { color-scheme: dark; }
+
+.query-form input, .query-block .filter-form input { color-scheme: dark; }
 .search-surface.is-expanded .filter-tray { max-height: 340px; opacity: 1; padding-top: 16px; pointer-events: auto; transform: translateY(0); transition-delay: .1s; visibility: visible; }
 .filter-form { border: 0; padding: 0; }
 .filter-form label { color: rgba(255,255,255,.88); font-family: var(--display); font-size: 11px; padding: 3px 0; }
@@ -200,20 +146,29 @@ form { position: relative; z-index: 2; }
 #resultBody[aria-busy=true] { opacity: .45; pointer-events: none; }
 .site-footer { margin: 32px 0 0; }
 @media(min-width:1700px) { body { padding: 0 96px; } }
-@media(max-width:900px) { .geometry { width: 42%; height: 215px; } }
+
 @media(max-width:600px) {
   body { padding: 0 22px; }
   .masthead { padding: 28px 0 24px; }
   .masthead h1 { font-size: clamp(47px,13vw,72px); }
-  .search-surface { padding-top: 30px; padding-bottom: 16px; }
-  .search-heading h2 { font-size: 36px; max-width: 75%; margin-bottom: 28px; }
-  .search-heading { min-height: 0; }
-  .geometry { top: 8px; width: 30%; height: 142px; overflow: visible; }
-  .geometry svg { overflow: visible; }
-  .geometry .square, .geometry .clearance rect { display: none; }
   .index-block { gap: 10px; }
   .index-stat { min-height: 110px; padding: 18px 12px; gap: 14px; }
 }
 @media(prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation: none!important; transition: none!important; scroll-behavior: auto!important; }
 }
+
+#profileSection { margin-top:28px;scroll-margin-top:24px; }
+.profile-navigation { display:flex;justify-content:flex-end;margin-bottom:14px; }
+.profile-navigation button { background:transparent;border:1px solid var(--rule);color:var(--ink);padding:10px 16px;min-height:42px; }
+.results-heading { justify-content:flex-start;gap:16px; }
+.profile-message-search { display:grid;place-items:center;min-width:42px;min-height:42px;background:transparent;border:1px solid var(--rule);color:var(--cool-accent); }
+.profile-message-search svg { fill:none;stroke:currentColor;stroke-width:1.5; }
+.profile-message-form { margin-bottom:20px; }
+.profile-message-form label { display:block;font-size:12px;color:var(--ink-soft);margin-bottom:8px; }
+.profile-message-form>div { display:flex; }
+.profile-message-form input { width:100%;min-width:0;background:var(--panel);color:var(--ink);border:1px solid var(--rule);padding:12px; }
+.profile-message-form button { border:1px solid var(--cool-accent);background:var(--cool-accent);color:var(--paper);padding:10px 18px; }
+body.has-profile .search-surface,body.has-profile .index-block { display:none; }
+body.has-profile .masthead { padding:24px 0; }
+body.has-profile .masthead h1 { font-size:clamp(42px,5vw,72px); }
