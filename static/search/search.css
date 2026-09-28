@@ -161,14 +161,13 @@ form { position: relative; z-index: 2; }
 #profileSection { margin-top:28px;scroll-margin-top:24px; }
 .profile-navigation { display:flex;justify-content:flex-end;margin-bottom:14px; }
 .profile-navigation button { background:transparent;border:1px solid var(--rule);color:var(--ink);padding:10px 16px;min-height:42px; }
-.results-heading { justify-content:flex-start;gap:16px; }
+.results-heading { position:relative;justify-content:flex-start;gap:16px; }
 .profile-message-search { display:grid;place-items:center;min-width:42px;min-height:42px;background:transparent;border:1px solid var(--rule);color:var(--cool-accent); }
 .profile-message-search svg { fill:none;stroke:currentColor;stroke-width:1.5; }
-.profile-message-form { margin-bottom:20px; }
-.profile-message-form label { display:block;font-size:12px;color:var(--ink-soft);margin-bottom:8px; }
-.profile-message-form>div { display:flex; }
+.profile-message-form { position:absolute;top:100%;left:0;width:min(420px,100%);z-index:5;padding:12px;background:var(--panel);border:1px solid var(--rule);box-shadow:0 10px 24px #0005;animation:profile-search-open .16s ease-out; }
 .profile-message-form input { width:100%;min-width:0;background:var(--panel);color:var(--ink);border:1px solid var(--rule);padding:12px; }
-.profile-message-form button { border:1px solid var(--cool-accent);background:var(--cool-accent);color:var(--paper);padding:10px 18px; }
+.profile-message-form input:focus { outline:none;box-shadow:none;border-color:var(--cool-accent); }
+@keyframes profile-search-open { from { opacity:0;transform:translateY(-6px); } to { opacity:1;transform:translateY(0); } }
 body.has-profile .search-surface,body.has-profile .index-block { display:none; }
 body.has-profile .masthead { padding:24px 0; }
 body.has-profile .masthead h1 { font-size:clamp(42px,5vw,72px); }

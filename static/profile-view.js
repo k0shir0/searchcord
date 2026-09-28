@@ -1,6 +1,6 @@
 /* Shared profile card for collection and read-only display. All archive text stays inert. */
 window.SearchcordProfile = class {
-  constructor(host, {writable=false, onMessages=()=>{}, onServer=()=>{}}={}) {
+  constructor(host, {writable=false, onMessages=null, onServer=()=>{}}={}) {
     this.host=host; this.writable=writable; this.onMessages=onMessages; this.onServer=onServer;
     this.version=0; this.serverVersion=0;
   }
@@ -42,7 +42,7 @@ window.SearchcordProfile = class {
     for(const badge of data.badges){const label=badge.description||badge.id;if(label)badges.append(this.node('span','',label));}
     if(badges.childElementCount)copy.append(badges);
     const actions=this.node('div','profile-actions');
-    const messages=this.node('button','','Search messages');messages.type='button';messages.addEventListener('click',()=>this.onMessages(this.uid));actions.append(messages);
+    if(this.onMessages){const messages=this.node('button','','Search messages');messages.type='button';messages.addEventListener('click',()=>this.onMessages(this.uid));actions.append(messages);}
     if(this.writable){
       const collect=this.node('button','profile-fetch',data.extended?'Refresh profile':'Scrape extended profile');collect.type='button';
       collect.addEventListener('click',async()=>{
@@ -51,7 +51,7 @@ window.SearchcordProfile = class {
         catch(error){if(version===this.version){status.textContent=error.message;collect.disabled=false;}}
       });actions.append(collect);
     }
-    copy.append(actions);
+    if(actions.childElementCount)copy.append(actions);
     const status=this.node('p','profile-status',!data.extended?(data.scraped?'Basic profile saved. Extended details have not been scraped.':'Profile has not been scraped. Showing archived identity.'):'');
     status.setAttribute('role','status');copy.append(status);
     if(data.bio)copy.append(this.node('p','profile-bio',data.bio));

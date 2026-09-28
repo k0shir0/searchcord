@@ -74,8 +74,9 @@
       <div id="profileHost"></div>
     </section>
     <section id="results" class="results" aria-labelledby="resultsTitle" hidden>
-      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">results</h2><button id="profileSearchToggle" class="profile-message-search" type="button" aria-label="Search this user's messages" aria-controls="profileMessageForm" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button><p class="sr-only" id="resultStatus" role="status" aria-live="polite"></p></div>
-      <form id="profileMessageForm" class="profile-message-form" hidden><label for="profileMessageQuery">Search this user's messages</label><div><input id="profileMessageQuery" type="search" placeholder="Word or phrase"><button type="submit">search</button></div></form>
+      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">results</h2><button id="profileSearchToggle" class="profile-message-search" type="button" aria-label="Search this user's messages" aria-controls="profileMessageForm" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button><p class="sr-only" id="resultStatus" role="status" aria-live="polite"></p>
+        <form id="profileMessageForm" class="profile-message-form" aria-label="Profile messages" hidden><label class="sr-only" for="profileMessageQuery">Search this user's messages</label><input id="profileMessageQuery" type="search" enterkeyhint="search" placeholder="Search messages, then press Enter" maxlength="200"></form>
+      </div>
       <div id="resultBody" aria-busy="false"><div id="messages" class="result-list"></div><div id="emptyState" class="empty-state" hidden><h3>No messages found.</h3><p>Try a shorter phrase or remove a filter.</p><button id="editSearch" type="button">Edit search <span aria-hidden="true">↑</span></button></div></div>
       <nav id="pagination" class="pagination" aria-label="Result pages" hidden><button id="previousPage" class="page-control" type="button">previous</button><span id="pageNumber" class="page-readout page-current"></span><button id="nextPage" class="page-control" type="button">next</button></nav>
     </section>

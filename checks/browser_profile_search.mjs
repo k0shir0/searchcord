@@ -35,7 +35,7 @@ try {
   const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});assert(!r.exceptionDetails,JSON.stringify(r.exceptionDetails));return r.result.value;};
   const until=async expression=>{for(let i=0;i<150;i++){if(await evaluate(expression))return;await delay(100);}throw new Error('Timed out: '+expression);};
   const check=async(name,expression)=>{assert(await evaluate(expression),name);report.checks.push(name);};
-  const key=async key=>{await command('Input.dispatchKeyEvent',{type:'keyDown',key});await command('Input.dispatchKeyEvent',{type:'keyUp',key});};
+  const key=async key=>{const windowsVirtualKeyCode=key==='Enter'?13:key==='Escape'?27:0;await command('Input.dispatchKeyEvent',{type:'keyDown',key,windowsVirtualKeyCode,...(key==='Enter'?{text:'\r'}:{})});await command('Input.dispatchKeyEvent',{type:'keyUp',key,windowsVirtualKeyCode});};
   const click=async selector=>{
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'})`);
     await delay(400);
@@ -66,6 +66,7 @@ try {
   await until(`document.querySelector('.profile-name')?.textContent==='Alice Example' && ${settled}`);
   await check('mention opens branded profile with full archive results',`!document.querySelector('#profileSection').hidden && document.querySelectorAll('.result-row').length===50 && new URLSearchParams(location.search).get('profile')==='50' && !new URLSearchParams(location.search).has('channel_id')`);
   await check('profile navigation receives keyboard focus',`document.activeElement.id==='closeProfile'`);
+  await check('profile search stays compact with no duplicate identity button',`!document.querySelector('#profileHost .profile-actions') && document.querySelector('#profileMessageForm').hidden`);
   await check('profile messages follow card in document order',`!!(document.querySelector('#profileSection').compareDocumentPosition(document.querySelector('#results')) & Node.DOCUMENT_POSITION_FOLLOWING)`);
   await check('messages ordered newest first',`(()=>{const ids=[...document.querySelectorAll('.result-row')].map(e=>BigInt(e.dataset.id));return ids.every((id,i)=>!i||ids[i-1]>id)})()`);
   await until(`document.querySelectorAll('.profile-server').length===30`);
@@ -75,7 +76,12 @@ try {
   await until(`document.querySelectorAll('.profile-server').length===1`);
   await check('profile server search and paging work',`document.querySelector('.profile-server strong').textContent==='Garden Club'`);
   await click('#profileSearchToggle');
-  await evaluate(`document.querySelector('#profileMessageQuery').value='not-present-fixture';document.querySelector('#profileMessageForm').requestSubmit()`);await until(settled);
+  await check('search icon opens and focuses the popout field',`!document.querySelector('#profileMessageForm').hidden && document.activeElement.id==='profileMessageQuery' && !document.querySelector('#profileMessageForm button')`);
+  await key('Escape');
+  await check('Escape closes search and returns focus',`document.querySelector('#profileMessageForm').hidden && document.activeElement.id==='profileSearchToggle'`);
+  await click('#profileSearchToggle');
+  await screenshot('profile-search-popout');
+  await evaluate(`document.querySelector('#profileMessageQuery').value='not-present-fixture'`);await key('Enter');await until(settled);
   await check('profile message search scopes to current user',`new URLSearchParams(location.search).get('author_id')==='50' && !document.querySelector('#emptyState').hidden`);
   await click('#editSearch');
   await check('empty profile search focuses its own query',`document.activeElement.id==='profileMessageQuery'`);
@@ -88,6 +94,10 @@ try {
     await evaluate(`document.querySelector('#profileSection').scrollIntoView({behavior:'instant'})`);
     await screenshot('profile-mobile-'+width);
     await check('profile fits mobile '+width,`document.documentElement.scrollWidth===innerWidth`);
+    await click('#profileSearchToggle');
+    await check('search popout fits mobile '+width,`(()=>{const r=document.querySelector('#profileMessageForm').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && document.activeElement.id==='profileMessageQuery'})()`);
+    await click('#resultsTitle');
+    await check('outside click closes mobile popout '+width,`document.querySelector('#profileMessageForm').hidden`);
   }
   await click('#closeProfile');
   await check('back to search restores hero',`!document.body.classList.contains('has-profile') && !new URLSearchParams(location.search).has('profile')`);
