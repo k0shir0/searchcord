@@ -4,6 +4,8 @@
 .profile-banner img { width:100%;height:100%;object-fit:cover; }
 .profile-portrait { position:relative; display:grid; place-items:center; margin:-64px 0 0 28px; width:120px;height:120px;border:8px solid var(--panel);border-radius:50%; background:var(--signal);color:var(--paper);font-size:48px;font-weight:700;overflow:hidden; }
 .profile-portrait img { width:100%;height:100%;object-fit:cover; }
+.profile-avatar-link { display:grid;place-items:center;width:100%;height:100%;color:inherit;text-decoration:none; }
+.profile-avatar-link:focus-visible { outline:3px solid var(--cool-accent);outline-offset:-3px; }
 .profile-copy { padding:20px 28px 28px; }
 .profile-name { font-family:var(--body);font-size:30px;line-height:1.2;overflow-wrap:anywhere;margin:0 0 8px; }
 .profile-handle { color:var(--ink-soft);font-size:14px;overflow-wrap:anywhere; }
@@ -12,7 +14,12 @@
 .profile-actions { display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 16px; }
 .profile-actions button,.profile-more { border:1px solid var(--cool-accent);background:transparent;color:var(--cool-accent);padding:10px 14px;font:inherit;font-size:12px;min-height:42px;cursor:pointer; }
 .profile-actions button:first-child { background:var(--cool-accent);color:var(--paper); }
-.profile-bio { white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.6;margin:22px 0; }
+.profile-about,.profile-presence { margin-top:22px; }
+.profile-about h3,.profile-presence h3 { font-family:var(--body);font-size:16px;margin:0 0 10px; }
+.profile-bio { white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.6;margin:0; }
+.profile-presence dl { display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 14px;margin:0;font-size:12px; }
+.profile-presence dt { color:var(--ink-soft); }
+.profile-presence dd { margin:0;overflow-wrap:anywhere;white-space:pre-wrap; }
 .profile-facts { display:grid;gap:6px;font-size:13px;margin:24px 0 0; }
 .profile-facts dt { color:var(--ink-soft);font-size:11px;margin-top:14px; }
 .profile-facts dd { margin:0;overflow-wrap:anywhere; }

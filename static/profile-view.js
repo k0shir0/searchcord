@@ -33,7 +33,11 @@ window.SearchcordProfile = class {
     const banner=this.node('div','profile-banner');
     if(data.banner_url){const image=this.node('img');image.alt='';image.src=data.banner_url;image.referrerPolicy='no-referrer';image.onerror=()=>image.remove();banner.append(image);}
     const portrait=this.node('div','profile-portrait',data.display_name.slice(0,1).toUpperCase());
-    if(data.avatar_url){const image=this.node('img');image.alt=`${data.display_name}'s avatar`;image.src=data.avatar_url;image.referrerPolicy='no-referrer';image.onload=()=>portrait.replaceChildren(image);}
+    if(data.avatar_url){
+      const image=this.node('img');image.alt=`${data.display_name}'s avatar`;image.referrerPolicy='no-referrer';
+      const link=this.node('a','profile-avatar-link',data.display_name.slice(0,1).toUpperCase());link.href=data.avatar_url;link.target='_blank';link.rel='noopener noreferrer';link.setAttribute('aria-label',`Open ${data.display_name}'s profile picture`);
+      image.onload=()=>link.replaceChildren(image);portrait.replaceChildren(link);image.src=data.avatar_url;
+    }
     const copy=this.node('div','profile-copy');
     copy.append(this.node('h2','profile-name',data.display_name));
     copy.append(this.node('p','profile-handle',`@${data.username}${data.pronouns?' · '+data.pronouns:''}`));
@@ -54,7 +58,15 @@ window.SearchcordProfile = class {
     copy.append(actions);
     const status=this.node('p','profile-status',!data.extended?(data.scraped?'Basic profile saved. Extended details have not been scraped.':'Profile has not been scraped. Showing archived identity.'):'');
     status.setAttribute('role','status');copy.append(status);
-    if(data.bio)copy.append(this.node('p','profile-bio',data.bio));
+    if(data.bio){const about=this.node('section','profile-about');about.append(this.node('h3','','About Me'),this.node('p','profile-bio',data.bio));copy.append(about);}
+    if(data.extended){
+      const presence=this.node('section','profile-presence');presence.append(this.node('h3','','Status'));
+      const facts=this.node('dl');
+      const online={online:'Online',idle:'Idle',dnd:'Do not disturb',offline:'Offline'}[data.online_status];
+      facts.append(this.node('dt','','Online status at fetch'),this.node('dd','',online||'Not returned by Discord'));
+      facts.append(this.node('dt','','Custom status at fetch'),this.node('dd','',data.custom_status||'Not returned by Discord'));
+      presence.append(facts);copy.append(presence);
+    }
     const dates=this.node('dl','profile-facts');
     for(const [label,value] of [['Member since',data.created_at],['Profile saved',data.fetched_at],['Subscriber since',data.premium_since]]){
       if(!value)continue;const parsed=new Date(value);if(Number.isNaN(parsed.valueOf()))continue;

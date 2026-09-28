@@ -56,7 +56,9 @@ try {
   await click('[data-profile-id="50"]');
   await until(`document.querySelector('.profile-name')?.textContent==='Alice Example'`);
   await check('main author opens native profile dialog',`document.querySelector('.profile-dialog').open`);
+  await check('avatar opens a CDN image URL',`document.querySelector('.profile-avatar-link')?.href==='https://cdn.discordapp.com/avatars/50/abc123.png?size=256'`);
   await check('extended bio and connections rendered',`document.querySelector('.profile-bio')?.textContent.includes('synthetic profile') && document.querySelectorAll('.profile-connection').length===2`);
+  await check('saved status snapshot rendered',`document.querySelector('.profile-presence')?.textContent.includes('Synthetic custom status') && document.querySelector('.profile-presence')?.textContent.includes('Online')`);
   await until(`document.querySelectorAll('.profile-server').length===30`);
   await check('observed servers ordered by count',`document.querySelector('.profile-server strong').textContent==='Garden Club'`);
   await check('server history scrolls',`document.querySelector('.profile-server-list').scrollHeight>document.querySelector('.profile-server-list').clientHeight`);

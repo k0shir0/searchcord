@@ -29,6 +29,24 @@ def image_url(uid, value, kind='avatars', size=256):
     return f'https://cdn.discordapp.com/{kind}/{uid}/{value}.{extension}?size={size}'
 
 
+def presence_fields(payload):
+    """Only expose status when a saved response explicitly contains presence."""
+    presence = payload.get('presence')
+    if not isinstance(presence, dict):
+        return None, None
+    status = presence.get('status')
+    if status not in ('online', 'idle', 'dnd', 'offline'):
+        status = None
+    activities = presence.get('activities')
+    if not isinstance(activities, list):
+        return status, None
+    for activity in activities:
+        if (isinstance(activity, dict) and activity.get('type') == 4
+                and isinstance(activity.get('state'), str)):
+            return status, activity['state']
+    return status, None
+
+
 def read_profile(db, uid):
     uid = user_id(uid)
     db.row_factory = sqlite3.Row
@@ -43,6 +61,7 @@ def read_profile(db, uid):
     payload = json.loads(extended['payload']) if extended else {}
     user = payload.get('user') or {}
     details = payload.get('user_profile') or {}
+    online_status, custom_status = presence_fields(payload)
     count = db.execute("SELECT count FROM stats_counts WHERE kind='author' AND key=?", (uid,)).fetchone()
     return {
         'id': uid, 'username': user.get('username') or basic.get('username') or (author['name'] if author else uid),
@@ -50,6 +69,7 @@ def read_profile(db, uid):
         'avatar_url': image_url(uid, user.get('avatar') or basic.get('avatar_hash')),
         'banner_url': image_url(uid, details.get('banner') or user.get('banner') or basic.get('banner_hash'), 'banners', 1024),
         'bio': details.get('bio') or user.get('bio') or '',
+        'online_status': online_status, 'custom_status': custom_status,
         'pronouns': details.get('pronouns') or '',
         'accent_color': details.get('accent_color') or user.get('accent_color') or basic.get('accent_color'),
         'badges': payload.get('badges') or [], 'connections': payload.get('connected_accounts') or [],

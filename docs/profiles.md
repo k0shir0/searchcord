@@ -6,6 +6,8 @@ connections in Searchcord's palette. Its server panel is **observed archive
 history**, not a claim about live membership or mutual servers with your account.
 Servers are searchable, scrollable, paginated and sorted by saved message count
 descending. Selecting one searches that author's messages in that server.
+The avatar is displayed from its Discord CDN URL and opens that URL when clicked;
+Searchcord saves no image bytes to disk. The bio is labelled **About Me**.
 
 Basic saved profiles remain readable. **Scrape extended profile** (or **Refresh
 profile**) explicitly fetches the selected user with the currently selected
@@ -15,6 +17,13 @@ work. Restart skips saved extended profiles. Neither action fetches automaticall
 when you open a card. Discord authorization/rate-limit failures stop bulk work;
 existing profile data is kept on failed requests. Unknown/unavailable fields are
 not invented and presence is not inferred.
+
+The card shows online and custom status as a snapshot only if the saved response
+explicitly contains presence data. Otherwise both fields say **Not returned by
+Discord**. The profile lookup used for backfill normally omits presence; Discord
+delivers it through [Gateway presence events](https://discord.com/developers/docs/events/gateway-events#presence-update),
+with visibility restrictions. Backfill therefore cannot promise live or historical
+status for every saved user ID.
 
 `profile_details` is an additive table alongside the schema v9 `profiles` table.
 It stores the complete returned profile JSON and its fetch timestamp, preserving
