@@ -56,7 +56,7 @@ desktop.ini
 .DS_Store
 /tests
 
-# Local Bauhaus design documents
+# Local design documents and reports
 /BAUHAUS-DESIGN-PLAN.md
 /BAUHAUS-DESIGN-PREFERENCES.md
-/docs/bauhaus-diff-report.md
+/docs/

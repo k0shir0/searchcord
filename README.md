@@ -67,10 +67,6 @@ ready. On Windows you can double-click `start.bat` instead. A first database
 upgrade can take several minutes for a large archive; the console reports
 progress every 30 seconds, and the port opens after the upgrade completes.
 
-The three production workspaces share the Bauhaus design. Earlier standalone
-drafts remain at `/trials/`, with synthetic data and local preview interactions.
-See [the workspace change report](docs/workspace-redesign.md).
-
 It binds to loopback only. There is **no authentication** — anyone who can
 reach the port gets your token and your entire archive — so only change the
 host if you understand that:
@@ -195,67 +191,9 @@ and access to the original message. Discord's [signed attachment URLs](https://g
 expire, so link-only storage cannot preserve an image after its message becomes
 unavailable. Non-image attachments are not stored in new archives.
 
-The browser receives gzip-compressed API responses when supported. Message
-text remains exact and searchable; per-message compression or truncation would
-add decode work and break the current substring index. The measured
-3.69-million-message legacy archive shrank from 1,664,700,416 to 843,780,096
-bytes (49.31%) in the active database, while retaining historical names and
-exact timestamp values. Its verified compressed recovery copy is 333,110,734
-bytes. An archive already converted to v7 shrank from 1,065,906,176 to
-777,445,376 bytes (27.06%); v7 had already discarded its historical names.
-See the [storage audit](docs/storage-audit.md) for the full timeline, field
-checks, and throughput measurements.
-
 If you ever push this database anywhere by accident, treat your token as
 compromised and reset it immediately by changing your Discord password.
-
-## Notes
-
-- Uses your user token against Discord's HTTP API. This is against Discord's
-  Terms of Service and can get your account terminated. You accept that risk
-  by running it.
-- Requests share a process-wide gate, honor Discord's rate-limit headers and
-  back off on HTTP 429, with a retry cap.
-- Search uses a SQLite trigram index for substring queries of at least three
-  characters; shorter queries still scan message content.
-- Stats are maintained as small counts when messages are saved; they do not
-  rescan the message table each time the stats view opens.
-- See [storage audit](docs/storage-audit.md) for current storage measurements and
-  [throughput audit](docs/throughput-audit.md) for earlier performance research.
 
 ## License
 
 MIT, with a wrongful use warning — see [LICENSE](LICENSE).
-
-## Release timeline
-
-### 2026-09-25
-
-- Reduced full-archive storage by packing the search index, reconstructing exact
-  timestamps, compressing verified recovery backups, and removing unused raw
-  attachment metadata while retaining historical per-message names, IDs, text,
-  and image links.
-
-### 2026-09-24
-
-- Unified channels, DMs, the collection queue, and live monitoring in the new
-  Bauhaus Scrape workspace.
-- Added searchable contributor rankings and six interactive, offline-ready
-  charts with search drilldowns and accessible data tables.
-
-### 2026-09-23
-
-- Promoted the Bauhaus home design with integrated search, expanding filters,
-  real archive totals, and shareable search URLs.
-- Added resumable incremental collection, optional profile harvesting, indexed
-  substring search, and cached statistics for large archives.
-
-### 2026-07-23
-
-- Replaced the separate scraper and search scripts with one self-hosted FastAPI
-  application and SQLite archive, including live monitoring and ChatML export.
-
-### 2025-09-20
-
-- Introduced the Discord scraper and Flask search interface for per-channel
-  JSON datasets, message search, and paginated conversation results.
