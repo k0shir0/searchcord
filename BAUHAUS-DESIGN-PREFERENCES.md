@@ -2,6 +2,16 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Search-only display direction (2026-09-28)
+
+The separate `search_app.py` frontend follows the user's newer Swiss / International
+Typographic Style direction, documented in `docs/search-display.md`. For that
+surface, one action-first search page supersedes the three-workspace navigation
+and Bauhaus styling below. Keep the `searchcord` wordmark, “What are you looking
+for?” hero, dark navy/mint/lavender palette, complete outline geometry with navy
+clearance, grid structure, real filters and a secondary mobile composition.
+The older rules still describe the collection frontend and archived trials.
+
 ## Stats and queue refinement (2026-09-26)
 
 - Stats is one continuous view. Put scrollable server and contributor rankings

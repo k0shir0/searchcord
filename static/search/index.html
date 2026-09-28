@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Search your local Discord archive.">
+  <title>searchcord</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="search.css">
+  <script src="search.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#searchInput">Skip to search</a>
+  <header class="masthead"><h1>search<span>cord</span></h1><span class="masthead-note">Your archive.<br>Within reach.</span></header>
+  <main>
+    <section class="search-surface" aria-labelledby="searchTitle">
+      <div class="geometry" aria-hidden="true">
+        <svg viewBox="0 0 440 250" fill="none">
+          <g class="grid-lines"><path d="M0 55H440M0 125H440M0 195H440M60 0V250M170 0V250M280 0V250M390 0V250"/></g>
+          <g class="clearance"><path d="M70 91 136 211H4Z"/><rect x="319" y="174" width="54" height="54"/></g>
+          <circle class="ring gap" cx="284" cy="98" r="72"/>
+          <circle class="ring" cx="284" cy="98" r="72"/>
+          <path class="triangle" d="M70 91 136 211H4Z"/>
+          <rect class="square" x="319" y="174" width="54" height="54"/>
+        </svg>
+      </div>
+      <div class="search-heading"><p class="eyebrow">Search your messages</p><h2 id="searchTitle">What are you<br>looking for?</h2></div>
+      <form id="searchForm" role="search" autocomplete="off">
+        <label class="sr-only" for="searchInput">Search messages</label>
+        <div class="search-frame">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
+          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="Word or phrase" aria-describedby="searchHint searchError" aria-controls="filterTray" aria-expanded="false">
+          <button class="search-button" type="submit">Search <span aria-hidden="true">↗</span></button>
+        </div>
+        <div class="search-tools"><p id="searchHint">3+ characters, or search empty to browse everything.</p><button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters <span id="filterCount"></span><span aria-hidden="true">+</span></button></div>
+        <div id="filterTray" class="filter-tray" hidden>
+          <div class="filters">
+            <label>Server<input id="guild" list="guildOptions" placeholder="Name or ID" data-kind="server" data-param="guild_id"><datalist id="guildOptions"></datalist></label>
+            <label>Channel<input id="channel" list="channelOptions" placeholder="Name or ID" data-kind="channel" data-param="channel_id"><datalist id="channelOptions"></datalist></label>
+            <label>Author<input id="author" list="authorOptions" placeholder="Name or ID" data-kind="author" data-param="author_id"><datalist id="authorOptions"></datalist></label>
+            <label>From <span class="label-note">UTC</span><input id="dateFrom" type="date" name="date_from"></label>
+            <label>To <span class="label-note">UTC, inclusive</span><input id="dateTo" type="date" name="date_to"></label>
+          </div>
+          <div class="filter-actions"><span id="suggestionStatus" role="status"></span><button id="clearFilters" type="button">Clear filters</button></div>
+        </div>
+        <p id="searchError" class="error" role="alert" hidden></p>
+      </form>
+    </section>
+    <div class="archive-totals" aria-label="Archive totals"><p><strong id="messageTotal">…</strong><span>messages indexed</span></p><p><strong id="serverTotal">…</strong><span>indexed servers</span></p></div>
+    <p id="archiveError" class="error" role="alert" hidden></p>
+    <section id="results" class="results" aria-labelledby="resultsTitle" hidden>
+      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">Results</h2><p id="resultStatus" role="status" aria-live="polite"></p></div>
+      <div id="resultBody" aria-busy="false"><ol id="messages" class="messages"></ol><div id="emptyState" class="empty-state" hidden><h3>No messages found.</h3><p>Try a shorter phrase or remove a filter.</p><button id="editSearch" type="button">Edit search <span aria-hidden="true">↑</span></button></div></div>
+      <nav id="pagination" class="pagination" aria-label="Result pages" hidden><button id="previousPage" type="button">← Previous</button><span id="pageNumber"></span><button id="nextPage" type="button">Next →</button></nav>
+    </section>
+  </main>
+  <footer><span>Stored locally. Searched locally.</span><span class="keyboard-hint"><kbd>/</kbd> to search</span></footer>
+</body>
+</html>

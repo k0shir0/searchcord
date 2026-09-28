@@ -58,6 +58,44 @@ pip install -r requirements.txt
 
 ## Running
 
+### Search-only display
+
+Run the standalone, read-only frontend against an existing schema v9 archive:
+
+```bash
+python search_app.py --data-dir /path/to/archive-directory
+```
+
+Open <http://127.0.0.1:8001>. On Windows, `start-search.bat` accepts the same
+arguments. `SEARCHCORD_DATA_DIR` also works. A Discord token is **not** required
+for this frontend. It serves one search page with the existing hero text,
+Swiss-style typography, navy grid and outline geometry, and a compact mobile
+layout. The collection app below remains separately available.
+
+For a **closed, unchanging test archive**, add `--snapshot`. This explicitly
+enables SQLite immutable mode and creates no database sidecars. Do not use it
+while another process modifies the archive; a nonempty WAL is rejected. Normal
+mode opens SQLite read-only and supports an archive being updated by a collector.
+Neither mode runs migrations or reads saved tokens. The display service binds
+only to loopback and exposes no collection, settings, deletion or export routes.
+
+Search a literal phrase of at least three characters, or submit an empty search
+to browse newest messages. Focus the search box or choose **Filters** for server,
+channel, author and inclusive UTC dates. Choose a name suggestion or paste an ID.
+Searches and cursor positions survive reloads and browser navigation. Results
+load 40 at a time; Next and Previous avoid deep offsets and archive-wide result
+counts. Very broad searches have a four-second SQL deadline and ask for a filter.
+
+All UI assets are local. No avatars or images are fetched automatically. Image
+links open the stored Discord URL on request and may have expired; this frontend
+does not use credentials to refresh them. Queries and filter IDs appear in the
+browser URL. API responses use `no-store`.
+
+See [display design and measured performance](docs/search-display.md) for query
+tradeoffs, verification, and repeatable checks.
+
+### Collection and archive administration
+
 ```bash
 python app.py
 ```
