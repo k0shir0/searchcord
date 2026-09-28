@@ -23,8 +23,8 @@ class DisplayTests(unittest.TestCase):
             db.executemany("INSERT INTO guilds VALUES (?,?)", [('10','Server Alpha'),('20','Server Beta')])
             db.executemany("INSERT INTO channels VALUES (?,?,?)", [('30','10','general'),('40','20','general')])
             db.executemany("INSERT INTO authors(id,name) VALUES (?,?)", [('50','Alex'),('60','Alina')])
-            db.executemany("INSERT INTO profiles(user_id,avatar_hash) VALUES (?,?)",
-                           [('50','a_abc123'),('60','../invalid')])
+            db.executemany("INSERT INTO profiles(user_id,username,avatar_hash,fetched_at) VALUES (?,?,?,?)",
+                           [('50','Alex','a_abc123','2026-09-01'),('60','Alina','../invalid','2026-09-01')])
             # Backfilled older messages have newer internal rowids. Public IDs
             # must determine order and cursor boundaries on both search paths.
             for i in list(range(40,80)) + list(range(40)):
