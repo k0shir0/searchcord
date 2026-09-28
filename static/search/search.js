@@ -5,20 +5,16 @@ const searchInput = $('#searchInput');
 const filters = [...document.querySelectorAll('[data-param]')];
 const dateFields = [$('#dateFrom'), $('#dateTo')];
 const number = new Intl.NumberFormat();
-const dateFormat = new Intl.DateTimeFormat(undefined, {dateStyle:'medium', timeStyle:'short', timeZone:'UTC'});
+const dateFormat = new Intl.DateTimeFormat(undefined, {dateStyle:'medium', timeStyle:'short'});
 let request, generation = 0, current = null, nextCursor = null, page = 1;
 let cursors = [null];
 const suggestionRequests = new Map();
 const suggestionTimers = new Map();
 
 function tray(open) {
-  $('#filterTray').hidden = !open;
-  $('#filterToggle').setAttribute('aria-expanded', String(open));
+  $('.search-surface').classList.toggle('is-expanded', open);
+  $('#filterTray').inert = !open;
   searchInput.setAttribute('aria-expanded', String(open));
-}
-function filterCount() {
-  const count = [...filters, ...dateFields].filter(input => input.value.trim()).length;
-  $('#filterCount').textContent = count ? `(${count})` : '';
 }
 function error(message = '') {
   $('#searchError').textContent = message;
@@ -45,11 +41,6 @@ function filterId(input) {
 function parameters() {
   const params = new URLSearchParams();
   const q = searchInput.value.trim();
-  if (q && q.length < 3) {
-    searchInput.setAttribute('aria-invalid', 'true');
-    searchInput.focus();
-    throw new Error('Use at least 3 characters, or leave search empty to browse.');
-  }
   if (q) params.set('q', q);
   for (const input of filters) {
     const id = filterId(input);
@@ -85,52 +76,49 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
+function messageAvatar(authorId, avatarUrl) {
+  let hash = 0;
+  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const avatar = element('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
+  avatar.setAttribute('aria-hidden', 'true');
+  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
+  fallback();
+  if (avatarUrl) {
+    const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+    img.onload = () => avatar.replaceChildren(img);
+    img.onerror = fallback; img.src = avatarUrl;
+  }
+  return avatar;
+}
+
 function render(messages, query) {
   const fragment = document.createDocumentFragment();
   for (const message of messages) {
-    const item = element('li', 'message');
-    item.dataset.id = message.id;
-    const shape = Number(BigInt(message.author_id || '0') % 4n);
-    const avatar = element('span', `avatar a${shape}`, ['◇','○','△','□'][shape]);
-    avatar.setAttribute('aria-hidden','true');
-    const body = element('div');
-    const meta = element('div','message-meta');
-    meta.append(element('strong', '', message.author_name || 'Unknown author'));
+    const row = element('article', 'result-row');
+    row.dataset.id = message.id;
+    const body = element('div', 'message-body');
+    const heading = element('div', 'message-heading');
+    const author = element('strong', 'message-author', message.author_name || message.author_id);
     const timestamp = new Date(message.timestamp);
-    const time = element('time', '', Number.isNaN(timestamp.valueOf()) ? 'Unknown date' : dateFormat.format(timestamp) + ' UTC');
-    if (!Number.isNaN(timestamp.valueOf())) time.dateTime = timestamp.toISOString();
-    meta.append(time);
-    const source = element('p','message-source', `${message.guild_name || 'Direct messages'} · #${message.channel_name || 'unknown channel'}`);
-    const content = element('p','message-text');
-    content.id = `text-${message.id}`;
-    const fullText = message.content || '';
-    putText(content, fullText.length > 2000 ? fullText.slice(0,2000) + '…' : fullText, query);
-    body.append(meta, source, content);
-    if (fullText.length > 2000) {
-      const expand = element('button','expand-message','Show full message');
-      expand.type = 'button';
-      expand.setAttribute('aria-expanded','false');
-      expand.setAttribute('aria-controls',content.id);
-      expand.addEventListener('click', () => {
-        const open = expand.getAttribute('aria-expanded') === 'false';
-        content.replaceChildren();
-        putText(content, open ? fullText : fullText.slice(0,2000) + '…', query);
-        expand.setAttribute('aria-expanded',String(open));
-        expand.textContent = open ? 'Show less' : 'Show full message';
-      });
-      body.append(expand);
-    }
-    if (message.attachments.length) {
-      const attachments = element('div','attachments');
+    const time = element('time', 'message-time', Number.isNaN(timestamp.valueOf()) ? 'Unknown date' : dateFormat.format(timestamp));
+    if (!Number.isNaN(timestamp.valueOf())) time.dateTime = message.timestamp;
+    const location = element('span', 'message-location', `${message.guild_name || 'Direct messages'} · #${message.channel_name || 'unknown channel'}`);
+    const id = element('span', 'message-id', `id: ${message.author_id}`);
+    heading.append(author, time, location, id);
+    const text = element('p', 'result-copy');
+    putText(text, message.content || '(no text content)', query);
+    body.append(heading, text);
+    if (message.attachments?.length) {
+      const attachments = element('div','rc-attachments');
       message.attachments.forEach((url, index) => {
-        const link = element('a','',`Image ${index+1} ↗`);
+        const link = element('a','rc-att',`image ${index+1}`);
         link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-        link.title = 'Open saved Discord image link (may have expired)';
         attachments.append(link);
       });
       body.append(attachments);
     }
-    item.append(avatar, body); fragment.append(item);
+    row.append(messageAvatar(message.author_id, message.avatar_url), body);
+    fragment.append(row);
   }
   $('#messages').replaceChildren(fragment);
   $('#emptyState').hidden = messages.length > 0;
@@ -145,6 +133,7 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
   $('#resultStatus').textContent = 'Searching…';
   $('#pagination').hidden = true;
   const url = new URLSearchParams(params);
+  url.set('limit', '50');
   if (cursor) url.set('before', cursor);
   try {
     const data = await json(`/api/search?${url}`, request.signal);
@@ -153,18 +142,18 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
     nextCursor = data.next_cursor;
     page = targetPage;
     render(data.messages, params.get('q') || '');
-    $('#resultStatus').textContent = `${data.messages.length} ${data.messages.length === 1 ? 'message' : 'messages'}${data.has_more ? ' · more available' : ''} · ${number.format(data.elapsed_ms)} ms`;
+    $('#resultStatus').textContent = data.messages.length ? 'Results loaded.' : 'No messages match these filters.';
     $('#pageNumber').textContent = `Page ${page}`;
     $('#previousPage').disabled = page === 1;
     $('#nextPage').disabled = !data.has_more;
-    $('#pagination').hidden = !data.messages.length && page === 1;
+    $('#pagination').hidden = page === 1 && !data.has_more;
     if (push) {
       const address = new URLSearchParams(url);
+      address.delete('limit');
       address.set('search','1');
       history.pushState({cursors, page}, '', `?${address}`);
     }
     if (scroll) {
-      $('#resultsTitle').focus({preventScroll:true});
       $('#results').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
     }
   } catch (exception) {
@@ -177,21 +166,22 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
     if (version === generation) $('#resultBody').setAttribute('aria-busy','false');
   }
 }
-form.addEventListener('submit', event => {
-  event.preventDefault();
+function submitSearch(scroll = false) {
+  request?.abort(); generation++;
+  $('#resultBody').setAttribute('aria-busy','false');
   try {
     const params = parameters();
     cursors = [null];
-    tray(false);
-    run(params);
+    run(params, {scroll});
   } catch (exception) { error(exception.message); }
-});
+}
+form.addEventListener('submit', event => { event.preventDefault(); submitSearch(true); });
 searchInput.addEventListener('focus', () => tray(true));
-$('#filterToggle').addEventListener('click', () => tray($('#filterTray').hidden));
+searchInput.addEventListener('click', () => tray(true));
 document.addEventListener('pointerdown', event => {if (!form.contains(event.target)) tray(false);});
 document.addEventListener('focusin', event => {if (!form.contains(event.target)) tray(false);});
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !$('#filterTray').hidden) {
+  if (event.key === 'Escape' && !$('#filterTray').inert) {
     searchInput.focus(); tray(false);
   }
   if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.target.matches('input,textarea,[contenteditable]')) {
@@ -199,7 +189,7 @@ document.addEventListener('keydown', event => {
   }
 });
 for (const input of [searchInput, ...filters, ...dateFields]) input.addEventListener('input', () => {
-  input.removeAttribute('aria-invalid'); error(); filterCount();
+  input.removeAttribute('aria-invalid'); error();
 });
 $('#clearFilters').addEventListener('click', () => {
   for (const input of [...filters,...dateFields]) { input.value = ''; input.removeAttribute('aria-invalid'); }
@@ -207,7 +197,7 @@ $('#clearFilters').addEventListener('click', () => {
   for (const timer of suggestionTimers.values()) clearTimeout(timer);
   document.querySelectorAll('datalist').forEach(list => list.replaceChildren());
   $('#suggestionStatus').textContent = '';
-  filterCount(); error();
+  error(); submitSearch();
 });
 for (const input of filters) {
   const suggest = () => {
@@ -229,7 +219,7 @@ for (const input of filters) {
         if (input.value.trim() !== value) return;
         input.list.replaceChildren(...rows.map(row => {
           const option = document.createElement('option');
-          option.value = `${row.name} · ${row.id}`;
+          option.value = `${input.id === 'channel' ? '#' : ''}${row.name} · ${row.id}`;
           return option;
         }));
         $('#suggestionStatus').textContent = '';
@@ -244,8 +234,9 @@ for (const input of filters) {
 $('#guild').addEventListener('input', () => {
   $('#channel').value = ''; $('#channelOptions').replaceChildren();
   suggestionRequests.get($('#channel'))?.abort();
-  clearTimeout(suggestionTimers.get($('#channel'))); filterCount();
+  clearTimeout(suggestionTimers.get($('#channel')));
 });
+for (const input of [...filters, ...dateFields]) input.addEventListener('change', () => submitSearch());
 $('#nextPage').addEventListener('click', () => {
   if (!nextCursor || !current) return;
   cursors[page] = nextCursor;
@@ -260,7 +251,7 @@ function restore() {
   searchInput.value = url.get('q') || '';
   filters.forEach(input => {input.value = url.get(input.dataset.param) || '';});
   dateFields.forEach(input => {input.value = url.get(input.name) || '';});
-  filterCount(); error(); tray(false);
+  error(); tray(false);
   if (!url.has('search') && !url.has('q')) {
     request?.abort(); generation++;
     $('#results').hidden = true;

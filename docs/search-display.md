@@ -14,27 +14,34 @@ clearance strokes; the grid continues through their transparent interiors.
 No generated bitmap assets, framework runtime, remote fonts or CDN dependencies
 are needed.
 
-Search expands a filter tray on focus. A visible Filters button also opens it;
-Escape and outside focus/click close it. Suggestions are delayed 180 ms, capped
-at 20, scoped by server for channels, and require two letters for authors.
-Native datalists support name selection while IDs disambiguate duplicate names.
-Dates include the complete selected end date in UTC. Invalid filters receive
-inline errors. `/` focuses search when the user is not already typing.
+The controls, counters, message rows and pagination reuse the collection
+frontend's `bauhaus.css` component styles. The search-only composition remains,
+but the added eyebrow, tagline, search hint, technical results summary and
+numbered message list have been removed at the user's request.
 
-Results use compact message rows with stable geometric identity marks, historical
-author/source names, UTC timestamps, literal highlighting and optional image
-links. Content is always inserted as text nodes. Long messages initially show
-2,000 characters with a full-text disclosure. Forty messages are rendered per
-page, with offscreen rendering deferred by `content-visibility`. Result requests
-are abortable and guarded against stale responses. Errors, empty results and
-loading states are explicit. Search state and cursors survive browser navigation
-and reload; direct deep links start at the linked cursor without inventing an
-earlier page history.
+Focus or click the search field to expand its filter tray; Escape and outside
+focus/click close it. Changing a filter or clearing filters immediately runs the
+search, matching the collection frontend. Enter submits the main search and
+scrolls to results. Suggestions remain bounded and delayed; IDs disambiguate
+names. Dates include the complete selected end date in UTC. Short queries work
+again, with the same SQL deadline protecting expensive scans.
 
-Mobile reflows the filters into two columns, makes Author full width, keeps a
-smaller circle/triangle composition and removes the desktop keyboard hint.
-Entrances and button feedback use short opacity/transform motion. Reduced motion
-disables it. Browser verification covers desktop plus 390 px and 320 px layouts.
+Results use the original compact article rows: circular avatars, author and local
+time, server/channel and author ID on the heading line, followed by full message
+text. Real Discord avatars load lazily when the archive has a valid avatar hash;
+otherwise the original geometric avatar fallback appears. Archived content is
+inserted as text nodes with literal highlighting. There are no numbered list
+markers or truncation disclosures. The frontend requests 50 messages per page.
+It retains cursor pagination and request cancellation for performance, and a
+screen-reader-only status announces completion without showing technical timing.
+
+The two archive totals use the original equally sized bordered, filled boxes,
+number font, weights and captions. On mobile, the search button stacks beneath
+the input and filters use the original responsive grid. Reduced motion disables
+transitions. The existing privacy page and its stylesheet now live under
+`static/search/`; its footer link is on this frontend only, and its return link
+returns to this search page. The privacy page is still the existing title-only
+placeholder, not new policy text.
 
 ## Read path
 
@@ -62,8 +69,8 @@ notes that indexed LIKE needs a literal run of at least three characters and
 does not accelerate LIKE with ESCAPE. The fallback therefore selects a literal
 run for the FTS predicate and applies an escaped exact substring predicate on
 messages. `%` and `_` in the user's query are literal characters. Queries without
-three consecutive non-wildcard characters are rejected instead of scanning the
-whole archive. LIKE retains SQLite's default ASCII case-insensitive behavior;
+three consecutive non-wildcard characters use a literal content scan, bounded
+by the same SQL deadline. LIKE retains SQLite's default ASCII case-insensitive behavior;
 non-ASCII case variants are not promised to match.
 
 SQL has a four-second progress-handler deadline. A sparse filter or uncommon
@@ -131,8 +138,9 @@ warmup. Desktop Chrome loaded the page in 158 ms in a recorded run; browser
 interaction timing includes test-driver polling and should not be confused with
 SQL or HTTP timings. Results depend on disk cache and machine load.
 
-Seven synthetic test cases and 33 browser assertions pass. Coverage includes
+After the parity correction, seven synthetic test cases and 42 browser assertions pass. Coverage includes
 out-of-order history backfills, all cursor pages, literal wildcard handling,
 historical names, inclusive dates, filter scoping, read-only enforcement,
 unsupported archives, browser back/reload, stale responses, hostile HTML,
-long-message disclosure, mobile fit, reduced motion and zero external requests.
+full message rendering, automatic filter application, privacy navigation, mobile
+fit, reduced motion and requests restricted to local assets and Discord avatars.

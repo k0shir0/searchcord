@@ -23,6 +23,8 @@ class DisplayTests(unittest.TestCase):
             db.executemany("INSERT INTO guilds VALUES (?,?)", [('10','Server Alpha'),('20','Server Beta')])
             db.executemany("INSERT INTO channels VALUES (?,?,?)", [('30','10','general'),('40','20','general')])
             db.executemany("INSERT INTO authors(id,name) VALUES (?,?)", [('50','Alex'),('60','Alina')])
+            db.executemany("INSERT INTO profiles(user_id,avatar_hash) VALUES (?,?)",
+                           [('50','a_abc123'),('60','../invalid')])
             # Backfilled older messages have newer internal rowids. Public IDs
             # must determine order and cursor boundaries on both search paths.
             for i in list(range(40,80)) + list(range(40)):
@@ -51,6 +53,8 @@ class DisplayTests(unittest.TestCase):
         return response.json()
 
     def test_summary_and_readonly_surface(self):
+        self.assertEqual(self.client.get('/privacy.html').status_code,200)
+        self.assertEqual(self.client.get('/bauhaus.css').status_code,200)
         self.assertEqual(self.client.get('/api/summary').json(),{'messages':80,'servers':2})
         for path in ['/api/settings','/api/token','/api/scrape','/api/export','/app.js','/../app.py']:
             self.assertEqual(self.client.get(path).status_code,404,path)
@@ -72,7 +76,7 @@ class DisplayTests(unittest.TestCase):
 
     def test_adaptive_query_matches_reference_all_pages(self):
         with patch('search_app.WINDOW',8), closing(sqlite3.connect(self.path)) as db:
-            for query in ['hello','rare phrase','100%_value','wow!','MiXeD','Héllo','not present']:
+            for query in ['hello','rare phrase','100%_value','wow!','MiXeD','Héllo','not present','he','h','%','%%%']:
                 expected=[str(r[0]) for r in db.execute("SELECT id FROM messages WHERE content LIKE ? ESCAPE '!' ORDER BY id DESC",['%'+query.replace('!','!!').replace('%','!%').replace('_','!_')+'%'])]
                 actual=[]; cursor=None
                 while True:
@@ -88,10 +92,13 @@ class DisplayTests(unittest.TestCase):
         self.assertEqual(result['messages'][0]['author_name'],'Historical name')
         self.assertEqual(result['messages'][0]['timestamp'],'2026-09-03T00:00:00+00:00')
         self.assertEqual(len(result['messages'][0]['attachments']),1)
+        self.assertIsNone(result['messages'][0]['avatar_url'])
+        self.assertEqual(self.get(author_id='50')['messages'][0]['avatar_url'],
+                         'https://cdn.discordapp.com/avatars/50/a_abc123.png?size=64')
         self.assertEqual(self.get(guild_id='10',channel_id='40')['messages'],[])
 
     def test_validation(self):
-        for params in [dict(q='ab'),dict(q='%%%'),dict(guild_id='name'),dict(author_id='9'*30),dict(date_from='2026-99-01'),dict(date_from='2026-09-04',date_to='2026-09-01')]:
+        for params in [dict(guild_id='name'),dict(author_id='9'*30),dict(date_from='2026-99-01'),dict(date_from='2026-09-04',date_to='2026-09-01')]:
             self.assertEqual(self.client.get('/api/search',params=params).status_code,400,params)
         for params in [dict(limit=101),dict(before=-1),dict(q='a'*201)]:
             self.assertEqual(self.client.get('/api/search',params=params).status_code,422)

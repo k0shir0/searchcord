@@ -11,6 +11,7 @@ from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parent
@@ -69,13 +70,9 @@ class Archive:
                date_from=None, date_to=None, before=None, limit=40):
         started = time.perf_counter()
         q = q.strip()
-        if q and len(q) < 3:
-            raise HTTPException(400, "Use at least 3 characters, or leave search empty to browse.")
         # A literal run preserves trigram acceleration, including queries with % or _.
         runs = re.findall(r"[^%_]+", q)
         anchor = max(runs, key=len, default="")
-        if q and len(anchor) < 3:
-            raise HTTPException(400, "Include at least 3 consecutive characters other than % or _.")
         conditions, params = [], []
         for column, value in (("guild_id", guild_id), ("channel_id", channel_id), ("author_id", author_id)):
             if value:
@@ -102,21 +99,31 @@ class Archive:
                     f"SELECT id FROM messages WHERE {where} AND id>=? AND content LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?",
                     params + [floor, literal, take])]
                 if len(ids) < take and boundary:
+                    indexed = len(anchor) >= 3
+                    candidate = "AND rowid IN (SELECT rowid FROM messages_fts WHERE content LIKE ?) " if indexed else ""
                     ids += [r[0] for r in db.execute(
-                        f"SELECT id FROM messages WHERE {where} AND id<? AND rowid IN "
-                        "(SELECT rowid FROM messages_fts WHERE content LIKE ?) "
+                        f"SELECT id FROM messages WHERE {where} AND id<? " + candidate +
                         "AND content LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?",
-                        params + [floor, "%" + anchor + "%", literal, take-len(ids)])]
+                        params + [floor] + (["%" + anchor + "%"] if indexed else []) + [literal, take-len(ids)])]
             else:
                 ids = [r[0] for r in db.execute(f"SELECT id FROM messages WHERE {where} ORDER BY id DESC LIMIT ?", params + [take])]
             has_more = len(ids) > limit
             ids = ids[:limit]
             messages = []
             if ids:
+                author_ids = [r[0] for r in db.execute(
+                    "SELECT DISTINCT author_id FROM messages WHERE id IN (" + ",".join("?" for _ in ids) + ")", ids)]
+                avatars = {str(r[0]): r[1] for r in db.execute(
+                    "SELECT user_id, avatar_hash FROM profiles WHERE user_id IN (" + ",".join("?" for _ in author_ids) + ")", author_ids)}
                 rows = db.execute("SELECT * FROM message_records WHERE id IN (" + ",".join("?" for _ in ids) + ") ORDER BY id DESC", ids)
                 for row in rows:
                     message = dict(row)
                     message["id"] = str(message["id"])
+                    avatar = avatars.get(message["author_id"])
+                    message["avatar_url"] = (
+                        f"https://cdn.discordapp.com/avatars/{message['author_id']}/{avatar}.png?size=64"
+                        if isinstance(avatar, str) and re.fullmatch(r"(?:a_)?[A-Za-z0-9]+", avatar)
+                        and str(message['author_id']).isdigit() else None)
                     # No credential lookup, external fetch or expiring-link refresh in display mode.
                     urls = (message.pop("image_urls") or "").splitlines()
                     message["attachments"] = [url for url in urls if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
@@ -140,7 +147,7 @@ def create_app(path=None, immutable=None):
         response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "no-cache"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
         return response
 
     @app.get("/api/summary")
@@ -169,6 +176,10 @@ def create_app(path=None, immutable=None):
             params.append(guild_id)
         with archive.connect() as db:
             return [dict(r) for r in db.execute(f"SELECT id, name FROM {table} WHERE {' AND '.join(conditions)} ORDER BY name COLLATE NOCASE, id LIMIT 20", params)]
+
+    @app.get("/bauhaus.css", include_in_schema=False)
+    def shared_styles():
+        return FileResponse(ROOT / "static" / "bauhaus.css", media_type="text/css")
 
     app.mount("/", StaticFiles(directory=ROOT / "static" / "search", html=True), name="display")
     return app

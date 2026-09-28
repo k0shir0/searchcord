@@ -2,6 +2,18 @@
 
 Read this before changing the Searchcord visual trials or proposing a new visual direction.
 
+## Search-only interaction correction (2026-09-28)
+
+- The search-only page must use the original search controls and interaction:
+  focus/click expands filters, filter changes and reset search immediately,
+  Escape/outside interaction collapses the tray, and Enter submits and scrolls.
+- Use the original compact message rows, full text, avatars, metadata and local
+  timestamp formatting. No ordered message numbers or technical timing summary.
+- Remove added eyebrow, tagline, local-storage slogan and minimum-length hint.
+- Match the original archive count fonts and the two bordered, filled boxes.
+- The existing privacy page and footer link belong to the search-only frontend;
+  remove the link from the collection frontend.
+
 ## Search-only display direction (2026-09-28)
 
 The separate `search_app.py` frontend follows the user's newer Swiss / International

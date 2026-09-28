@@ -79,15 +79,16 @@ mode opens SQLite read-only and supports an archive being updated by a collector
 Neither mode runs migrations or reads saved tokens. The display service binds
 only to loopback and exposes no collection, settings, deletion or export routes.
 
-Search a literal phrase of at least three characters, or submit an empty search
-to browse newest messages. Focus the search box or choose **Filters** for server,
+Search a literal phrase, or submit an empty search to browse newest messages.
+Focus or click the search box for server,
 channel, author and inclusive UTC dates. Choose a name suggestion or paste an ID.
 Searches and cursor positions survive reloads and browser navigation. Results
-load 40 at a time; Next and Previous avoid deep offsets and archive-wide result
+load 50 at a time; Next and Previous avoid deep offsets and archive-wide result
 counts. Very broad searches have a four-second SQL deadline and ask for a filter.
 
-All UI assets are local. No avatars or images are fetched automatically. Image
-links open the stored Discord URL on request and may have expired; this frontend
+All UI assets are local. As in the collection frontend, valid saved avatar hashes
+load Discord avatars lazily, with geometric fallbacks. Image links open the stored
+Discord URL on request and may have expired; this frontend
 does not use credentials to refresh them. Queries and filter IDs appear in the
 browser URL. API responses use `no-store`.
 
@@ -209,7 +210,8 @@ and delete it when you are done. **Clear All Data** asks for a second click
 inside the button before it wipes archived messages and derived metadata.
 Saved tokens remain; deleting the database file removes them too.
 
-The in-app **privacy & data** page currently contains only its title and a
+The search-only frontend now owns the **privacy & data** page and footer link.
+The collection page no longer links it. The privacy page contains only its title and a
 return link to the Searchcord home page that also works when opened as a local
 file. This README holds the current data-handling details; the page is
 not a completed privacy policy.
