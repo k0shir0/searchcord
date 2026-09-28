@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database
+from profile_api import profile_router, fetch_profile
 
 # Resolve paths against this file, not the process working directory, so the
 # app behaves the same however it was launched.
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
         for info in list(live_monitors.values()):
             info["task"].cancel()
         live_monitors.clear()
+        await shutdown_profile_jobs()
         await http_client.aclose()
         http_client = None
 
@@ -375,6 +377,8 @@ def _emit(q: asyncio.Queue, event: dict):
 
 
 profile_fetch_lock = asyncio.Lock()
+profile_routes, shutdown_profile_jobs = profile_router(DB_PATH, get_token, discord, profile_fetch_lock)
+app.include_router(profile_routes)
 
 
 async def _write_db():
@@ -483,7 +487,7 @@ async def _clear_pending(db, cid: str):
 
 async def _harvest_profiles(db, cid: str, token: str, job_id: str, q: asyncio.Queue) -> int:
     async with db.execute("""SELECT ca.author_id FROM channel_authors ca
-        LEFT JOIN profiles p ON p.user_id=ca.author_id
+        LEFT JOIN profile_details p ON p.user_id=ca.author_id
         WHERE ca.channel_id=? AND p.user_id IS NULL""", (cid,)) as cur:
         missing = [row[0] for row in await cur.fetchall()]
     saved = 0
@@ -493,29 +497,16 @@ async def _harvest_profiles(db, cid: str, token: str, job_id: str, q: asyncio.Qu
         # Two scrape jobs can see the same missing author. Check again under the
         # lock so each stable user ID is fetched at most once per process.
         async with profile_fetch_lock:
-            async with db.execute("SELECT 1 FROM profiles WHERE user_id=?", (user_id,)) as cur:
+            async with db.execute("SELECT 1 FROM profile_details WHERE user_id=?", (user_id,)) as cur:
                 if await cur.fetchone():
                     continue
-            r = await discord("GET", f"/users/{user_id}", token)
-            if r.status_code != 200:
-                _emit(q, {"type": "profile_warning", "message": f"Profile HTTP {r.status_code}"})
-                if r.status_code in (401, 403, 429):
+            try:
+                await fetch_profile(db, user_id, token, discord)
+            except HTTPException as exc:
+                _emit(q, {"type": "profile_warning", "message": f"Profile HTTP {exc.status_code}"})
+                if exc.status_code in (401, 403, 429):
                     break
                 continue
-            profile = r.json()
-            if profile.get("id") != user_id:
-                _emit(q, {"type": "profile_warning", "message": "Profile ID mismatch"})
-                continue
-            await db.execute("""INSERT OR IGNORE INTO profiles
-                (user_id, username, global_name, avatar_hash, banner_hash,
-                 accent_color, bot, public_flags, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (user_id, profile.get("username") or "",
-                 profile.get("global_name"), profile.get("avatar"),
-                 profile.get("banner"), profile.get("accent_color"),
-                 int(bool(profile.get("bot"))), profile.get("public_flags"),
-                 datetime.now(timezone.utc).isoformat()))
-            await db.commit()
             saved += 1
             _emit(q, {"type": "profile_progress", "channel_id": cid, "saved": saved})
     return saved
@@ -1449,9 +1440,10 @@ async def update_settings(s: SettingsIn):
 
 @app.delete("/api/messages")
 async def clear_messages():
-    async with aiosqlite.connect(DB_PATH) as db:
+    await shutdown_profile_jobs()
+    async with profile_fetch_lock, aiosqlite.connect(DB_PATH) as db:
         for table in ("messages", "message_history", "name_values", "stats_counts",
-                      "scrape_cursors", "channel_authors", "profiles", "authors",
+                      "scrape_cursors", "channel_authors", "profile_details", "profiles", "authors",
                       "channels", "guilds"):
             await db.execute(f"DELETE FROM {table}")
         await db.commit()

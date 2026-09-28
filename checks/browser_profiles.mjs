@@ -1,0 +1,86 @@
+// Local Chrome checks. Prints assertions and timings, never archived text.
+// node checks/browser_search.mjs http://127.0.0.1:8002 agents/profile-main-browser
+import {spawn} from 'node:child_process';
+import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'node:fs';
+import {setTimeout as delay} from 'node:timers/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+
+const base = process.argv[2] || 'http://127.0.0.1:8002';
+const output = path.resolve(process.argv[3] || 'agents/profile-main-browser');
+mkdirSync(output,{recursive:true});
+const chrome = process.env.CHROME_PATH || path.join(process.env.ProgramFiles,'Google/Chrome/Application/chrome.exe');
+const profile = path.join(output,`profile-${Date.now()}`);
+const browser = spawn(chrome,['--headless','--disable-gpu','--no-first-run','--no-sandbox','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:'ignore'});
+let socket;
+const report = {checks:[],timings:{}};
+try {
+  const portFile=path.join(profile,'DevToolsActivePort');
+  for(let i=0;i<100&&!existsSync(portFile);i++) await delay(100);
+  assert(existsSync(portFile),'Chrome debugging port available');
+  const port=Number(readFileSync(portFile,'utf8').split('\n')[0]);
+  const targets=await(await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+  socket=new WebSocket(targets.find(t=>t.type==='page').webSocketDebuggerUrl);
+  await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject;});
+  let id=0;const pending=new Map();const exceptions=[];const requests=[];
+  socket.onmessage=({data})=>{
+    const msg=JSON.parse(data);
+    if(msg.method==='Runtime.exceptionThrown') exceptions.push(msg.params.exceptionDetails.text);
+    if(msg.method==='Network.requestWillBeSent') requests.push(msg.params.request.url);
+    if(!msg.id)return;
+    const item=pending.get(msg.id);pending.delete(msg.id);
+    msg.error?item.reject(msg.error):item.resolve(msg.result);
+  };
+  const command=(method,params={})=>new Promise((resolve,reject)=>{const next=++id;pending.set(next,{resolve,reject});socket.send(JSON.stringify({id:next,method,params}));});
+  const evaluate=async expression=>{const r=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});assert(!r.exceptionDetails,JSON.stringify(r.exceptionDetails));return r.result.value;};
+  const until=async expression=>{for(let i=0;i<150;i++){if(await evaluate(expression))return;await delay(100);}throw new Error('Timed out: '+expression);};
+  const check=async(name,expression)=>{assert(await evaluate(expression),name);report.checks.push(name);};
+  const key=async key=>{await command('Input.dispatchKeyEvent',{type:'keyDown',key,windowsVirtualKeyCode:key==='Escape'?27:0});await command('Input.dispatchKeyEvent',{type:'keyUp',key,windowsVirtualKeyCode:key==='Escape'?27:0});};
+  const click=async selector=>{
+    await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'})`);
+    await delay(400);
+    const point=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+    await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+  };
+  const screenshot=async name=>{await delay(220);const r=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});writeFileSync(path.join(output,name+'.png'),Buffer.from(r.data,'base64'));};
+  const settled=`document.querySelector('#resultBody').getAttribute('aria-busy')==='false' && !document.querySelector('#results').hidden`;
+  await command('Page.enable');await command('Runtime.enable');await command('Network.enable');
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await command('Page.navigate',{url:base});
+  await until(`document.body?.dataset.archiveReady==='true'`);
+  await screenshot('collection-home');
+  report.timings.load=await evaluate(`(()=>{const n=performance.getEntriesByType('navigation')[0];return {dom_ms:Math.round(n.domContentLoadedEventEnd),load_ms:Math.round(n.loadEventEnd),resources:performance.getEntriesByType('resource').length}})()`);
+  await evaluate(`document.querySelector('#searchInput').value='';document.querySelector('#queryForm').requestSubmit()`);
+  await until(`document.querySelectorAll('#searchResults .result-row').length>0`);
+  await click('[data-profile-id="50"]');
+  await until(`document.querySelector('.profile-name')?.textContent==='Alice Example'`);
+  await check('main author opens native profile dialog',`document.querySelector('.profile-dialog').open`);
+  await check('extended bio and connections rendered',`document.querySelector('.profile-bio')?.textContent.includes('synthetic profile') && document.querySelectorAll('.profile-connection').length===2`);
+  await until(`document.querySelectorAll('.profile-server').length===30`);
+  await check('observed servers ordered by count',`document.querySelector('.profile-server strong').textContent==='Garden Club'`);
+  await check('server history scrolls',`document.querySelector('.profile-server-list').scrollHeight>document.querySelector('.profile-server-list').clientHeight`);
+  await screenshot('profile-desktop');
+  await click('.profile-more');await until(`document.querySelectorAll('.profile-server').length===45`);
+  await check('server pagination loads remaining history',`document.querySelector('.profile-more').hidden`);
+  await evaluate(`document.querySelector('.profile-server-search input').value='garden';document.querySelector('.profile-server-search input').dispatchEvent(new Event('input'))`);
+  await until(`document.querySelectorAll('.profile-server').length===1`);
+  await check('server history searches',`document.querySelector('.profile-server strong').textContent==='Garden Club'`);
+  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await screenshot('profile-mobile');
+  await check('mobile profile stays within viewport',`document.querySelector('.profile-dialog').scrollWidth<=document.querySelector('.profile-dialog').clientWidth`);
+  await key('Escape');await until(`!document.querySelector('.profile-dialog').open`);await check('Escape closes native dialog',`!document.querySelector('.profile-dialog').open`);
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await click('[data-profile-id="60"]');await until(`document.querySelector('.profile-name')?.textContent==='Bob Example'`);
+  await check('unscraped profile is explicit',`document.querySelector('.profile-dialog .profile-status').textContent.includes('not been scraped')`);
+  await click('.profile-fetch');await until(`document.querySelector('.profile-dialog .profile-status').textContent.includes('token')`);
+  await check('profile fetch without account shows recoverable error',`!document.querySelector('.profile-fetch').disabled`);
+  await click('.profile-actions button');
+  await until(`!document.querySelector('.profile-dialog').open && document.querySelector('#fUser').value==='60' && document.querySelectorAll('#searchResults .result-row').length===1`);
+  await check('profile message action filters original results',`document.querySelector('#searchResults .message-author').dataset.profileId==='60'`);
+  await click('[data-view="scrape"]');await click('#backfillProfiles');
+  await until(`document.querySelector('#profileBackfillStatus').textContent.includes('token')`);
+  await check('backfill is explicit and reports missing account',`!document.querySelector('#backfillProfiles').disabled`);
+  assert.deepEqual(exceptions,[]);report.checks.push('no uncaught browser errors');
+  writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+}finally{socket?.close();browser.kill();}

@@ -1028,7 +1028,8 @@ function populateChannelFilter(guildId) {
   S.channelMap.clear();
   const list = guildId ? S.filterChans.filter(c => c.guild_id === guildId) : S.filterChans;
   list.forEach(c => {
-    const display = `#${c.channel_name} · ${c.channel_id}`;
+    const name = c.channel_name.normalize('NFKC').replace(/^[^\p{L}\p{N}]+/u, '') || c.channel_name;
+    const display = `#${name} · ${c.channel_id}`;
     S.channelMap.set(display, c.channel_id);
     const option = document.createElement('option');
     option.value = display;
@@ -1130,7 +1131,7 @@ function renderResults(data, query) {
     const row = ce('article', 'result-row');
     const content = ce('div', 'message-body');
     const heading = ce('div', 'message-heading');
-    const author = ce('strong', 'message-author'); author.textContent = msg.author_name || msg.author_id;
+    const author = ce('button', 'message-author profile-author'); author.type = 'button'; author.dataset.profileId = msg.author_id; author.textContent = msg.author_name || msg.author_id;
     const time = ce('time', 'message-time'); time.dateTime = msg.timestamp;
     time.textContent = new Date(msg.timestamp).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
     const location = ce('span', 'message-location');
