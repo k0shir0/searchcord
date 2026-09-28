@@ -41,10 +41,14 @@ extended fetch, preservation on failure and resumable bulk collection:
 
 ```bash
 python -m unittest discover -s checks -v
+python checks/profile_fixture.py agents/profile-fixture
+# Start the collection app in a separate terminal with SEARCHCORD_DATA_DIR
+# set to the absolute path of agents/profile-fixture, on port 8002.
 node checks/browser_profiles.mjs http://127.0.0.1:8002 agents/profile-browser
 ```
 
-The browser suite expects the synthetic Alice/Bob archive used for development.
+The browser suite expects the synthetic Alice/Bob archive created above. The
+fixture builder refuses to overwrite an existing database.
 It checks card navigation, server paging/search, mobile fit, missing-account
 errors, profile message drilldown and explicit backfill controls. No personal
 tokens or live Discord requests are used in automated tests.
