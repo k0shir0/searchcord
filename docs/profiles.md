@@ -52,3 +52,18 @@ fixture builder refuses to overwrite an existing database.
 It checks card navigation, server paging/search, mobile fit, missing-account
 errors, profile message drilldown and explicit backfill controls. No personal
 tokens or live Discord requests are used in automated tests.
+
+## Search-only profile view
+
+The display app resolves `@username` suggestions and `@userID` directly from the
+archive. Submitting one alone opens the shared profile card with newest messages
+below it. The search icon above results opens a query scoped to that author.
+Browser Back and reload restore the profile, query and message cursor. Basic
+archives without the extended table still show the saved identity and history.
+No profile collection routes or account credentials are exposed by this app.
+
+For a repeatable display check, run `python search_app.py --data-dir
+agents/profile-fixture --port 8003` against the synthetic fixture, then run
+`node checks/browser_profile_search.mjs`. This covers emoji channel selection,
+mention suggestions, profiles, server history, newest-first messages, navigation,
+mobile layout and avatar/banner rendering with local image fixtures.

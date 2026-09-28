@@ -8,8 +8,17 @@ const number = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, {dateStyle:'medium', timeStyle:'short'});
 let request, generation = 0, current = null, nextCursor = null, page = 1;
 let cursors = [null];
+let activeProfile = null, profileRequest = 0;
 const suggestionRequests = new Map();
 const suggestionTimers = new Map();
+const profileView = new SearchcordProfile($('#profileHost'), {
+  onMessages: () => { $('#profileMessageForm').hidden=false;$('#profileSearchToggle').setAttribute('aria-expanded','true');$('#profileMessageQuery').focus(); },
+  onServer: (uid, guild) => {
+    const params=new URLSearchParams({profile:uid,author_id:uid,guild_id:guild});
+    if($('#profileMessageQuery').value.trim())params.set('q',$('#profileMessageQuery').value.trim());
+    cursors=[null];run(params);
+  }
+});
 
 function tray(open) {
   $('.search-surface').classList.toggle('is-expanded', open);
@@ -98,7 +107,8 @@ function render(messages, query) {
     row.dataset.id = message.id;
     const body = element('div', 'message-body');
     const heading = element('div', 'message-heading');
-    const author = element('strong', 'message-author', message.author_name || message.author_id);
+    const author = element('button', 'message-author profile-author', message.author_name || message.author_id);
+    author.type='button';author.addEventListener('click',()=>openProfile(message.author_id));
     const timestamp = new Date(message.timestamp);
     const time = element('time', 'message-time', Number.isNaN(timestamp.valueOf()) ? 'Unknown date' : dateFormat.format(timestamp));
     if (!Number.isNaN(timestamp.valueOf())) time.dateTime = message.timestamp;
@@ -166,10 +176,25 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
     if (version === generation) $('#resultBody').setAttribute('aria-busy','false');
   }
 }
-function submitSearch(scroll = false) {
+async function submitSearch(scroll = false) {
+  const profileVersion=++profileRequest;
   request?.abort(); generation++;
   $('#resultBody').setAttribute('aria-busy','false');
   try {
+    const raw=searchInput.value.trim();
+    if(raw.startsWith('@')) {
+      const id=raw.match(/^@(?:.* · )?([0-9]+)$/)?.[1];
+      if(id){await openProfile(id);return;}
+      const name=raw.slice(1).trim();
+      if(!name)throw new Error('Type a username or user ID after @.');
+      const suggestions=await json(`/api/suggestions/author?q=${encodeURIComponent(name)}`);
+      if(profileVersion!==profileRequest)return;
+      const exact=suggestions.filter(row=>[row.username,row.name].some(value=>value?.toLocaleLowerCase()===name.toLocaleLowerCase()));
+      const match=exact.length===1?exact[0]:(suggestions.length===1?suggestions[0]:null);
+      if(!match)throw new Error('Choose an author suggestion to open their profile.');
+      await openProfile(match.id);return;
+    }
+    closeProfile(false);
     const params = parameters();
     cursors = [null];
     run(params, {scroll});
@@ -185,7 +210,7 @@ document.addEventListener('keydown', event => {
     searchInput.focus(); tray(false);
   }
   if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.target.matches('input,textarea,[contenteditable]')) {
-    event.preventDefault(); searchInput.focus();
+    event.preventDefault(); focusSearch();
   }
 });
 for (const input of [searchInput, ...filters, ...dateFields]) input.addEventListener('input', () => {
@@ -219,7 +244,9 @@ for (const input of filters) {
         if (input.value.trim() !== value) return;
         input.list.replaceChildren(...rows.map(row => {
           const option = document.createElement('option');
-          option.value = `${input.id === 'channel' ? '#' : ''}${row.name} · ${row.id}`;
+          const name = row.name.normalize('NFKC').replace(/^[^\p{L}\p{N}]+/u, '') || row.name;
+          option.value = `${input.id === 'channel' ? '#' : ''}${name} · ${row.id}`;
+          option.label = row.name;
           return option;
         }));
         $('#suggestionStatus').textContent = '';
@@ -245,13 +272,22 @@ $('#nextPage').addEventListener('click', () => {
 $('#previousPage').addEventListener('click', () => {
   if (page > 1 && current) run(current, {cursor:cursors[page-2],targetPage:page-1});
 });
-$('#editSearch').addEventListener('click', () => searchInput.focus());
+function focusSearch() {
+  if(activeProfile){$('#profileMessageForm').hidden=false;$('#profileSearchToggle').setAttribute('aria-expanded','true');$('#profileMessageQuery').focus();}
+  else searchInput.focus();
+}
+$('#editSearch').addEventListener('click', focusSearch);
 function restore() {
   const url = new URLSearchParams(location.search);
   searchInput.value = url.get('q') || '';
   filters.forEach(input => {input.value = url.get(input.dataset.param) || '';});
   dateFields.forEach(input => {input.value = url.get(input.name) || '';});
   error(); tray(false);
+  if(url.has('profile')) {
+    cursors=history.state?.cursors || [url.get('before')];page=history.state?.page||1;
+    openProfile(url.get('profile'),{push:false,params:url,cursor:url.get('before'),targetPage:page,scroll:false});return;
+  }
+  closeProfile(false);
   if (!url.has('search') && !url.has('q')) {
     request?.abort(); generation++;
     $('#results').hidden = true;
@@ -266,6 +302,53 @@ function restore() {
   url.delete('search'); url.delete('before');
   run(url, {push:false,cursor,targetPage:page,scroll:false});
 }
+async function openProfile(uid,{push=true,params=null,cursor=null,targetPage=1,scroll=true}={}) {
+  profileRequest++; activeProfile=uid;
+  request?.abort();generation++;
+  document.body.classList.add('has-profile');$('#profileSection').hidden=false;$('#profileSearchToggle').hidden=false;
+  $('#profileMessageQuery').value=params?.get('q')||'';
+  $('#profileMessageForm').hidden=!$('#profileMessageQuery').value;
+  $('#profileSearchToggle').setAttribute('aria-expanded',String(!$('#profileMessageForm').hidden));
+  searchInput.value=`@${uid}`;tray(false);
+  if(!params)cursors=[null];
+  const query=new URLSearchParams(params||{});query.delete('before');query.delete('search');
+  query.set('profile',uid);query.set('author_id',uid);
+  const profileLoading=profileView.open(uid);
+  const resultsLoading=run(query,{push,cursor,targetPage,scroll:false});
+  if(scroll){
+    $('#closeProfile').focus({preventScroll:true});
+    $('#profileSection').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
+  }
+  await Promise.all([profileLoading,resultsLoading]);
+}
+function closeProfile(reset=true) {
+  activeProfile=null;profileView.close();$('#profileSection').hidden=true;$('#profileSearchToggle').hidden=true;$('#profileMessageForm').hidden=true;
+  document.body.classList.remove('has-profile');
+  if(reset){profileRequest++;request?.abort();generation++;searchInput.value='';$('#results').hidden=true;history.pushState(null,'',location.pathname);searchInput.focus();}
+}
+$('#closeProfile').addEventListener('click',()=>closeProfile());
+$('#profileSearchToggle').addEventListener('click',()=>{
+  const open=$('#profileMessageForm').hidden;$('#profileMessageForm').hidden=!open;$('#profileSearchToggle').setAttribute('aria-expanded',String(open));if(open)$('#profileMessageQuery').focus();
+});
+$('#profileMessageForm').addEventListener('submit',event=>{
+  event.preventDefault();if(!activeProfile)return;
+  const params=new URLSearchParams({profile:activeProfile,author_id:activeProfile});
+  if($('#profileMessageQuery').value.trim())params.set('q',$('#profileMessageQuery').value.trim());
+  cursors=[null];run(params,{scroll:false});
+});
+let mentionTimer, mentionRequest;
+searchInput.addEventListener('input',()=>{
+  profileRequest++;clearTimeout(mentionTimer);mentionRequest?.abort();$('#profileOptions').replaceChildren();
+  const value=searchInput.value.trim();if(!value.startsWith('@')||value.includes(' · '))return;
+  mentionTimer=setTimeout(async()=>{
+    mentionRequest=new AbortController();
+    try{
+      const rows=await json(`/api/suggestions/author?q=${encodeURIComponent(value.slice(1))}`,mentionRequest.signal);
+      if(searchInput.value.trim()!==value)return;
+      $('#profileOptions').replaceChildren(...rows.map(row=>{const option=document.createElement('option');option.value=`@${row.username||row.name} · ${row.id}`;option.label=row.name;return option;}));
+    }catch(exception){if(exception.name!=='AbortError')error('Author suggestions unavailable. You can still enter @ followed by a user ID.');}
+  },180);
+});
 window.addEventListener('popstate', restore);
 json('/api/summary').then(data => {
   $('#messageTotal').textContent = number.format(data.messages);

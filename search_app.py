@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from profile_store import read_profile, profile_servers, search_label
 
 ROOT = Path(__file__).resolve().parent
 EPOCH_MS = 1420070400000
@@ -168,18 +169,43 @@ def create_app(path=None, immutable=None):
     @app.get("/api/suggestions/{kind}")
     def suggestions(kind: Literal["server", "channel", "author"], q: str = Query("", max_length=100), guild_id: Optional[str] = None):
         table = {"server": "guilds", "channel": "channels", "author": "authors"}[kind]
-        if kind == "author" and len(q.strip()) < 2:
+        if kind == "author" and len(q.strip()) < 2 and not q.strip().isdigit():
             return []
         conditions, params = ["name LIKE ? ESCAPE '!'"], [like_literal(q.strip()) + "%"]
         if kind == "channel" and guild_id:
             conditions.append("guild_id=?")
             params.append(guild_id)
         with archive.connect() as db:
+            if kind == 'author':
+                return [dict(r) for r in db.execute('''SELECT a.id,a.name,p.username
+                    FROM authors a LEFT JOIN profiles p ON p.user_id=a.id WHERE a.id IN (
+                    SELECT id FROM authors WHERE name LIKE ? ESCAPE '!'
+                    UNION SELECT user_id FROM profiles WHERE username LIKE ? ESCAPE '!'
+                    UNION SELECT id FROM authors WHERE id=?)
+                    ORDER BY a.name COLLATE NOCASE,a.id LIMIT 20''', (params[0],params[0],q.strip()))]
+            db.create_function('search_label', 1, search_label, deterministic=True)
+            conditions[0] = "(search_label(name) LIKE ? ESCAPE '!' OR id=?)"
+            params = [like_literal(search_label(q))+'%',q.strip()] + params[1:]
             return [dict(r) for r in db.execute(f"SELECT id, name FROM {table} WHERE {' AND '.join(conditions)} ORDER BY name COLLATE NOCASE, id LIMIT 20", params)]
 
-    @app.get("/bauhaus.css", include_in_schema=False)
-    def shared_styles():
-        return FileResponse(ROOT / "static" / "bauhaus.css", media_type="text/css")
+    @app.get('/api/profiles/{uid}')
+    def profile(uid: str):
+        with archive.connect() as db:
+            return read_profile(db, uid)
+
+    @app.get('/api/profiles/{uid}/servers')
+    def servers(uid: str, q: str = Query('',max_length=100), offset: int = Query(0,ge=0), limit: int = Query(30,ge=1,le=100)):
+        with archive.connect() as db:
+            return profile_servers(db, uid, q, offset, limit)
+
+    @app.get('/{asset}', include_in_schema=False)
+    def shared_asset(asset: str):
+        if asset in ('bauhaus.css','profile-view.css','profile-view.js'):
+            return FileResponse(ROOT / 'static' / asset)
+        target = ROOT / 'static' / 'search' / asset
+        if asset in ('index.html','search.css','search.js','privacy.html','privacy.css'):
+            return FileResponse(target)
+        raise HTTPException(404, 'Not found')
 
     app.mount("/", StaticFiles(directory=ROOT / "static" / "search", html=True), name="display")
     return app

@@ -9,30 +9,50 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="../bauhaus.css">
   <link rel="stylesheet" href="search.css">
+  <link rel="stylesheet" href="../profile-view.css">
+  <script src="../profile-view.js" defer></script>
   <script src="search.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#searchInput">Skip to search</a>
   <header class="masthead"><h1>search<span>cord</span></h1></header>
   <main>
-    <section class="search-surface" aria-labelledby="searchTitle">
-      <div class="geometry" aria-hidden="true">
-        <svg viewBox="0 0 440 250" fill="none">
-          <g class="grid-lines"><path d="M0 55H440M0 125H440M0 195H440M60 0V250M170 0V250M280 0V250M390 0V250"/></g>
-          <g class="clearance"><path d="M70 91 136 211H4Z"/><rect x="319" y="174" width="54" height="54"/></g>
-          <circle class="ring gap" cx="284" cy="98" r="72"/>
-          <circle class="ring" cx="284" cy="98" r="72"/>
-          <path class="triangle" d="M70 91 136 211H4Z"/>
-          <rect class="square" x="319" y="174" width="54" height="54"/>
-        </svg>
-      </div>
-      <div class="search-heading"><h2 id="searchTitle">What are you<br>looking for?</h2></div>
+    <section class="search-surface query-block" aria-labelledby="searchTitle">
+          <div class="bauhaus-geometry" aria-hidden="true">
+            <div class="geometry-ornaments">
+              <span class="ornament-rule ornament-rule-a"></span>
+              <span class="ornament-rule ornament-rule-b"></span>
+              <span class="ornament-rule ornament-rule-c"></span>
+              <span class="ornament-rule ornament-rule-d"></span>
+              <span class="ornament-rule ornament-rule-e"></span>
+              <span class="ornament-rule ornament-rule-f"></span>
+              <span class="ornament-rule ornament-rule-g"></span>
+              <span class="ornament-rule ornament-rule-h"></span>
+              <span class="ornament-rule ornament-rule-i"></span>
+              <span class="ornament-rule ornament-rule-j"></span>
+            </div>
+            <div class="geometry-forms geometry-forms-backdrop">
+              <span class="geometry-backdrop-disk"></span>
+              <span class="geometry-backdrop-square"></span>
+            </div>
+            <div class="geometry-forms geometry-forms-right">
+              <span class="geometry-ring"></span><span class="geometry-square"></span>
+              <span class="geometry-bar"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+            <div class="geometry-forms geometry-forms-left">
+              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+            <div class="geometry-forms geometry-forms-center">
+              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+          </div>
+      <div class="query-copy"><h2 id="searchTitle">What are you looking for?</h2></div>
       <form id="searchForm" role="search" autocomplete="off">
         <label class="sr-only" for="searchInput">Search messages</label>
-        <div class="query-form">
-          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="try “release notes”" aria-describedby="searchError" aria-controls="filterTray" aria-expanded="false">
+        <div class="query-copy"><div class="query-form">
+          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="try “release notes”" aria-describedby="searchError" aria-controls="filterTray" aria-expanded="false" list="profileOptions">
           <button type="submit">search</button>
-        </div>
+        </div><datalist id="profileOptions"></datalist></div>
         <div id="filterTray" class="filter-tray" inert>
           <div class="filter-form">
             <label>server<input id="guild" list="guildOptions" placeholder="server name" data-kind="server" data-param="guild_id"><datalist id="guildOptions"></datalist></label>
@@ -44,13 +64,18 @@
           </div>
           <span id="suggestionStatus" role="status"></span>
         </div>
-        <p id="searchError" class="error" role="alert" hidden></p>
       </form>
     </section>
+    <p id="searchError" class="error" role="alert" hidden></p>
     <div class="index-block" aria-label="Archive totals"><div class="index-stat"><span class="index-number" id="messageTotal">…</span><span class="index-caption">messages indexed</span></div><div class="index-stat"><span class="index-number" id="serverTotal">…</span><span class="index-caption">indexed servers</span></div></div>
     <p id="archiveError" class="error" role="alert" hidden></p>
+    <section id="profileSection" aria-label="Archived profile" hidden>
+      <div class="profile-navigation"><button id="closeProfile" type="button">back to search</button></div>
+      <div id="profileHost"></div>
+    </section>
     <section id="results" class="results" aria-labelledby="resultsTitle" hidden>
-      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">results</h2><p class="sr-only" id="resultStatus" role="status" aria-live="polite"></p></div>
+      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">results</h2><button id="profileSearchToggle" class="profile-message-search" type="button" aria-label="Search this user's messages" aria-controls="profileMessageForm" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button><p class="sr-only" id="resultStatus" role="status" aria-live="polite"></p></div>
+      <form id="profileMessageForm" class="profile-message-form" hidden><label for="profileMessageQuery">Search this user's messages</label><div><input id="profileMessageQuery" type="search" placeholder="Word or phrase"><button type="submit">search</button></div></form>
       <div id="resultBody" aria-busy="false"><div id="messages" class="result-list"></div><div id="emptyState" class="empty-state" hidden><h3>No messages found.</h3><p>Try a shorter phrase or remove a filter.</p><button id="editSearch" type="button">Edit search <span aria-hidden="true">↑</span></button></div></div>
       <nav id="pagination" class="pagination" aria-label="Result pages" hidden><button id="previousPage" class="page-control" type="button">previous</button><span id="pageNumber" class="page-readout page-current"></span><button id="nextPage" class="page-control" type="button">next</button></nav>
     </section>
