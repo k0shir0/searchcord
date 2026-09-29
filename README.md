@@ -127,6 +127,13 @@ documented public user fields needed for identity and appearance, including
 username, display name, avatar/banner hashes, accent color, bot flag, and
 public flags.
 
+Temporary Discord/network failures and SQLite busy errors pause the scrape and
+retry the same page with a 2–60 second backoff (longer when Discord asks for it).
+The progress panel shows the retry, and **stop scraping** still works during the
+wait. The terminal logs the job, channel ID, cursor, retry count, and failure
+type without printing tokens or message contents. Permanent access errors are
+shown for that channel; saved cursors and the queue remain available to resume.
+
 Message IDs are unique in the archive. If Discord returns an overlapping page,
 existing IDs are ignored by SQLite; only newly inserted messages increase the
 scrape count, archive totals, and search index. An extra database lookup or
