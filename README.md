@@ -127,6 +127,11 @@ documented public user fields needed for identity and appearance, including
 username, display name, avatar/banner hashes, accent color, bot flag, and
 public flags.
 
+Message IDs are unique in the archive. If Discord returns an overlapping page,
+existing IDs are ignored by SQLite; only newly inserted messages increase the
+scrape count, archive totals, and search index. An extra database lookup or
+message cache is not needed for this check.
+
 Archives created before the cursor migration resume older history from their
 oldest stored message. The old schema did not record whether a scrape finished,
 so the next job makes one older-history request even for an archive that was
