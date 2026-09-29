@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI):
         http_client = None
 
 app = FastAPI(lifespan=lifespan)
+APP_INSTANCE_ID = uuid.uuid4().hex
 
 # The UI is served from this same origin, so cross-origin access is never
 # needed. Allowing "*" would let any site you happen to visit read your
@@ -118,7 +119,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 @app.get("/api/health", include_in_schema=False)
 async def health():
-    return Response(content="searchcord-ready", media_type="text/plain")
+    return Response(content="searchcord-ready", media_type="text/plain",
+                    headers={"X-Searchcord-Instance": APP_INSTANCE_ID})
 
 
 def open_browser_when_ready(host: str, port: int):
@@ -130,7 +132,9 @@ def open_browser_when_ready(host: str, port: int):
         try:
             connection.request("GET", "/api/health")
             response = connection.getresponse()
-            if response.status == 200 and response.read() == b"searchcord-ready":
+            if (response.status == 200
+                    and response.getheader("X-Searchcord-Instance") == APP_INSTANCE_ID
+                    and response.read() == b"searchcord-ready"):
                 webbrowser.open(f"http://{url_host}:{port}")
                 return
         except (OSError, HTTPClientException):
