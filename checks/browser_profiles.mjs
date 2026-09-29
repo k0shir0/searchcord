@@ -80,9 +80,14 @@ try {
   await click('.profile-actions button');
   await until(`!document.querySelector('.profile-dialog').open && document.querySelector('#fUser').value==='60' && document.querySelectorAll('#searchResults .result-row').length===1`);
   await check('profile message action filters original results',`document.querySelector('#searchResults .message-author').dataset.profileId==='60'`);
-  await click('[data-view="scrape"]');await click('#backfillProfiles');
+  await click('[data-view="scrape"]');
+  await check('backfill appears beside Scrape connection controls',`document.querySelector('#view-scrape .collection-toolbar').nextElementSibling?.classList.contains('profile-backfill') && document.querySelector('#backfillProfiles').textContent==='backfill saved profiles'`);
+  await screenshot('backfill-scrape');
+  await click('#backfillProfiles');
   await until(`document.querySelector('#profileBackfillStatus').textContent.includes('token')`);
   await check('backfill is explicit and reports missing account',`!document.querySelector('#backfillProfiles').disabled`);
+  await click('[data-view="stats"]');
+  await check('Stats workspace remains available',`document.querySelector('#view-stats').classList.contains('active') && document.querySelector('[data-view="stats"]').getAttribute('aria-pressed')==='true'`);
   assert.deepEqual(exceptions,[]);report.checks.push('no uncaught browser errors');
   writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{socket?.close();browser.kill();}
