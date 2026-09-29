@@ -821,6 +821,17 @@ async function startScraping() {
         $('queueProgressSummary').textContent = `${n(run.total)} messages saved across ${total} queued channels`;
         break;
 
+      case 'retry_wait':
+        row().querySelector('strong').textContent = `retry ${ev.attempt} in ${n(ev.wait_seconds)}s`;
+        $('queueProgressSummary').textContent =
+          `${ev.reason} in #${S.queue[run.index].name}; retrying the same page in ${n(ev.wait_seconds)}s.`;
+        break;
+
+      case 'retry_resumed':
+        row().querySelector('strong').textContent = 'scraping…';
+        $('queueProgressSummary').textContent = `Connection recovered; continuing #${S.queue[run.index].name}.`;
+        break;
+
       case 'channel_complete':
         run.completed++;
         $('queueProgressBar').value = run.completed;
@@ -849,7 +860,12 @@ async function startScraping() {
       case 'complete':
         es.close();
         $('queueProgressBar').value = total;
-        finishScrape(`${n(ev.total_messages)} messages saved across ${ev.channels} ${ev.channels === 1 ? 'channel' : 'channels'}.`);
+        if (ev.failed_channels) {
+          finishScrape(`${n(ev.total_messages)} messages saved; ${n(ev.failed_channels)} ${ev.failed_channels === 1 ? 'channel needs' : 'channels need'} attention. The queue is ready to retry from saved cursors.`,
+            'Scrape finished with errors', false, true);
+        } else {
+          finishScrape(`${n(ev.total_messages)} messages saved across ${ev.channels} ${ev.channels === 1 ? 'channel' : 'channels'}.`);
+        }
         break;
 
       case 'cancelled':
@@ -859,23 +875,29 @@ async function startScraping() {
           else if (count.textContent.endsWith(' messages')) count.textContent = count.textContent.replace(' messages', ' saved');
           else if (count.textContent === 'waiting') count.textContent = 'not started';
         });
-        finishScrape(`Stopped. ${n(ev.total_messages)} messages saved.`, 'Scrape stopped');
+        finishScrape(`Stopped. ${n(ev.total_messages)} messages saved. The queue is ready to resume.`,
+          'Scrape stopped', false, true);
         break;
 
       case 'error':
         es.close();
-        finishScrape(ev.message, 'Scrape failed');
+        finishScrape(ev.message, 'Scrape failed', false, true);
         break;
     }
   };
 
   es.onerror = () => {
+    if (es.readyState === EventSource.CONNECTING) {
+      $('queueProgressSummary').textContent = 'Progress connection lost; reconnecting while the server continues scraping.';
+      return;
+    }
     es.close();
-    finishScrape('Progress connection lost. The scrape may still be running.', 'Progress disconnected');
+    finishScrape('Progress connection lost. Check the terminal before restarting the saved queue.',
+      'Progress disconnected', false, true);
   };
 }
 
-function finishScrape(message, title = 'Scrape finished', started = true) {
+function finishScrape(message, title = 'Scrape finished', clearQueue = true, refreshData = clearQueue) {
   S.scraping = false;
   S.activeJobId = null;
   S.activeJobKind = null;
@@ -883,9 +905,9 @@ function finishScrape(message, title = 'Scrape finished', started = true) {
   $('queueProgressSummary').textContent = message;
   $('stopQueueScrape').hidden = true;
   $('dismissQueueProgress').hidden = false;
-  if (started) S.queue = [];
+  if (clearQueue) S.queue = [];
   renderQueue();
-  if (started) {
+  if (refreshData) {
     loadSearchFilters();
     if (activeView === 'stats') loadStats(true);
   }
