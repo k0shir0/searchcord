@@ -11,7 +11,7 @@ Searchcord saves no image bytes to disk. The bio is labelled **About Me**.
 
 Basic saved profiles remain readable. **Scrape extended profile** (or **Refresh
 profile**) explicitly fetches the selected user with the currently selected
-Discord account. The Scrape workspace also has **scrape missing profiles**, which
+Discord account. Near the top of Scrape, **backfill saved profiles**
 visits authors already in the archive in bounded batches. Stop preserves finished
 work. Restart skips saved extended profiles. Neither action fetches automatically
 when you open a card. Discord authorization/rate-limit failures stop bulk work;

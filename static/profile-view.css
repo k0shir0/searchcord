@@ -45,7 +45,7 @@
 .profile-dialog { width:min(1040px,94vw);max-height:90dvh;margin:auto;padding:20px;background:var(--paper);color:var(--ink);border:1px solid var(--rule);overflow:auto; }
 .profile-dialog::backdrop { background:#000b; }
 .profile-dialog-close { display:block;margin:0 0 16px auto;border:1px solid var(--rule);background:transparent;color:var(--ink);padding:10px 16px;cursor:pointer; }
-.profile-backfill { margin-top:24px;border-top:1px solid var(--rule);padding-top:18px; }
+.profile-backfill { margin:0 0 24px;border-top:1px solid var(--rule);padding-top:18px; }
 .profile-backfill button { margin-right:10px; }
 @media(max-width:700px) {
   .profile-card { grid-template-columns:minmax(0,1fr); }
