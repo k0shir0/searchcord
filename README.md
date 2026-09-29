@@ -71,6 +71,8 @@ The app starts on <http://127.0.0.1:8000> and opens your browser when it is
 ready. On Windows you can double-click `start.bat` instead. A first database
 upgrade can take several minutes for a large archive; the console reports
 progress every 30 seconds, and the port opens after the upgrade completes.
+If the port is already in use, this launch reports an error instead of opening
+another Searchcord instance.
 
 It binds to loopback only. There is **no authentication** — anyone who can
 reach the port gets your token and your entire archive — so only change the
