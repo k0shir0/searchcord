@@ -1,6 +1,8 @@
 import os
 import json
 import asyncio
+import logging
+import sqlite3
 import uuid
 import time
 import webbrowser
@@ -36,6 +38,8 @@ DISCORD_API = "https://discord.com/api/v10"
 
 # Give up rather than recursing forever if Discord keeps rate-limiting us.
 MAX_RATE_LIMIT_RETRIES = 5
+SCRAPE_RETRY_BASE_SECONDS = 2
+SCRAPE_RETRY_MAX_SECONDS = 60
 # Cap on buffered scrape-progress events, so a job whose SSE client never
 # connects (or goes away mid-scrape) can't grow its queue without bound.
 PROGRESS_QUEUE_MAX = 1000
@@ -44,6 +48,14 @@ JOB_RETENTION_SECONDS = 60
 
 # In-memory job tracker: job_id -> {queue, cancelled}
 active_jobs: dict = {}
+
+scrape_log = logging.getLogger("searchcord.scrape")
+if not scrape_log.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [scrape] %(message)s"))
+    scrape_log.addHandler(handler)
+scrape_log.setLevel(logging.INFO)
+scrape_log.propagate = False
 
 # DM clear job tracker: job_id -> {queue, cancelled}
 delete_jobs: dict = {}
@@ -519,11 +531,99 @@ async def _harvest_profiles(db, cid: str, token: str, job_id: str, q: asyncio.Qu
 
 async def _fetch_messages(cid: str, token: str, params: dict) -> list:
     r = await discord("GET", f"/channels/{cid}/messages", token, params=params)
+    if r.status_code in (408, 425, 429) or 500 <= r.status_code <= 599:
+        raise _TransientScrapeError(f"HTTP {r.status_code}",
+                                    _retry_after(r) if r.status_code in (429, 503) else 0)
+    if r.status_code == 401:
+        raise PermissionError("Token rejected (401)")
     if r.status_code == 403:
         raise PermissionError("No access (403)")
     if r.status_code != 200:
         raise RuntimeError(f"HTTP {r.status_code}")
-    return r.json()
+    try:
+        messages = r.json()
+    except (ValueError, TypeError) as exc:
+        raise _TransientScrapeError("Invalid JSON response") from exc
+    if not isinstance(messages, list):
+        raise _TransientScrapeError("Unexpected messages response")
+    return messages
+
+
+class _TransientScrapeError(RuntimeError):
+    def __init__(self, reason: str, retry_after: float = 0):
+        super().__init__(reason)
+        self.retry_after = retry_after
+
+
+class _ScrapeStopped(Exception):
+    pass
+
+
+def _scrape_position(params: dict) -> str:
+    if "before" in params:
+        return f"before={params['before']}"
+    if "after" in params:
+        return f"after={params['after']}"
+    return "start"
+
+
+def _scrape_retry_reason(exc: Exception):
+    if isinstance(exc, _TransientScrapeError):
+        return str(exc), exc.retry_after
+    if isinstance(exc, httpx.RequestError):
+        return type(exc).__name__, 0
+    if isinstance(exc, TimeoutError):
+        return "TimeoutError", 0
+    if isinstance(exc, sqlite3.OperationalError) and any(
+            word in str(exc).lower() for word in ("locked", "busy")):
+        return "database busy", 0
+    return None
+
+
+async def _wait_for_scrape_retry(job_id: str, seconds: float):
+    deadline = time.monotonic() + seconds
+    while True:
+        if active_jobs.get(job_id, {}).get("cancelled"):
+            raise _ScrapeStopped
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        await asyncio.sleep(min(1.0, remaining))
+
+
+async def _retry_scrape_operation(job_id: str, cid: str, q: asyncio.Queue,
+                                  params: dict, stage: str, operation):
+    attempts = 0
+    position = _scrape_position(params)
+    while True:
+        if active_jobs.get(job_id, {}).get("cancelled"):
+            raise _ScrapeStopped
+        try:
+            result = await operation()
+            if attempts:
+                scrape_log.info("job=%s channel=%s %s %s recovered after %s retries",
+                                job_id, cid, stage, position, attempts)
+                _emit(q, {"type": "retry_resumed", "channel_id": cid,
+                          "stage": stage, "attempts": attempts})
+            return result
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            retry = _scrape_retry_reason(exc)
+            if retry is None:
+                raise
+            attempts += 1
+            reason, retry_after = retry
+            backoff = min(SCRAPE_RETRY_MAX_SECONDS,
+                          SCRAPE_RETRY_BASE_SECONDS * 2 ** min(attempts - 1, 10))
+            delay = max(backoff, retry_after)
+            scrape_log.warning(
+                "job=%s channel=%s %s %s failed: %s; attempt=%s waiting=%.1fs",
+                job_id, cid, stage, position, reason, attempts, delay)
+            _emit(q, {"type": "retry_wait", "channel_id": cid,
+                      "stage": stage, "attempt": attempts,
+                      "wait_seconds": round(delay, 1), "reason": reason})
+            await _wait_for_scrape_retry(job_id, delay)
 
 
 async def run_scrape(job_id: str, channels: list, limit: int = 0,
@@ -531,12 +631,16 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
     job = active_jobs[job_id]
     q: asyncio.Queue = job["queue"]
     total_messages = 0
+    failed_channels = 0
+    scrape_log.info("job=%s started channels=%s limit=%s profiles=%s",
+                    job_id, len(channels), limit, harvest_profiles)
 
     # Whatever happens below, the job must not be left behind in active_jobs.
     try:
         try:
             token = await get_token()
-        except Exception:
+        except HTTPException:
+            scrape_log.exception("job=%s could not load a Discord token", job_id)
             _emit(q, {"type": "error", "message": "No token configured"})
             return
 
@@ -560,6 +664,12 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                         pending_before_message_id
                         FROM scrape_cursors WHERE channel_id=?""", (cid,)) as cur:
                         cursor = await cur.fetchone()
+                    scrape_log.info("job=%s channel=%s start newest=%s oldest=%s complete=%s pending_after=%s pending_before=%s",
+                                    job_id, cid, cursor[0] if cursor else None,
+                                    cursor[1] if cursor else None,
+                                    cursor[2] if cursor else None,
+                                    cursor[3] if cursor else None,
+                                    cursor[4] if cursor else None)
 
                     # An indexed channel needs only messages newer than its
                     # saved high-water mark. A full page leaves a pending gap;
@@ -575,21 +685,31 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                                 break
                             params = {"limit": fetch}
                             params["before" if before else "after"] = before or cursor[0]
-                            msgs = await _fetch_messages(cid, token, params)
+                            msgs = await _retry_scrape_operation(
+                                job_id, cid, q, params, "fetch",
+                                lambda: _fetch_messages(cid, token, params))
                             fresh = [m for m in msgs if int(m["id"]) > anchor]
                             more = bool(fresh) and len(msgs) == fetch and len(fresh) == len(msgs)
                             if fresh:
                                 next_before = str(min(int(m["id"]) for m in fresh))
-                                inserted = await _save_messages(
-                                    db, fresh, cid, cname, gid, gname,
-                                    pending=(str(anchor), next_before) if more else None,
-                                    clear_pending=not more)
+                                inserted = await _retry_scrape_operation(
+                                    job_id, cid, q, params, "save",
+                                    lambda: _save_messages(
+                                        db, fresh, cid, cname, gid, gname,
+                                        pending=(str(anchor), next_before) if more else None,
+                                        clear_pending=not more))
                                 ch_count += inserted
                                 total_messages += inserted
                                 _emit(q, {"type": "progress", "channel": cname,
                                           "messages": ch_count, "total_messages": total_messages})
                             elif before:
-                                await _clear_pending(db, cid)
+                                await _retry_scrape_operation(
+                                    job_id, cid, q, params, "cursor",
+                                    lambda: _clear_pending(db, cid))
+                            scrape_log.info(
+                                "job=%s channel=%s page=%s received=%s fresh=%s saved=%s channel_saved=%s",
+                                job_id, cid, _scrape_position(params), len(msgs),
+                                len(fresh), inserted if fresh else 0, ch_count)
                             if not more:
                                 if resuming_pending and (not limit or ch_count < limit):
                                     resuming_pending = False
@@ -611,20 +731,32 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                             params = {"limit": fetch}
                             if before:
                                 params["before"] = before
-                            msgs = await _fetch_messages(cid, token, params)
+                            msgs = await _retry_scrape_operation(
+                                job_id, cid, q, params, "fetch",
+                                lambda: _fetch_messages(cid, token, params))
                             if not msgs:
                                 if before:
-                                    await _mark_history_complete(db, cid)
+                                    await _retry_scrape_operation(
+                                        job_id, cid, q, params, "cursor",
+                                        lambda: _mark_history_complete(db, cid))
                                 break
-                            inserted = await _save_messages(db, msgs, cid, cname, gid, gname,
-                                                            history_page=True)
+                            inserted = await _retry_scrape_operation(
+                                job_id, cid, q, params, "save",
+                                lambda: _save_messages(db, msgs, cid, cname, gid, gname,
+                                                       history_page=True))
                             ch_count += inserted
                             total_messages += inserted
                             before = str(min(int(m["id"]) for m in msgs))
                             _emit(q, {"type": "progress", "channel": cname,
                                       "messages": ch_count, "total_messages": total_messages})
+                            scrape_log.info(
+                                "job=%s channel=%s page=%s received=%s saved=%s channel_saved=%s",
+                                job_id, cid, _scrape_position(params), len(msgs),
+                                inserted, ch_count)
                             if len(msgs) < fetch:
-                                await _mark_history_complete(db, cid)
+                                await _retry_scrape_operation(
+                                    job_id, cid, q, params, "cursor",
+                                    lambda: _mark_history_complete(db, cid))
                                 break
 
                     if harvest_profiles and not active_jobs.get(job_id, {}).get("cancelled"):
@@ -632,24 +764,43 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                         _emit(q, {"type": "profiles", "channel": cname, "saved": profiles})
                 except asyncio.CancelledError:
                     raise
+                except _ScrapeStopped:
+                    scrape_log.info("job=%s channel=%s stopped during retry", job_id, cid)
                 except Exception as e:
-                    _emit(q, {"type": "channel_error", "channel": cname, "message": str(e)})
+                    failed_channels += 1
+                    scrape_log.exception("job=%s channel=%s failed; saved cursor is unchanged for the failed page",
+                                         job_id, cid)
+                    safe_message = (str(e) if isinstance(e, PermissionError) or
+                                    (isinstance(e, RuntimeError) and str(e).startswith("HTTP "))
+                                    else f"{type(e).__name__}; see terminal")
+                    _emit(q, {"type": "channel_error", "channel": cname,
+                              "message": safe_message})
 
                 _emit(q, {"type": "channel_complete", "channel": cname,
                           "messages": ch_count})
+                scrape_log.info("job=%s channel=%s finished saved=%s", job_id, cid, ch_count)
         finally:
             await db.close()
 
         was_cancelled = active_jobs.get(job_id, {}).get("cancelled", False)
         _emit(q, {"type": "cancelled" if was_cancelled else "complete",
-                  "total_messages": total_messages, "channels": len(channels)})
-        job["running"] = False
-
-        # Leave the finished job readable briefly so a reconnecting client can
-        # still pick up the terminal event.
-        await asyncio.sleep(JOB_RETENTION_SECONDS)
+                  "total_messages": total_messages, "channels": len(channels),
+                  "failed_channels": failed_channels})
+        scrape_log.info("job=%s finished saved=%s failed_channels=%s cancelled=%s",
+                        job_id, total_messages, failed_channels, was_cancelled)
+    except asyncio.CancelledError:
+        scrape_log.info("job=%s task cancelled", job_id)
+        raise
+    except Exception:
+        scrape_log.exception("job=%s failed outside a channel; saved cursors remain available", job_id)
+        _emit(q, {"type": "error", "message": "Scrape stopped; see terminal for details. Saved cursors remain available."})
     finally:
-        active_jobs.pop(job_id, None)
+        job["running"] = False
+        # Keep the terminal event available when the progress client reconnects.
+        try:
+            await asyncio.sleep(JOB_RETENTION_SECONDS)
+        finally:
+            active_jobs.pop(job_id, None)
 
 
 # ─── DM Clearer ──────────────────────────────────────────────
