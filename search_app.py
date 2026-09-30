@@ -14,6 +14,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from profile_store import read_profile, profile_servers, search_label
+from profile_store import user_id
+import search_snapshot
 
 ROOT = Path(__file__).resolve().parent
 EPOCH_MS = 1420070400000
@@ -55,9 +57,12 @@ class Archive:
             db.execute("PRAGMA query_only=ON")
             deadline = time.monotonic() + 4
             db.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
-            if db.execute("PRAGMA user_version").fetchone()[0] != 9:
-                raise HTTPException(503, "This display app needs a schema v9 archive. Upgrade a copy with the collection app first.")
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version not in (9, search_snapshot.VERSION):
+                raise HTTPException(503, "This display app needs a schema v9 archive or a verified search snapshot.")
             db.execute("BEGIN")
+            if version == search_snapshot.VERSION:
+                search_snapshot.install_reader(db)
             yield db
         except sqlite3.OperationalError as exc:
             if "interrupt" in str(exc):
@@ -74,13 +79,14 @@ class Archive:
         # A literal run preserves trigram acceleration, including queries with % or _.
         runs = re.findall(r"[^%_]+", q)
         anchor = max(runs, key=len, default="")
-        conditions, params = [], []
+        conditions, params, selected = [], [], []
         for column, value in (("guild_id", guild_id), ("channel_id", channel_id), ("author_id", author_id)):
             if value:
                 if not value.isascii() or not value.isdigit() or not 0 < int(value) <= MAX_ID:
                     raise HTTPException(400, "Choose a filter suggestion or enter a valid Discord ID.")
                 conditions.append(column + "=?")
                 params.append(int(value))
+                selected.append((column, int(value)))
         lower = snowflake_day(date_from) if date_from else None
         upper = snowflake_day(date_to, True) if date_to else None
         if lower is not None and upper is not None and lower >= upper:
@@ -92,7 +98,11 @@ class Archive:
         where = " AND ".join(conditions) or "1"
         take = limit + 1
         with self.connect() as db:
-            if q:
+            packed = db.execute('PRAGMA user_version').fetchone()[0] == search_snapshot.VERSION
+            if packed:
+                ids = search_snapshot.search_ids(db, q, selected, lower, upper, before, take,
+                                                '%' + like_literal(q) + '%')
+            elif q:
                 boundary = db.execute(f"SELECT id FROM messages WHERE {where} ORDER BY id DESC LIMIT 1 OFFSET ?", params + [WINDOW-1]).fetchone()
                 floor = boundary[0] if boundary else 0
                 literal = "%" + like_literal(q) + "%"
@@ -112,13 +122,14 @@ class Archive:
             ids = ids[:limit]
             messages = []
             if ids:
-                author_ids = [r[0] for r in db.execute(
-                    "SELECT DISTINCT author_id FROM messages WHERE id IN (" + ",".join("?" for _ in ids) + ")", ids)]
+                key = 'storage_rowid' if packed else 'id'
+                rows = db.execute(f"SELECT * FROM message_records WHERE {key} IN (" + ",".join("?" for _ in ids) + f") ORDER BY {key} DESC", ids).fetchall()
+                author_ids = list({row['author_id'] for row in rows})
                 avatars = {str(r[0]): r[1] for r in db.execute(
                     "SELECT user_id, avatar_hash FROM profiles WHERE user_id IN (" + ",".join("?" for _ in author_ids) + ")", author_ids)}
-                rows = db.execute("SELECT * FROM message_records WHERE id IN (" + ",".join("?" for _ in ids) + ") ORDER BY id DESC", ids)
                 for row in rows:
                     message = dict(row)
+                    message.pop('storage_rowid', None)
                     message["id"] = str(message["id"])
                     avatar = avatars.get(message["author_id"])
                     message["avatar_url"] = (
@@ -130,7 +141,7 @@ class Archive:
                     message["attachments"] = [url for url in urls if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
                     messages.append(message)
         return {"messages": messages, "has_more": has_more,
-                "next_cursor": str(ids[-1]) if has_more else None,
+                "next_cursor": messages[-1]['id'] if has_more else None,
                 "elapsed_ms": round((time.perf_counter()-started)*1000, 1)}
 
 
@@ -196,6 +207,8 @@ def create_app(path=None, immutable=None):
     @app.get('/api/profiles/{uid}/servers')
     def servers(uid: str, q: str = Query('',max_length=100), offset: int = Query(0,ge=0), limit: int = Query(30,ge=1,le=100)):
         with archive.connect() as db:
+            if db.execute('PRAGMA user_version').fetchone()[0] == search_snapshot.VERSION:
+                return search_snapshot.profile_servers(db, user_id(uid), q, offset, limit, search_label)
             return profile_servers(db, uid, q, offset, limit)
 
     @app.get('/{asset}', include_in_schema=False)

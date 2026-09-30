@@ -71,7 +71,7 @@ try {
   await evaluate(`document.querySelector('#searchInput').value='hello';document.querySelector('#searchInput').dispatchEvent(new Event('input'));window.searchStart=performance.now();document.querySelector('#searchForm').requestSubmit()`);
   await until(settled);
   report.timings.search_dom_ms=await evaluate('Math.round(performance.now()-window.searchStart)');
-  await check('real dataset returns bounded results',`document.querySelectorAll('.result-row').length>0 && document.querySelectorAll('.result-row').length<=50`);
+  await check('archive returns bounded results',`document.querySelectorAll('.result-row').length>0 && document.querySelectorAll('.result-row').length<=50`);
   await check('literal match highlighting',`document.querySelector('mark')?.textContent.toLowerCase()==='hello'`);
   await check('technical results summary is absent',`!document.body.innerText.includes('more available') && !document.body.innerText.includes(' ms')`);
   await check('URL retains search',`new URLSearchParams(location.search).get('q')==='hello'`);

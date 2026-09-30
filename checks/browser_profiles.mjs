@@ -56,7 +56,9 @@ try {
   await click('[data-profile-id="50"]');
   await until(`document.querySelector('.profile-name')?.textContent==='Alice Example'`);
   await check('main author opens native profile dialog',`document.querySelector('.profile-dialog').open`);
+  await check('avatar opens a CDN image URL',`document.querySelector('.profile-avatar-link')?.href==='https://cdn.discordapp.com/avatars/50/abc123.png?size=256'`);
   await check('extended bio and connections rendered',`document.querySelector('.profile-bio')?.textContent.includes('synthetic profile') && document.querySelectorAll('.profile-connection').length===2`);
+  await check('saved status snapshot rendered',`document.querySelector('.profile-presence')?.textContent.includes('Synthetic custom status') && document.querySelector('.profile-presence')?.textContent.includes('Online')`);
   await until(`document.querySelectorAll('.profile-server').length===30`);
   await check('observed servers ordered by count',`document.querySelector('.profile-server strong').textContent==='Garden Club'`);
   await check('server history scrolls',`document.querySelector('.profile-server-list').scrollHeight>document.querySelector('.profile-server-list').clientHeight`);
@@ -78,9 +80,14 @@ try {
   await click('.profile-actions button');
   await until(`!document.querySelector('.profile-dialog').open && document.querySelector('#fUser').value==='60' && document.querySelectorAll('#searchResults .result-row').length===1`);
   await check('profile message action filters original results',`document.querySelector('#searchResults .message-author').dataset.profileId==='60'`);
-  await click('[data-view="scrape"]');await click('#backfillProfiles');
+  await click('[data-view="scrape"]');
+  await check('backfill appears beside Scrape connection controls',`document.querySelector('#view-scrape .collection-toolbar').nextElementSibling?.classList.contains('profile-backfill') && document.querySelector('#backfillProfiles').textContent==='backfill saved profiles'`);
+  await screenshot('backfill-scrape');
+  await click('#backfillProfiles');
   await until(`document.querySelector('#profileBackfillStatus').textContent.includes('token')`);
   await check('backfill is explicit and reports missing account',`!document.querySelector('#backfillProfiles').disabled`);
+  await click('[data-view="stats"]');
+  await check('Stats workspace remains available',`document.querySelector('#view-stats').classList.contains('active') && document.querySelector('[data-view="stats"]').getAttribute('aria-pressed')==='true'`);
   assert.deepEqual(exceptions,[]);report.checks.push('no uncaught browser errors');
   writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 }finally{socket?.close();browser.kill();}

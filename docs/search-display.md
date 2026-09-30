@@ -4,6 +4,10 @@
 It is independent of the collection application's startup, migration, tokens,
 background jobs and frontend bundles. The branch starts from `main` at `d2ea53c`.
 
+The current compressed snapshot implementation and integrated collector fixes
+are documented in [search-only storage and latency](../SEARCH-ONLY-SCALE-RESULTS.md).
+The measurements below describe the earlier v9 display implementation.
+
 ## Interface
 
 The Swiss direction uses left-aligned type, a shared column grid, clear rules,
@@ -45,19 +49,24 @@ placeholder, not new policy text.
 
 ## Read path
 
-The display app requires schema v9 and opens the archive with `mode=ro` and
-`query_only`. It never imports `app.py`, runs a storage migration, reads settings,
+The display app accepts schema v9 or a verified search snapshot and opens the
+archive with `mode=ro` and `query_only`. It never imports `app.py`, runs a storage migration, reads settings,
 or writes new indexes to the archive. Missing or unsupported archives produce a
 useful error without creating a database. Explicit snapshot mode also enables
 `immutable=1`; it is only for a closed archive and refuses a nonempty WAL.
 The archive must remain unchanged throughout a snapshot session.
 
-Unfiltered browse uses the existing message-ID index. Text search first inspects
-up to 16,384 newest eligible messages, then uses the FTS trigram index for older
+For a schema v9 archive, unfiltered browse uses the existing message-ID index.
+Text search first inspects up to 16,384 newest eligible messages, then uses the FTS trigram index for older
 matches if the page is not full. Both paths apply the same literal substring
 predicate and cursor boundary. Only the selected page is joined against
 `message_records`, preserving historical names and exact stored timestamps.
 The next cursor is the last returned Discord ID, not SQLite's internal rowid.
+
+Packed snapshots use compressed blocks, dense references, a contentless trigram
+index and a short-text block index. Matches are checked against full decoded text;
+public IDs still define dates and cursors. The current report above includes
+the complete storage and query design.
 
 This avoids gathering every common-term match before displaying the newest page.
 The extra candidate establishes whether Next is available; no full match count
