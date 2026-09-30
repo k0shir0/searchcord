@@ -11,7 +11,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from checks import test_search_display
 from search_app import Archive, create_app
-from search_snapshot import build_snapshot, FIELDS, METADATA, VERSION, main as snapshot_main
+from search_snapshot import build_snapshot, page_usage, FIELDS, METADATA, VERSION, main as snapshot_main
 from storage import init_database
 
 
@@ -38,7 +38,19 @@ class SnapshotTests(test_search_display.DisplayTests):
             with self.assertRaises(sqlite3.OperationalError):output.execute('DELETE FROM message_index')
         self.assertTrue(self.report['source_main_file_unchanged'])
         self.assertEqual(self.report['integrity'],'ok')
-        self.assertEqual(sum(self.report['source_pages'].values()),self.report['source_bytes'])
+        with closing(sqlite3.connect(self.path)) as source:
+            total = source.execute('PRAGMA page_count').fetchone()[0] * source.execute('PRAGMA page_size').fetchone()[0]
+        self.assertEqual(total,self.report['source_bytes'])
+        if self.report['source_pages'] is not None:
+            self.assertEqual(sum(self.report['source_pages'].values()),self.report['source_bytes'])
+
+    def test_missing_storage_diagnostics_do_not_mask_other_errors(self):
+        db = unittest.mock.Mock()
+        db.execute.side_effect = sqlite3.OperationalError('no such table: dbstat')
+        self.assertIsNone(page_usage(db))
+        db.execute.side_effect = sqlite3.OperationalError('database is locked')
+        with self.assertRaisesRegex(sqlite3.OperationalError, 'database is locked'):
+            page_usage(db)
 
     def test_empty_archive_and_existing_output_are_safe(self):
         with tempfile.TemporaryDirectory() as directory:

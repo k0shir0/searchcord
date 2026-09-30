@@ -214,8 +214,15 @@ def profile_servers(db, uid, q, offset, limit, normalize):
 
 
 def page_usage(db, schema='main'):
-    return {row[0]: row[1] for row in db.execute(
-        'SELECT name,SUM(pgsize) FROM dbstat(?) GROUP BY name', (schema,))}
+    try:
+        return {row[0]: row[1] for row in db.execute(
+            'SELECT name,SUM(pgsize) FROM dbstat(?) GROUP BY name', (schema,))}
+    except sqlite3.OperationalError as exc:
+        # Stock Python SQLite builds may omit this diagnostic extension.
+        # Total page counts and complete export verification still work.
+        if str(exc) == 'no such table: dbstat':
+            return None
+        raise
 
 
 def build_snapshot(source, destination, *, block_rows=BLOCK_ROWS, progress=None):
