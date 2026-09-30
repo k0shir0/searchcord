@@ -16,8 +16,10 @@ channels into SQLite, then search, filter, and chart what you collected.
 
 - **Archived profiles**: click a result author for their saved Discord-style card,
   avatar, bio, connections and searchable server history. Fetch one extended
-  profile from the card, or use **scrape missing profiles** in Scrape to backfill
-  existing authors with explicit start/stop controls. See [profiles](docs/profiles.md).
+  profile from the card, or use **backfill saved profiles** near the top of Scrape to backfill
+  existing authors with explicit start/stop controls. Rate limits and temporary
+  failures wait and retry the same user; unavailable users are skipped. See
+  [profiles](docs/profiles.md).
 
 - **Three workspaces**: Browse for local search, Scrape for channels, DMs,
   a shared collection queue and live monitoring, and Stats for archive exploration.
@@ -51,7 +53,7 @@ Chart.js is bundled locally, so charts work without a CDN connection.
 
 - Python 3.9 or newer
 - SQLite with the FTS5 trigram tokenizer (included in the tested Python build)
-- A Discord token
+- A Discord token for collection; search-only display needs no token
 
 ## Installation
 
@@ -65,47 +67,48 @@ pip install -r requirements.txt
 
 ### Search-only display
 
-Run the standalone, read-only frontend against an existing schema v9 archive:
+Run the separate frontend against an existing schema v9 archive:
 
 ```bash
 python search_app.py --data-dir /path/to/archive-directory
 ```
 
-Open <http://127.0.0.1:8001>. On Windows, `start-search.bat` accepts the same
-arguments. `SEARCHCORD_DATA_DIR` also works. A Discord token is **not** required
-for this frontend. It serves one search page with the existing hero text,
-the original bold typography, navy grid and outlined geometry, and a compact mobile
-layout. The collection app below remains separately available.
+Open <http://127.0.0.1:8001>. `start-search.bat` accepts the same arguments on
+Windows. The frontend keeps the existing search, filters, profiles and theme.
+Results load 50 at a time with public message-ID cursors, literal highlighting,
+full text, and inclusive UTC dates. Saved profiles are read locally; profile
+collection stays in the main application.
 
-For a **closed, unchanging test archive**, add `--snapshot`. This explicitly
-enables SQLite immutable mode and creates no database sidecars. Do not use it
-while another process modifies the archive; a nonempty WAL is rejected. Normal
-mode opens SQLite read-only and supports an archive being updated by a collector.
-Neither mode runs migrations or reads saved tokens. The display service binds
-only to loopback and exposes no collection, settings, deletion or export routes.
+For a smaller deployment file, export the collector archive into a **new** directory:
 
-Search a literal phrase, or submit an empty search to browse newest messages.
-Enter `@username` or `@userID` and select an author suggestion to open their saved
-profile, observed servers and newest messages. Exact usernames and IDs also work
-without selecting a suggestion. The small search button above their messages
-opens an author-scoped search. Profile URLs survive reloads and browser navigation.
-Profile collection stays in the collection app; the display app reads saved data.
-Focus or click the search box for server,
-channel, author and inclusive UTC dates. Choose a name suggestion or paste an ID.
-Channel suggestions accept plain names even when stored names include emoji or
-decorative separators; selection always uses the channel ID.
-Searches and cursor positions survive reloads and browser navigation. Results
-load 50 at a time; Next and Previous avoid deep offsets and archive-wide result
-counts. Very broad searches have a four-second SQL deadline and ask for a filter.
+```bash
+python search_snapshot.py /path/to/collector/searchcord.db packed/searchcord.db --report packed/build-report.json
+python search_app.py --data-dir packed --snapshot
+```
 
-All UI assets are local. As in the collection frontend, valid saved avatar hashes
-load Discord avatars lazily, with geometric fallbacks. Image links open the stored
-Discord URL on request and may have expired; this frontend
-does not use credentials to refresh them. Queries and filter IDs appear in the
-browser URL. API responses use `no-store`.
+This schema v101 search snapshot preserves message text, IDs, historical names,
+exact timestamps, image links and saved profiles. It compresses blocks of 128
+messages and keeps separate substring indexes, including short queries. The
+verified 5,574,147-message archive uses **118.31 bytes/message instead of 260.03**,
+a **54.5% reduction**. Settings, tokens and collection cursors are omitted.
+Existing output files and reports are never overwritten. The exporter opens the
+source read-only and pins a coherent read transaction, including pending WAL data.
 
-See [display design and measured performance](docs/search-display.md) for query
-tradeoffs, verification, and repeatable checks.
+The packed file stays unchanged while being served. Export a new snapshot after
+collecting more messages or profiles, then restart the display app with its new
+directory. Use the original schema v9 file for the collection app.
+
+Normal display mode also supports a schema v9 archive being updated by a collector.
+`--snapshot` enables SQLite immutable mode for a closed, unchanging archive and
+rejects a nonempty WAL. Neither display mode runs migrations, reads saved tokens,
+or exposes collection, settings, deletion or export routes. The service binds to
+loopback; API responses use `no-store`. Valid saved avatars load lazily from
+Discord, and saved image links open their original URLs without credential-based
+refresh. Those URLs may have expired.
+
+See [search storage and latency measurements](SEARCH-ONLY-SCALE-RESULTS.md) for
+the storage breakdown, first-request costs, HTTP and browser checks, and repeatable
+commands.
 
 ### Collection and archive administration
 
@@ -117,11 +120,8 @@ The app starts on <http://127.0.0.1:8000> and opens your browser when it is
 ready. On Windows you can double-click `start.bat` instead. A first database
 upgrade can take several minutes for a large archive; the console reports
 progress every 30 seconds, and the port opens after the upgrade completes.
-
-The three production workspaces share the Bauhaus design. Earlier standalone
-drafts remain at `/trials/`, with synthetic data and local preview interactions.
-See [the workspace change report](docs/workspace-redesign.md) and the
-[original integration and draft report](docs/bauhaus-diff-report.md).
+If the port is already in use, this launch reports an error instead of opening
+another Searchcord instance.
 
 It binds to loopback only. There is **no authentication** — anyone who can
 reach the port gets your token and your entire archive — so only change the
@@ -169,12 +169,27 @@ the total, and a stop button while the job runs. You can keep using the rest of
 the workspace without closing a progress dialog. Later jobs fetch only messages
 newer than each channel's saved cursor. If a first run is limited or stopped, a
 later job can resume the remaining older history. Check **fetch expanded
-profiles** to request expanded Discord user records for authors missing from
-the local profile table. The toggle is off by default; known profiles are not
-fetched again. Searchcord stores the
+profiles** to save each newly encountered user's extended profile immediately
+after its message page is committed, before requesting another page. The toggle
+is off by default; saved extended profiles are not fetched again, and webhooks
+are skipped. Earlier missing profiles can be collected with **backfill saved
+profiles**. Profile waits show their retry/cooldown and can be stopped without
+losing saved work. Searchcord stores the
 documented public user fields needed for identity and appearance, including
 username, display name, avatar/banner hashes, accent color, bot flag, and
 public flags.
+
+Temporary Discord/network failures and SQLite busy errors pause the scrape and
+retry the same page with a 2–60 second backoff (longer when Discord asks for it).
+The progress panel shows the retry, and **stop scraping** still works during the
+wait. The terminal logs the job, channel ID, cursor, retry count, and failure
+type without printing tokens or message contents. Permanent access errors are
+shown for that channel; saved cursors and the queue remain available to resume.
+
+Message IDs are unique in the archive. If Discord returns an overlapping page,
+existing IDs are ignored by SQLite; only newly inserted messages increase the
+scrape count, archive totals, and search index. An extra database lookup or
+message cache is not needed for this check.
 
 Archives created before the cursor migration resume older history from their
 oldest stored message. The old schema did not record whether a scrape finished,
@@ -190,6 +205,8 @@ messages so the next job can fill it without walking completed history.
 searchcord/
 ├── app.py             # FastAPI backend — API, scraper, live poller, export
 ├── storage.py         # SQLite schema, backup, migration
+├── search_app.py      # Separate read-only search frontend
+├── search_snapshot.py # Lossless packed snapshot exporter and reader
 ├── requirements.txt
 ├── start.bat          # Windows launcher
 ├── static/
@@ -222,8 +239,8 @@ and delete it when you are done. **Clear All Data** asks for a second click
 inside the button before it wipes archived messages and derived metadata.
 Saved tokens remain; deleting the database file removes them too.
 
-The search-only frontend now owns the **privacy & data** page and footer link.
-The collection page no longer links it. The privacy page contains only its title and a
+The search-only frontend owns the **privacy & data** page and footer link.
+The page currently contains only its title and a
 return link to the Searchcord home page that also works when opened as a local
 file. This README holds the current data-handling details; the page is
 not a completed privacy policy.
@@ -248,39 +265,30 @@ and access to the original message. Discord's [signed attachment URLs](https://g
 expire, so link-only storage cannot preserve an image after its message becomes
 unavailable. Non-image attachments are not stored in new archives.
 
-The browser receives gzip-compressed API responses when supported. Message
-text remains exact and searchable; per-message compression or truncation would
-add decode work and break the current substring index. The measured
-3.69-million-message legacy archive shrank from 1,664,700,416 to 843,780,096
-bytes (49.31%) in the active database, while retaining historical names and
-exact timestamp values. Its verified compressed recovery copy is 333,110,734
-bytes. An archive already converted to v7 shrank from 1,065,906,176 to
-777,445,376 bytes (27.06%); v7 had already discarded its historical names.
-See the [storage audit](docs/storage-audit.md) for the full timeline, field
-checks, and throughput measurements.
+The search snapshot contains the preserved message data and saved profiles, so
+it remains private archive data even though it excludes saved tokens. It is a
+separate deployment file; it does not replace or migrate the collection archive.
+API responses use gzip when supported. Message blocks are compressed at rest,
+and index candidates are checked against full decoded content with the original
+literal substring rules. The server retains a bounded cache of 64 decoded blocks
+across requests, plus small per-connection caches.
 
 If you ever push this database anywhere by accident, treat your token as
 compromised and reset it immediately by changing your Discord password.
-
-## Notes
-
-- Uses your user token against Discord's HTTP API. This is against Discord's
-  Terms of Service and can get your account terminated. You accept that risk
-  by running it.
-- Requests share a process-wide gate, honor Discord's rate-limit headers and
-  back off on HTTP 429, with a retry cap.
-- Search uses a SQLite trigram index for substring queries of at least three
-  characters; shorter queries still scan message content.
-- Stats are maintained as small counts when messages are saved; they do not
-  rescan the message table each time the stats view opens.
-- See [storage audit](docs/storage-audit.md) for current storage measurements and
-  [throughput audit](docs/throughput-audit.md) for earlier performance research.
 
 ## License
 
 MIT, with a wrongful use warning — see [LICENSE](LICENSE).
 
 ## Release timeline
+
+### 2026-09-29
+
+- Added verified, compressed search-only snapshots and short-query indexing,
+  reducing the measured archive to 118.31 bytes per message.
+- Save missing extended profiles as each message page is collected, retry the
+  same user through temporary failures, and keep backfill stoppable during
+  requests and Discord cooldowns.
 
 ### 2026-09-25
 

@@ -55,3 +55,11 @@ Thumbs.db
 desktop.ini
 .DS_Store
 /tests
+
+# Local design documents and reports
+/BAUHAUS-DESIGN-PLAN.md
+/BAUHAUS-DESIGN-PREFERENCES.md
+/docs/
+
+# Standalone design trials
+/static/trials/
