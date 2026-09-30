@@ -16,7 +16,7 @@
   document.querySelector('#view-scrape .collection-toolbar').after(panel);
   const start=panel.querySelector('#backfillProfiles'),stop=panel.querySelector('#stopProfileBackfill'),status=panel.querySelector('#profileBackfillStatus');let timer;
   const display=data=>{start.disabled=data.running;stop.hidden=!data.running;status.textContent=data.status==='idle'?'':`${data.status} ${data.saved} saved · ${data.failed} unavailable`;clearTimeout(timer);if(data.running)timer=setTimeout(poll,1000);};
-  async function poll(){try{display(await view.json('/api/profile-backfill'));}catch{status.textContent='Could not load profile collection progress.';}}
+  async function poll(){try{display(await view.json('/api/profile-backfill'));}catch{status.textContent='Could not load progress; reconnecting…';clearTimeout(timer);timer=setTimeout(poll,1000);}}
   start.addEventListener('click',async()=>{start.disabled=true;try{display(await view.json('/api/profile-backfill',{method:'POST'}));}catch(error){start.disabled=false;status.textContent=error.message;}});
   stop.addEventListener('click',async()=>{try{display(await view.json('/api/profile-backfill/stop',{method:'POST'}));}catch(error){status.textContent=error.message;}});
   poll();

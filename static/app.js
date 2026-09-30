@@ -850,6 +850,11 @@ async function startScraping() {
         $('queueProgressSummary').textContent = `Profile notice: ${ev.message}`;
         break;
 
+      case 'profile_retry':
+        $('queueProgressSummary').textContent =
+          `${ev.reason}; waiting ${n(ev.wait_seconds)}s for profile ${ev.user_id}. Saved messages are kept.`;
+        break;
+
       case 'channel_error':
         row().classList.add('failed');
         row().querySelector('strong').textContent = 'error';

@@ -14,8 +14,13 @@ profile**) explicitly fetches the selected user with the currently selected
 Discord account. Near the top of Scrape, **backfill saved profiles**
 visits authors already in the archive in bounded batches. Stop preserves finished
 work. Restart skips saved extended profiles. Neither action fetches automatically
-when you open a card. Discord authorization/rate-limit failures stop bulk work;
-existing profile data is kept on failed requests. Unknown/unavailable fields are
+when you open a card. Rate limits, timeouts, malformed responses, server errors,
+and SQLite busy errors retry the same user with a 2–60 second backoff, honoring
+longer Discord cooldowns. Progress identifies the current user and wait. Stop
+interrupts an active request or cooldown. HTTP 403/404 skip that unavailable
+user; HTTP 401 stops bulk work so account authorization can be corrected.
+Successful profiles commit before the next request's cooldown begins.
+Existing profile data is kept on failed requests. Unknown/unavailable fields are
 not invented and presence is not inferred.
 
 The card shows online and custom status as a snapshot only if the saved response
@@ -31,7 +36,12 @@ fields outside the initial card renderer. Supported card fields include avatar,
 banner, bio, pronouns, connected accounts, badges, creation date from user ID,
 saved date and subscriber date when returned. Clearing the archive also removes
 this table's rows and stops bulk profile collection. Existing optional profile
-harvesting during message collection now requests these extended details too.
+harvesting during message collection requests these extended details immediately
+after each saved message page, before requesting another page or channel. It
+checks unique real authors from that page, skips webhooks and already saved
+extended profiles, and rechecks under the shared lock to avoid duplicate fetches
+between collection jobs and backfill. Backfill handles older missing authors
+separately. A transient failure never advances past the failed user.
 
 The public user-profile endpoint can return only what the active account is
 allowed to see. The upstream [client API documentation](https://discordpy-self.readthedocs.io/en/latest/api.html#discord.Client.fetch_user_profile)

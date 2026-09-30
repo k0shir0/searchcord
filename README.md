@@ -17,7 +17,9 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Archived profiles**: click a result author for their saved Discord-style card,
   avatar, bio, connections and searchable server history. Fetch one extended
   profile from the card, or use **backfill saved profiles** near the top of Scrape to backfill
-  existing authors with explicit start/stop controls. See [profiles](docs/profiles.md).
+  existing authors with explicit start/stop controls. Rate limits and temporary
+  failures wait and retry the same user; unavailable users are skipped. See
+  [profiles](docs/profiles.md).
 
 - **Three workspaces**: Browse for local search, Scrape for channels, DMs,
   a shared collection queue and live monitoring, and Stats for archive exploration.
@@ -120,9 +122,12 @@ the total, and a stop button while the job runs. You can keep using the rest of
 the workspace without closing a progress dialog. Later jobs fetch only messages
 newer than each channel's saved cursor. If a first run is limited or stopped, a
 later job can resume the remaining older history. Check **fetch expanded
-profiles** to request expanded Discord user records for authors missing from
-the local profile table. The toggle is off by default; known profiles are not
-fetched again. Searchcord stores the
+profiles** to save each newly encountered user's extended profile immediately
+after its message page is committed, before requesting another page. The toggle
+is off by default; saved extended profiles are not fetched again, and webhooks
+are skipped. Earlier missing profiles can be collected with **backfill saved
+profiles**. Profile waits show their retry/cooldown and can be stopped without
+losing saved work. Searchcord stores the
 documented public user fields needed for identity and appearance, including
 username, display name, avatar/banner hashes, accent color, bot flag, and
 public flags.
@@ -218,6 +223,12 @@ compromised and reset it immediately by changing your Discord password.
 MIT, with a wrongful use warning — see [LICENSE](LICENSE).
 
 ## Release timeline
+
+### 2026-09-29
+
+- Save missing extended profiles as each message page is collected, retry the
+  same user through temporary failures, and keep backfill stoppable during
+  requests and Discord cooldowns.
 
 ### 2026-09-25
 
