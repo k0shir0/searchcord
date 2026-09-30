@@ -27,6 +27,11 @@ container overhead. Snapshot size is the actual closed deployment file. Keeping
 both files locally consumes their combined storage; the reduction applies to the
 search server's archive.
 
+Per-component measurements use SQLite's optional `dbstat` extension. Export also
+works on stock Python builds without it: `source_pages` and `snapshot_pages` are
+then `null`, while total bytes, integrity checks and all-field verification remain
+available. The breakdown below was measured on a build with that extension.
+
 | Snapshot component | Bytes |
 | --- | ---: |
 | Compressed record blocks | 225,476,608 |
@@ -189,7 +194,7 @@ node checks/browser_search.mjs http://127.0.0.1:8017 agents/browser-search
 node checks/browser_profile_search.mjs http://127.0.0.1:8017 agents/browser-profiles
 ```
 
-Validation includes **39 integrated backend tests**, **42 search browser checks**,
+Validation includes **40 integrated backend tests**, **42 search browser checks**,
 **27 profile browser checks**, and the collector's **17 backfill browser checks**.
 Browser checks cover real synthetic API results, literal highlighting, saved
 profiles, cursors, reload/back navigation, stale responses, inert archived HTML,

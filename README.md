@@ -94,6 +94,10 @@ a **54.5% reduction**. Settings, tokens and collection cursors are omitted.
 Existing output files and reports are never overwritten. The exporter opens the
 source read-only and pins a coherent read transaction, including pending WAL data.
 
+SQLite's optional `dbstat` extension supplies the per-table storage breakdown.
+If unavailable, the exporter still measures total bytes and verifies all data;
+the report's `source_pages` and `snapshot_pages` fields are `null`.
+
 The packed file stays unchanged while being served. Export a new snapshot after
 collecting more messages or profiles, then restart the display app with its new
 directory. Use the original schema v9 file for the collection app.
