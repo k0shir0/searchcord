@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import logging
+import math
 import sqlite3
 import uuid
 import time
@@ -22,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database
-from profile_api import profile_router, fetch_profile
+from profile_api import profile_router, collect_profile, ProfileStopped
 
 # Resolve paths against this file, not the process working directory, so the
 # app behaves the same however it was launched.
@@ -70,6 +71,7 @@ live_subscribers: list = []
 http_client: Optional[httpx.AsyncClient] = None
 discord_request_lock = asyncio.Lock()
 last_discord_request = 0.0
+discord_ready_at = 0.0
 
 
 def discord_avatar_url(user_id: str, avatar_hash: Optional[str]) -> Optional[str]:
@@ -200,14 +202,15 @@ def _retry_after(response) -> float:
     except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
         value = None
     try:
-        return max(0.0, float(value if value is not None else
-                              response.headers.get("Retry-After", 1.0)))
+        seconds = float(value if value is not None else response.headers.get("Retry-After", 1.0))
+        return max(0.0, seconds) if math.isfinite(seconds) else 1.0
     except (ValueError, TypeError, AttributeError):
         return 1.0
 
 
-async def discord(method: str, path: str, token: str, **kwargs):
-    global last_discord_request
+async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
+                  cancelled=None, on_wait=None, **kwargs):
+    global last_discord_request, discord_ready_at
     headers = {
         "Authorization": token,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -220,20 +223,29 @@ async def discord(method: str, path: str, token: str, **kwargs):
         for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
             # Stay below the documented global request ceiling even when many
             # jobs are active. Route-specific headers and 429s take precedence.
-            wait = last_discord_request + 0.025 - time.monotonic()
+            wait = max(last_discord_request + 0.025, discord_ready_at) - time.monotonic()
             if wait > 0:
-                await asyncio.sleep(wait)
+                if on_wait and wait >= 0.1:
+                    on_wait(wait)
+                deadline = time.monotonic() + wait
+                while time.monotonic() < deadline:
+                    if cancelled and cancelled():
+                        raise ProfileStopped
+                    await asyncio.sleep(min(0.25, max(0, deadline - time.monotonic())))
+            if cancelled and cancelled():
+                raise ProfileStopped
             last_discord_request = time.monotonic()
             r = await http_client.request(method, url, headers=headers, **kwargs)
             if r.status_code == 429:
-                if attempt == MAX_RATE_LIMIT_RETRIES:
+                discord_ready_at = max(discord_ready_at, time.monotonic() + _retry_after(r))
+                if not retry_rate_limits or attempt == MAX_RATE_LIMIT_RETRIES:
                     return r
-                await asyncio.sleep(_retry_after(r))
                 continue
             if r.headers.get("X-RateLimit-Remaining") == "0":
                 try:
-                    await asyncio.sleep(max(0.0, float(r.headers.get(
-                        "X-RateLimit-Reset-After", 0))))
+                    seconds = float(r.headers.get("X-RateLimit-Reset-After", 0))
+                    if math.isfinite(seconds):
+                        discord_ready_at = max(discord_ready_at, time.monotonic() + max(0.0, seconds))
                 except ValueError:
                     pass
             return r
@@ -502,11 +514,11 @@ async def _clear_pending(db, cid: str):
     await db.commit()
 
 
-async def _harvest_profiles(db, cid: str, token: str, job_id: str, q: asyncio.Queue) -> int:
-    async with db.execute("""SELECT ca.author_id FROM channel_authors ca
-        LEFT JOIN profile_details p ON p.user_id=ca.author_id
-        WHERE ca.channel_id=? AND p.user_id IS NULL""", (cid,)) as cur:
-        missing = [row[0] for row in await cur.fetchall()]
+async def _harvest_profiles(db, msgs: list, cid: str, token: str, job_id: str,
+                            q: asyncio.Queue, already_saved: int = 0) -> int:
+    # Fetch each newly encountered real user before requesting another message
+    # page. Do not scan every author ever archived in this channel.
+    missing = dict.fromkeys(m['author']['id'] for m in msgs if not m.get('webhook_id'))
     saved = 0
     for user_id in missing:
         if active_jobs.get(job_id, {}).get("cancelled"):
@@ -518,14 +530,18 @@ async def _harvest_profiles(db, cid: str, token: str, job_id: str, q: asyncio.Qu
                 if await cur.fetchone():
                     continue
             try:
-                await fetch_profile(db, user_id, token, discord)
+                await collect_profile(db, user_id, token, discord,
+                    lambda: active_jobs.get(job_id, {}).get('cancelled', False),
+                    lambda info: _emit(q, {'type': 'profile_retry', 'channel_id': cid, **info}))
             except HTTPException as exc:
                 _emit(q, {"type": "profile_warning", "message": f"Profile HTTP {exc.status_code}"})
-                if exc.status_code in (401, 403, 429):
+                if exc.status_code == 401:
+                    active_jobs[job_id]['profile_auth_failed'] = True
                     break
                 continue
             saved += 1
-            _emit(q, {"type": "profile_progress", "channel_id": cid, "saved": saved})
+            _emit(q, {"type": "profile_progress", "channel_id": cid,
+                      "user_id": user_id, "saved": already_saved + saved})
     return saved
 
 
@@ -657,6 +673,7 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                 _emit(q, {"type": "channel_start", "channel": cname, "guild": gname,
                           "index": idx + 1, "total": len(channels)})
                 ch_count = 0
+                ch_profiles = 0
 
                 try:
                     async with db.execute("""SELECT newest_message_id, oldest_message_id,
@@ -702,6 +719,9 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                                 total_messages += inserted
                                 _emit(q, {"type": "progress", "channel": cname,
                                           "messages": ch_count, "total_messages": total_messages})
+                                if harvest_profiles and not job.get('profile_auth_failed'):
+                                    ch_profiles += await _harvest_profiles(db, fresh, cid, token,
+                                                                          job_id, q, ch_profiles)
                             elif before:
                                 await _retry_scrape_operation(
                                     job_id, cid, q, params, "cursor",
@@ -749,6 +769,9 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                             before = str(min(int(m["id"]) for m in msgs))
                             _emit(q, {"type": "progress", "channel": cname,
                                       "messages": ch_count, "total_messages": total_messages})
+                            if harvest_profiles and not job.get('profile_auth_failed'):
+                                ch_profiles += await _harvest_profiles(db, msgs, cid, token,
+                                                                      job_id, q, ch_profiles)
                             scrape_log.info(
                                 "job=%s channel=%s page=%s received=%s saved=%s channel_saved=%s",
                                 job_id, cid, _scrape_position(params), len(msgs),
@@ -760,11 +783,10 @@ async def run_scrape(job_id: str, channels: list, limit: int = 0,
                                 break
 
                     if harvest_profiles and not active_jobs.get(job_id, {}).get("cancelled"):
-                        profiles = await _harvest_profiles(db, cid, token, job_id, q)
-                        _emit(q, {"type": "profiles", "channel": cname, "saved": profiles})
+                        _emit(q, {"type": "profiles", "channel": cname, "saved": ch_profiles})
                 except asyncio.CancelledError:
                     raise
-                except _ScrapeStopped:
+                except (_ScrapeStopped, ProfileStopped):
                     scrape_log.info("job=%s channel=%s stopped during retry", job_id, cid)
                 except Exception as e:
                     failed_channels += 1
