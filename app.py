@@ -24,6 +24,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database
 from profile_api import profile_router, collect_profile, ProfileStopped
+from channel_access import readable_channels
+from invite_api import invite_router
 
 # Resolve paths against this file, not the process working directory, so the
 # app behaves the same however it was launched.
@@ -112,6 +114,7 @@ async def lifespan(app: FastAPI):
         for info in list(live_monitors.values()):
             info["task"].cancel()
         live_monitors.clear()
+        await shutdown_invite_jobs()
         await shutdown_profile_jobs()
         await http_client.aclose()
         http_client = None
@@ -286,27 +289,9 @@ async def get_guilds():
 
 
 @app.get("/api/guilds/{guild_id}/channels")
-async def get_channels(guild_id: str):
+async def get_channels(guild_id: str, include_threads: bool = False):
     token = await get_token()
-    r = await discord("GET", f"/guilds/{guild_id}/channels", token)
-    if r.status_code != 200:
-        raise HTTPException(r.status_code, "Failed to fetch channels")
-
-    all_ch = r.json()
-    categories = {c["id"]: c["name"] for c in all_ch if c["type"] == 4}
-    text_types = {0, 5, 10, 11, 12}
-    result = []
-    for c in sorted(all_ch, key=lambda x: (x.get("parent_id") or "", x.get("position", 0))):
-        if c["type"] in text_types:
-            result.append({
-                "id": c["id"],
-                "name": c["name"],
-                "type": c["type"],
-                "category": categories.get(c.get("parent_id"), ""),
-                "category_id": c.get("parent_id"),
-                "nsfw": c.get("nsfw", False),
-            })
-    return result
+    return await readable_channels(guild_id, token, discord, include_threads=include_threads)
 
 
 @app.get("/api/dms")
@@ -408,6 +393,8 @@ def _emit(q: asyncio.Queue, event: dict):
 profile_fetch_lock = asyncio.Lock()
 profile_routes, shutdown_profile_jobs = profile_router(DB_PATH, get_token, discord, profile_fetch_lock)
 app.include_router(profile_routes)
+invite_routes, shutdown_invite_jobs = invite_router(get_token, discord)
+app.include_router(invite_routes)
 
 
 async def _write_db():

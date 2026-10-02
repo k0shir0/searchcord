@@ -128,11 +128,21 @@
 
   <section class="view" id="view-scrape" aria-labelledby="scrapeTitle">
     <div class="collection-toolbar"><div><h2 id="scrapeTitle">Your sources</h2><p id="connectionStatus" role="status">Connect Discord to load your channels and conversations.</p></div><button class="btn-mint" id="connectDiscord">connect Discord</button></div>
+    <section class="invite-panel collection-panel" aria-labelledby="inviteTitle">
+      <div class="panel-heading"><h3 id="inviteTitle">Join servers</h3><span class="invite-cadence">one join every 30 seconds</span></div>
+      <form id="inviteForm" class="invite-form">
+        <label for="inviteInput">Invite links or codes<textarea id="inviteInput" rows="2" required maxlength="50000" placeholder="discord.gg/example, https://discord.com/invite/example, or an invite code" aria-describedby="inviteHint inviteStatus" spellcheck="false"></textarea></label>
+        <div class="invite-actions"><button class="btn-mint" id="startInvites" type="submit">join servers</button><button class="btn-ghost" id="stopInvites" type="button" hidden>stop joining</button></div>
+      </form>
+      <p class="queue-hint" id="inviteHint">Separate invites with spaces, commas, or new lines. Uses the selected account when started; duplicate codes are skipped.</p>
+      <p class="collection-status" id="inviteStatus" role="status"></p>
+      <ul class="invite-results" id="inviteResults" aria-label="Invite queue" hidden></ul>
+    </section>
     <div class="collection-grid">
       <section class="collection-panel" aria-label="Collection sources">
         <div class="source-tabs" role="tablist" aria-label="Source type"><button id="sourceChannels" role="tab" aria-selected="true" aria-controls="source-channels" data-source="channels">channels</button><button id="sourceDms" role="tab" aria-selected="false" aria-controls="source-dms" tabindex="-1" data-source="dms">direct messages</button></div>
         <label class="collection-filter">Find a channel or conversation<input type="search" id="collectionSearch" placeholder="filter by name" autocomplete="off"></label>
-        <div id="source-channels" role="tabpanel" aria-labelledby="sourceChannels"><div class="server-list" id="serverList"><p class="placeholder-msg">Your servers appear here after connecting.</p></div><div class="content" id="content"><div class="empty-state" id="emptyState"><p>Select a server to browse channels.</p></div><div class="channels-pane" id="channelsPane"><h4 class="cp-head" id="cpHead"></h4><div class="cp-body" id="cpBody"></div></div></div></div>
+        <div id="source-channels" role="tabpanel" aria-labelledby="sourceChannels"><p class="queue-hint scan-hint" id="scanHint">Double-click a server to scan and scrape its readable channels. Names containing “bot” are skipped.</p><div class="server-list" id="serverList"><p class="placeholder-msg">Your servers appear here after connecting.</p></div><p class="collection-status" id="scanStatus" role="status"></p><div class="content" id="content"><div class="empty-state" id="emptyState"><p>Select a server to browse channels.</p></div><div class="channels-pane" id="channelsPane"><div class="channel-heading"><h4 class="cp-head" id="cpHead"></h4><button class="btn-ghost" id="scanServer" type="button" disabled>scan &amp; scrape</button></div><div class="cp-body" id="cpBody"></div></div></div></div>
         <div id="source-dms" role="tabpanel" aria-labelledby="sourceDms" hidden><div id="dmBody"><p class="placeholder-msg">Open direct messages to load conversations.</p></div></div>
       </section>
       <section class="collection-panel monitoring-panel" aria-label="Live monitoring"><div class="panel-heading"><h3>Live monitor <span class="live-badge" id="liveBadge"></span></h3><button class="btn-ghost" id="stopAllLive">stop all</button></div>
@@ -219,6 +229,7 @@
 
 <script src="vendor/chart.umd.min.js" defer></script>
 <script src="app.js" defer></script>
+<script src="collection.js" defer></script>
 <script src="stats.js" defer></script>
 <script src="profile-view.js" defer></script>
 <script src="profiles.js" defer></script>

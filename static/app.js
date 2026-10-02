@@ -4,6 +4,11 @@
 const S = {
   guilds:        [],
   guild:         null,
+  guildLoad:     null,
+  channelViewRevision: 0,
+  accountRevision: 0,
+  autoStartPending: false,
+  queueStopRevision: 0,
   queue:         [],
   scraping:      false,
   activeJobId:   null,
@@ -27,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initNav();
   initSettings();
   initQueue();
+  initCollectionAutomation();
   initSearch();
   initModal();
   initExportModal();
@@ -281,6 +287,7 @@ async function loadSavedTokens() {
 }
 
 async function verifyActiveToken() {
+  S.accountRevision++;
   try {
     const verified = await api('/api/token/validate');
     if (!verified.valid) {
@@ -292,6 +299,8 @@ async function verifyActiveToken() {
     $('connectionStatus').textContent = `Connected as ${verified.username}`;
     if (!S.scraping) { S.queue = []; renderQueue(); }
     S.guild = null;
+    S.guildLoad = null;
+    $('scanServer').disabled = true;
     $('channelsPane').classList.remove('visible');
     $('emptyState').style.display = '';
     $('cpBody').replaceChildren();
@@ -370,12 +379,22 @@ function renderGuilds() {
 
     el.append(icon, name);
     el.addEventListener('click', () => selectGuild(g));
+    el.addEventListener('dblclick', () => scanGuild(g));
+    el.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); scanGuild(g); }
+    });
+    el.title = 'Select server. Double-click or Shift+Enter to scan and scrape.';
+    el.setAttribute('aria-describedby', 'scanHint');
+    el.classList.toggle('active', S.guild?.id === g.id);
     list.appendChild(el);
   });
 }
 
-async function selectGuild(guild) {
+async function selectGuild(guild, includeThreads = false) {
+  const revision = S.accountRevision;
+  const viewRevision = ++S.channelViewRevision;
   S.guild = guild;
+  $('scanServer').disabled = scanningGuilds.has(guild.id);
   document.querySelectorAll('.server-item').forEach(el =>
     el.classList.toggle('active', el.dataset.id === guild.id)
   );
@@ -386,13 +405,25 @@ async function selectGuild(guild) {
   $('cpHead').textContent = guild.name;
   $('cpBody').innerHTML = spinnerHTML();
 
+  if (S.guildLoad?.id !== guild.id || S.guildLoad.revision !== revision || (includeThreads && !S.guildLoad.includeThreads)) {
+    const load = {id: guild.id, revision, includeThreads};
+    load.promise = api(`/api/guilds/${encodeURIComponent(guild.id)}/channels${includeThreads ? '?include_threads=true' : ''}`)
+      .finally(() => { if (S.guildLoad === load) S.guildLoad = null; });
+    S.guildLoad = load;
+  }
+  const load = S.guildLoad;
   try {
-    const channels = await api(`/api/guilds/${guild.id}/channels`);
-    if (S.guild.id !== guild.id) return;
+    const channels = await load.promise;
+    if (S.guild?.id !== guild.id || S.accountRevision !== revision || S.channelViewRevision !== viewRevision) return channels;
     renderChannels(channels, guild);
-  } catch {
-    if (S.guild.id !== guild.id) return;
-    $('cpBody').innerHTML = '<div class="error-msg">Failed to load channels</div>';
+    return channels;
+  } catch (error) {
+    if (S.guild?.id === guild.id && S.accountRevision === revision && S.channelViewRevision === viewRevision) {
+      $('cpBody').replaceChildren();
+      const message = ce('div', 'error-msg'); message.textContent = `Could not check channels: ${error.message}`;
+      $('cpBody').appendChild(message);
+    }
+    return null;
   }
 }
 
@@ -611,12 +642,14 @@ function finishDmClear(errMsg) {
   }
 
   if (errMsg) logLine($('moLog'), `Error: ${errMsg}`, 'err');
+  if (S.autoStartPending && S.queue.length) { S.autoStartPending = false; startScraping(); }
 }
 
 // ── Channels ─────────────────────────────────────────────────
 function renderChannels(channels, guild) {
   const body = $('cpBody');
   body.innerHTML = '';
+  if (!channels.length) body.innerHTML = '<p class="placeholder-msg">No readable message channels found. Complete any server screening in Discord, then try again.</p>';
 
   const categories = {};
   const uncategorised = [];
@@ -700,6 +733,8 @@ function toggleQueue(ch, guild, rowEl, btnEl) {
 
 function initQueue() {
   $('clearQueue').addEventListener('click', () => {
+    S.queueStopRevision++;
+    S.autoStartPending = false;
     S.queue = [];
     renderQueue();
     document.querySelectorAll('.ch-item.queued').forEach(el => {
@@ -768,17 +803,18 @@ async function startScraping() {
 
   const limitVal = parseInt($('scrapeLimit').value, 10);
   const limit = (!isNaN(limitVal) && limitVal > 0) ? limitVal : 0;
-  S.scrapeRun = {index: -1, total: 0, completed: 0};
+  const channels = S.queue.map(channel => ({...channel}));
+  S.scrapeRun = {index: -1, total: 0, completed: 0, channels};
   $('queueProgress').hidden = false;
   $('queueProgressTitle').textContent = 'Starting scrape…';
   $('queueProgressSummary').textContent = limit ? `Limit: ${n(limit)} messages per channel` : 'Waiting for the first channel.';
-  $('queueProgressBar').max = S.queue.length;
+  $('queueProgressBar').max = channels.length;
   $('queueProgressBar').value = 0;
   $('stopQueueScrape').hidden = false;
   $('stopQueueScrape').disabled = true;
   $('dismissQueueProgress').hidden = true;
   const rows = $('queueProgressRows'); rows.replaceChildren();
-  S.queue.forEach((channel, index) => {
+  channels.forEach((channel, index) => {
     const row = ce('div', 'queue-progress-row'); row.dataset.index = index;
     const name = ce('span'); name.textContent = `${channel.guild_name || 'Direct messages'} · #${channel.name}`;
     const count = ce('strong'); count.textContent = 'waiting';
@@ -789,7 +825,7 @@ async function startScraping() {
   let resp;
   try {
     resp = await api('/api/scrape/start', { method: 'POST', body: {
-      channels: S.queue, limit, harvest_profiles: $('harvestProfiles').checked,
+      channels, limit, harvest_profiles: $('harvestProfiles').checked,
     } });
   } catch (error) {
     finishScrape(`Could not start: ${error.message}`, 'Scrape could not start', false);
@@ -801,7 +837,7 @@ async function startScraping() {
   $('stopQueueScrape').disabled = false;
 
   const es = new EventSource(`/api/scrape/progress/${job_id}`);
-  const total = S.queue.length;
+  const total = channels.length;
 
   es.onmessage = e => {
     const ev = JSON.parse(e.data);
@@ -824,12 +860,12 @@ async function startScraping() {
       case 'retry_wait':
         row().querySelector('strong').textContent = `retry ${ev.attempt} in ${n(ev.wait_seconds)}s`;
         $('queueProgressSummary').textContent =
-          `${ev.reason} in #${S.queue[run.index].name}; retrying the same page in ${n(ev.wait_seconds)}s.`;
+          `${ev.reason} in #${channels[run.index].name}; retrying the same page in ${n(ev.wait_seconds)}s.`;
         break;
 
       case 'retry_resumed':
         row().querySelector('strong').textContent = 'scraping…';
-        $('queueProgressSummary').textContent = `Connection recovered; continuing #${S.queue[run.index].name}.`;
+        $('queueProgressSummary').textContent = `Connection recovered; continuing #${channels[run.index].name}.`;
         break;
 
       case 'channel_complete':
@@ -910,16 +946,24 @@ function finishScrape(message, title = 'Scrape finished', clearQueue = true, ref
   $('queueProgressSummary').textContent = message;
   $('stopQueueScrape').hidden = true;
   $('dismissQueueProgress').hidden = false;
-  if (clearQueue) S.queue = [];
+  if (clearQueue) {
+    const finished = new Set(S.scrapeRun.channels.map(channel => channel.id));
+    S.queue = S.queue.filter(channel => !finished.has(channel.id));
+  }
   renderQueue();
   if (refreshData) {
     loadSearchFilters();
     if (activeView === 'stats') loadStats(true);
   }
+  const continueQueue = clearQueue && S.autoStartPending && S.queue.length;
+  S.autoStartPending = false;
+  if (continueQueue) startScraping();
 }
 
 async function stopQueueScrape() {
   if (!S.activeJobId || S.activeJobKind !== 'scrape') return;
+  S.queueStopRevision++;
+  S.autoStartPending = false;
   $('stopQueueScrape').disabled = true;
   $('queueProgressTitle').textContent = 'Stopping scrape…';
   try {

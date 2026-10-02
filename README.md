@@ -26,6 +26,14 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Queue and scrape** any number of channels at once, with an optional
   per-channel message cap, live per-channel counts and stopping in the queue, and an optional
   expanded-profile fetch for message authors.
+- **Join servers** from a single invite or a list of links/codes in Scrape.
+  Duplicate codes are removed, join attempts are at least 30 seconds apart,
+  and the server keeps the stoppable queue running through page navigation or reloads.
+- **Scan and scrape** a server by double-clicking it, using Shift+Enter, or
+  selecting **scan & scrape**. Only channels with readable message history
+  are listed. Scans add readable channels and accessible active/archived threads
+  to the existing queue, skip names containing `bot` regardless of case, and
+  start automatically with your existing limit and profile choice.
 - **Resume and update** channel archives from saved message cursors, without
   re-reading completed history on later scrape jobs.
 - **Live monitor** channels and watch new messages stream in as they arrive.
@@ -149,6 +157,44 @@ switch accounts without re-entering credentials. Open **Scrape** and use
 **direct messages**, filter by name, and use the labeled queue/monitor/export
 controls. Live monitoring and its incoming feed remain in the same workspace.
 
+**Join servers** accepts `discord.gg/code`, `https://discord.com/invite/code`,
+legacy `discordapp.com/invite/code` links, and bare invite codes. Separate a list
+with spaces, commas, semicolons, or new lines. The account selected when the
+queue starts is used for the whole queue. Each attempt is at least 30 seconds
+after the previous one; Discord rate limits can extend that wait and retry the
+same invite. Invalid/expired invites are shown individually. Successful joins
+refresh the server list. **Stop joining** cancels pending work; completed joins
+remain. A request already sent to Discord may have completed before a stop,
+so check Discord before retrying a stopped request. Navigation and reloads
+recover progress; restarting the application stops the in-memory invite queue.
+Account verification, an invalid token, or server screening can require action
+in Discord. Searchcord reports these states and does not solve or bypass verification.
+An account restriction on joining servers stops the whole invite queue with an
+Account Standing notice; refreshing a token does not remove that restriction.
+
+Single-click a server to browse its channels. Searchcord checks the selected
+member's roles and channel overwrites for both `VIEW_CHANNEL` and
+`READ_MESSAGE_HISTORY`, then probes one message without saving it. An empty
+readable channel stays in the list; a view-only or denied channel does not.
+This follows [Discord's permission precedence](https://docs.discord.com/developers/topics/permissions).
+Scans also discover active threads and archived public/private threads accessible
+to the account, including forum and media posts. Ordinary browsing checks current
+channels without walking thread archives. Thread access inherits parent
+permissions and is checked before listing; archive pages are paginated.
+Temporary access-check failures show an error so a partial list does not silently
+become a complete automatic scrape.
+
+Double-click a server to scan and start collection without selecting individual
+channels. Keyboard users can press **Shift+Enter** on a server; **scan & scrape**
+provides the same action for touch. A scan ignores the current name filter,
+adds each channel once, and keeps manually queued sources. Names containing
+`bot` are excluded from automatic additions; readable bot channels remain
+available for manual queuing. Another scan during an active job waits in the
+queue and starts after that job finishes successfully. Stopping or an error
+preserves the queue and pauses automatic continuation. Keep the page open for
+continuation of scans queued behind an active job; the active scrape itself
+already runs on the server. Changing accounts discards scans still in flight.
+
 ### Data directory
 
 The default database is `data/searchcord.db`, resolved relative to the application
@@ -208,6 +254,8 @@ messages so the next job can fill it without walking completed history.
 ```
 searchcord/
 ├── app.py             # FastAPI backend — API, scraper, live poller, export
+├── channel_access.py  # Readable-channel checks and scan thread discovery
+├── invite_api.py      # Server-owned invite queue and progress
 ├── storage.py         # SQLite schema, backup, migration
 ├── search_app.py      # Separate read-only search frontend
 ├── search_snapshot.py # Lossless packed snapshot exporter and reader
@@ -216,6 +264,7 @@ searchcord/
 ├── static/
 │   ├── index.html
 │   ├── app.js         # Frontend logic
+│   ├── collection.js  # Invite controls and automatic server scans
 │   ├── stats.js       # Contributor pagination, charts and drilldowns
 │   ├── workspace.css  # Production three-view layout
 │   ├── vendor/        # Pinned Chart.js and its license
@@ -285,6 +334,13 @@ compromised and reset it immediately by changing your Discord password.
 MIT, with a wrongful use warning — see [LICENSE](LICENSE).
 
 ## Release timeline
+
+### 2026-10-01
+
+- Added a stoppable invite queue with 30-second spacing and reload recovery.
+- Filter collection sources by readable history, including accessible threads.
+- Added double-click server scanning and automatic queue continuation, with
+  case-insensitive `bot` exclusions and existing scrape options preserved.
 
 ### 2026-09-29
 
