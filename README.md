@@ -69,6 +69,12 @@ collects details for authors already in the archive. Both can be stopped.
 Search results load one page at a time. Collection retries temporary failures
 and keeps saved messages when stopped. Message IDs prevent duplicate records.
 
+Browse uses message-ID cursors to avoid counting every matching message. It shows
+the current page and whether more results are available, rather than an exact
+match total. Existing counted page links still work. Reloaded or shared cursor
+links preserve their page; when earlier cursors are unavailable, **first page**
+returns to the beginning. Queries accept up to 200 characters.
+
 ## Search only
 
 Run the separate frontend in `static/search` with an existing SearchCord archive:
@@ -120,6 +126,24 @@ The viewer needs a Python server; a static host cannot run it on its own.
   check the upgraded archive before removing a backup.
 - **Clear All Data** removes archived messages and derived metadata after
   confirmation. Saved tokens remain.
+
+Recovery backups are named `searchcord.db.pre-compact-*.bak.gz` (or `.bak` if
+compression fails) and contain the same private tokens and messages as the
+source archive. Migration checks SQLite and full-text integrity. Fields already
+discarded by an older migration can only be recovered from an original archive
+or backup. Test upgrades on a separate copy first.
+
+## Technical details and checks
+
+- [Saved profiles and backfill](docs/profiles.md)
+- [Read-only search behavior](docs/search-display.md)
+- [Snapshot storage and latency measurements](SEARCH-ONLY-SCALE-RESULTS.md)
+- [Standalone deployment](deploy/search/README.md)
+
+Run the local regression checks with `python -m unittest discover -s checks -v`
+and `node checks/test_browse_cursor.mjs`. Tests create synthetic archives and
+mock Discord responses; no real token is required. For offline browser review,
+see [review and reproduction notes](REVIEW-NOTES.md).
 
 ## Release timeline
 

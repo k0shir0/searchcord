@@ -3,8 +3,15 @@ import hashlib
 import importlib.util
 import os
 import sqlite3
+import socket
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
@@ -81,3 +88,47 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(list((target/'data').iterdir()),[])
         self.assertEqual(len(list(target.rglob('*.db'))),0)
         with self.assertRaises(FileExistsError): package.build(target)
+
+    def test_packaged_server_runs_without_collector_or_repository_imports(self):
+        source=Path(__file__).resolve().parents[1]/'deploy/search/package.py'
+        spec=importlib.util.spec_from_file_location('isolated_search_package',source)
+        package=importlib.util.module_from_spec(spec); spec.loader.exec_module(package)
+        target=package.build(Path(self.temp.name)/'standalone')
+        before=hashlib.sha256(self.path.read_bytes()).digest()
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]
+        environment={key:value for key,value in os.environ.items()
+                     if not key.startswith('SEARCHCORD_') and key != 'PYTHONPATH'}
+        process=subprocess.Popen([sys.executable,str(target/'search_app.py'),
+                                  '--db',str(self.path),'--snapshot','--port',str(port)],
+                                 cwd=self.temp.name,env=environment,
+                                 stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        origin=f'http://127.0.0.1:{port}'
+        try:
+            for _ in range(100):
+                if process.poll() is not None:
+                    self.fail('The standalone server exited during startup.')
+                try:
+                    with urlopen(origin+'/api/summary',timeout=1) as response:
+                        self.assertEqual(json.load(response)['messages'],120)
+                    break
+                except URLError:
+                    time.sleep(.05)
+            else:
+                self.fail('The standalone server did not become ready.')
+            with urlopen(origin+'/api/search?q=hello',timeout=5) as response:
+                self.assertEqual(len(json.load(response)['messages']),40)
+            for asset in ['/', '/search.js', '/bauhaus.css', '/profile-view.js', '/privacy.html']:
+                with urlopen(origin+asset,timeout=2) as response:
+                    self.assertEqual(response.status,200)
+            for forbidden in ['/app.js','/api/settings','/data/searchcord.db','/archive.db']:
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(origin+forbidden,timeout=2)
+                self.assertEqual(error.exception.code,404)
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill(); process.wait(timeout=5)
+        self.assertEqual(before,hashlib.sha256(self.path.read_bytes()).digest())

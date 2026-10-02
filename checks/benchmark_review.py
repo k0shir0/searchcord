@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app
 from profile_store import profile_servers
+from search_snapshot import page_usage
 from storage import init_database
 
 
@@ -76,7 +77,8 @@ def run(path, rounds):
             'database_bytes':path.stat().st_size,'queries':[]}
     with sqlite3.connect(path) as db:
         report['messages']=db.execute('SELECT COUNT(*) FROM messages').fetchone()[0]
-        report['profile_index_bytes']=db.execute("SELECT SUM(pgsize) FROM dbstat WHERE name='idx_profiles_username'").fetchone()[0]
+        usage=page_usage(db)
+        report['profile_index_bytes']=usage.get('idx_profiles_username',0) if usage is not None else None
     for name,filters in [('browse',{}),('common',{'q':'hello'}),('phrase',{'q':'release notes'}),
                          ('absent',{'q':'zzzzunlikelymatch'}),('author',{'author_id':'50'}),
                          ('combined',{'q':'hello','author_id':'50'})]:

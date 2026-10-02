@@ -1,0 +1,302 @@
+{
+  "reviewed_base": "6ee9255",
+  "reviewed_tip": "3343b15",
+  "backend_before": 44,
+  "backend_after": 45,
+  "browser_checks": 89,
+  "benchmarks": {
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "rounds": 3,
+    "cache": "Fresh SQLite connections; OS cache not flushed; sequential in-process calls, not HTTP.",
+    "database_bytes": 29659136,
+    "queries": [
+      {
+        "class": "browse",
+        "legacy": {
+          "median_ms": 3.62,
+          "max_ms": 16.463,
+          "samples_ms": [
+            16.463,
+            3.561,
+            3.62
+          ]
+        },
+        "cursor": {
+          "median_ms": 4.132,
+          "max_ms": 6.235,
+          "samples_ms": [
+            6.235,
+            4.132,
+            3.547
+          ]
+        },
+        "same_ids": true
+      },
+      {
+        "class": "common",
+        "legacy": {
+          "median_ms": 80.797,
+          "max_ms": 86.071,
+          "samples_ms": [
+            80.797,
+            80.399,
+            86.071
+          ]
+        },
+        "cursor": {
+          "median_ms": 4.231,
+          "max_ms": 4.416,
+          "samples_ms": [
+            4.231,
+            3.787,
+            4.416
+          ]
+        },
+        "same_ids": true
+      },
+      {
+        "class": "phrase",
+        "legacy": {
+          "median_ms": 3.998,
+          "max_ms": 4.658,
+          "samples_ms": [
+            4.658,
+            3.998,
+            3.963
+          ]
+        },
+        "cursor": {
+          "median_ms": 12.463,
+          "max_ms": 12.594,
+          "samples_ms": [
+            12.463,
+            12.594,
+            11.496
+          ]
+        },
+        "same_ids": true
+      },
+      {
+        "class": "absent",
+        "legacy": {
+          "median_ms": 3.313,
+          "max_ms": 4.289,
+          "samples_ms": [
+            4.289,
+            3.313,
+            3.123
+          ]
+        },
+        "cursor": {
+          "median_ms": 10.129,
+          "max_ms": 10.289,
+          "samples_ms": [
+            10.289,
+            9.85,
+            10.129
+          ]
+        },
+        "same_ids": true
+      },
+      {
+        "class": "author",
+        "legacy": {
+          "median_ms": 4.09,
+          "max_ms": 4.57,
+          "samples_ms": [
+            3.852,
+            4.09,
+            4.57
+          ]
+        },
+        "cursor": {
+          "median_ms": 3.467,
+          "max_ms": 3.637,
+          "samples_ms": [
+            3.637,
+            3.467,
+            3.163
+          ]
+        },
+        "same_ids": true
+      },
+      {
+        "class": "combined",
+        "legacy": {
+          "median_ms": 59.094,
+          "max_ms": 59.906,
+          "samples_ms": [
+            59.906,
+            59.094,
+            58.412
+          ]
+        },
+        "cursor": {
+          "median_ms": 4.952,
+          "max_ms": 5.449,
+          "samples_ms": [
+            4.952,
+            5.449,
+            4.827
+          ]
+        },
+        "same_ids": true
+      }
+    ],
+    "messages": 100000,
+    "profile_index_bytes": 180224,
+    "profiles": {
+      "legacy": {
+        "median_ms": 92.945,
+        "max_ms": 98.809,
+        "samples_ms": [
+          98.809,
+          91.288,
+          92.945
+        ]
+      },
+      "group_first": {
+        "median_ms": 19.247,
+        "max_ms": 19.638,
+        "samples_ms": [
+          19.247,
+          19.089,
+          19.638
+        ]
+      },
+      "same_results": true
+    }
+  },
+  "browser_reports": {
+    "Collector: actual app + synthetic v9 archive": {
+      "checks": [
+        "Archive opens without a token",
+        "Browse loads 50 results through the cursor API",
+        "Next page has no duplicate messages",
+        "Reload preserves the page number and its results",
+        "Previous after reload returns the first page",
+        "A deep link offers an honest first-page fallback",
+        "First-page fallback restores the start of the results",
+        "Existing counted page links remain functional",
+        "New filters reset pagination and isolate the author",
+        "Saved profile and first 30 server counts render locally",
+        "Profile pagination retains all 45 observed servers",
+        "Profile server search still works",
+        "Stats remain available",
+        "Existing collection controls remain present",
+        "Collector fits 1440px",
+        "Collector fits 768px",
+        "Collector fits 375px",
+        "Collector fits 320px",
+        "No credential-dependent features invoked",
+        "No browser exceptions"
+      ],
+      "errors": [],
+      "externalRequestsBlocked": true
+    },
+    "Packaged viewer: actual standalone process + packed archive": {
+      "checks": [
+        "one search surface, no workspace tabs",
+        "hero text preserved",
+        "requested decorative copy removed",
+        "archive counters share the original box and type style",
+        "results hidden until search",
+        "desktop has no overflow",
+        "focus opens filters",
+        "Escape closes filters and keeps focus",
+        "click reopens filters after Escape",
+        "outside click closes filters",
+        "short search remains supported",
+        "archive returns bounded results",
+        "literal match highlighting",
+        "technical results summary is absent",
+        "URL retains search",
+        "next page cursor has no duplicate messages",
+        "previous restores first page",
+        "browser back restores cursor page",
+        "reload restores cursor and page",
+        "empty state gives edit action",
+        "empty query browses archive",
+        "archived HTML stays inert",
+        "full messages are shown without disclosure",
+        "original message metadata stays in the heading",
+        "message rows have no list numbering",
+        "stale response cannot overwrite newer search",
+        "network error clears stale results and stays actionable",
+        "reduced motion disables tray transitions",
+        "mobile 390 no horizontal overflow",
+        "mobile 390 search button fits its label",
+        "mobile 390 filters no horizontal overflow",
+        "mobile 390 results no horizontal overflow",
+        "mobile 320 no horizontal overflow",
+        "mobile 320 search button fits its label",
+        "mobile 320 filters no horizontal overflow",
+        "mobile 320 results no horizontal overflow",
+        "changing a filter searches immediately",
+        "clear filters immediately restores results",
+        "existing privacy page moved to display frontend",
+        "privacy return opens search frontend",
+        "no uncaught browser errors",
+        "only local assets and original avatar URLs"
+      ],
+      "timings": {
+        "load": {
+          "dom_ms": 63,
+          "load_ms": 124,
+          "resources": 6
+        },
+        "search_dom_ms": 106
+      },
+      "externalRequestsBlocked": true
+    },
+    "Saved profiles: packed viewer": {
+      "checks": [
+        "emoji channel matches plain text",
+        "emoji channel selection searches by stable ID",
+        "mention autofill matches saved username",
+        "mention opens branded profile with full archive results",
+        "profile navigation receives keyboard focus",
+        "profile search stays compact with no duplicate identity button",
+        "profile messages follow card in document order",
+        "messages ordered newest first",
+        "profile server search and paging work",
+        "search icon opens and focuses the popout field",
+        "Escape closes search and returns focus",
+        "profile message search scopes to current user",
+        "empty profile search focuses its own query",
+        "profile and message query restore after reload",
+        "browser back restores profile results",
+        "profile fits mobile 390",
+        "search popout fits mobile 390",
+        "outside click closes mobile popout 390",
+        "profile fits mobile 320",
+        "search popout fits mobile 320",
+        "outside click closes mobile popout 320",
+        "back to search restores hero",
+        "raw user ID opens unscraped identity",
+        "display profile cannot trigger collection",
+        "typed exact username resolves without selecting suggestion",
+        "saved avatar and banner render as decoded images",
+        "no uncaught browser errors"
+      ],
+      "timings": {
+        "load": {
+          "dom_ms": 185,
+          "load_ms": 257,
+          "resources": 6
+        }
+      },
+      "externalRequestsBlocked": true
+    }
+  },
+  "logo": {
+    "font": "Arial Bold",
+    "menu_blue": "#8abde8",
+    "deep_blue": "#315a87",
+    "mint": "#8dd8b0",
+    "exclusive_ownership_verified": false
+  },
+  "docker_runtime_verified": false,
+  "real_discord_requests": 0
+}
