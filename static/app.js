@@ -80,7 +80,10 @@ async function boot() {
   populateChannelFilter(resolveFilter(S.guildMap, $('fGuild').value));
   const view = location.hash.slice(1) || 'browse';
   if (params.has('search') || [...Object.keys(searchFields)].some(key => params.has(key))) {
-    await doSearch(Math.max(1, Number(params.get('page')) || 1), false);
+    submittedSearch = new URLSearchParams(params);
+    const cursor = params.get('cursor') === 'true';
+    searchCursors = [params.get('before')];
+    await doSearch(cursor ? 1 : Math.max(1, Number(params.get('page')) || 1), false, true);
   }
   await switchView(view, true, false);
 }
@@ -958,6 +961,7 @@ const searchFields = {q: 'searchInput', guild_id: 'fGuild', channel_id: 'fChanne
 let searchController;
 let searchRequest = 0;
 let submittedSearch = new URLSearchParams();
+let searchCursors = [null];
 
 function setFilterTrayExpanded(expanded) {
   $('queryBlock').classList.toggle('is-expanded', expanded);
@@ -1107,6 +1111,14 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
       return;
     }
   }
+  if (!reuseSubmitted) {
+    params.set('cursor', 'true');
+    searchCursors = [null];
+  }
+  if (params.get('cursor') === 'true') {
+    params.delete('before');
+    if (searchCursors[page - 1]) params.set('before', searchCursors[page - 1]);
+  }
   params.set('page', page); params.set('limit', 50);
   submittedSearch = new URLSearchParams(params);
   S.searchPage = page;
@@ -1123,6 +1135,7 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   try {
     const data = await api(`/api/search?${params}`, {signal: searchController.signal});
     if (request !== searchRequest) return;
+    if (params.get('cursor') === 'true') searchCursors[page] = data.next_cursor;
     renderResults(data, params.get('q') || '');
     if (shouldScroll && activeView === 'browse') $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
   } catch (error) {
@@ -1144,7 +1157,7 @@ function messageAvatar(authorId, avatarUrl) {
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
     img.onload = () => avatar.replaceChildren(img);
-    img.onerror = fallback; img.src = avatarUrl;
+    img.onerror = fallback; avatar.appendChild(img); img.src = avatarUrl;
   }
   return avatar;
 }
@@ -1152,7 +1165,9 @@ function messageAvatar(authorId, avatarUrl) {
 function renderResults(data, query) {
   const results = $('searchResults');
   results.replaceChildren();
-  $('resultsStatus').textContent = data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
+  $('resultsStatus').textContent = data.total === null
+    ? (data.messages.length ? `${n(data.messages.length)} messages on this page` : 'No messages match these filters')
+    : data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
   if (!data.messages.length) results.innerHTML = '<p class="no-results">No results found. Try another query or clear the filters.</p>';
   data.messages.forEach(msg => {
     const row = ce('article', 'result-row');
@@ -1178,18 +1193,18 @@ function renderResults(data, query) {
     }
     row.append(messageAvatar(msg.author_id, msg.avatar_url), content); results.appendChild(row);
   });
-  renderPagination(data.page, data.pages);
+  renderPagination(data.page, data.pages, data.has_more);
 }
 
-function renderPagination(page, pages) {
+function renderPagination(page, pages, hasMore) {
   const pagination = $('pagination');
-  pagination.replaceChildren(); pagination.hidden = pages <= 1;
-  for (const [label, target, disabled] of [['previous', page - 1, page === 1], ['next', page + 1, page >= pages]]) {
+  pagination.replaceChildren(); pagination.hidden = pages === null ? page === 1 && !hasMore : pages <= 1;
+  for (const [label, target, disabled] of [['previous', page - 1, page === 1], ['next', page + 1, pages === null ? !hasMore : page >= pages]]) {
     const button = ce('button', 'page-control'); button.type = 'button'; button.textContent = label; button.disabled = disabled;
     button.addEventListener('click', () => doSearch(target, true, true));
     if (label === 'next') {
       const readout = ce('div', 'page-readout');
-      readout.innerHTML = `<span class="page-current">page ${n(page)}</span><span class="page-rule" aria-hidden="true"></span><span>${n(pages)} pages</span>`;
+      readout.innerHTML = `<span class="page-current">page ${n(page)}</span><span class="page-rule" aria-hidden="true"></span><span>${pages === null ? (hasMore ? 'next page available' : 'last page') : `${n(pages)} pages`}</span>`;
       pagination.appendChild(readout);
     }
     pagination.appendChild(button);

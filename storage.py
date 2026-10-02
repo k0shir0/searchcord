@@ -309,6 +309,7 @@ def init_database(path: str) -> dict:
             db.execute("CREATE INDEX IF NOT EXISTS idx_gd_id ON messages(guild_id,id) WHERE guild_id IS NOT NULL")
             db.execute("CREATE INDEX IF NOT EXISTS idx_au_id ON messages(author_id,id)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_authors_name ON authors(name COLLATE NOCASE)")
+            db.execute("CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username COLLATE NOCASE)")
 
             db.execute("""CREATE TABLE IF NOT EXISTS stats_counts (
                 kind TEXT NOT NULL, key TEXT NOT NULL, count INTEGER NOT NULL,

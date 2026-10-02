@@ -203,10 +203,12 @@ def profile_servers(db, uid, q, offset, limit, normalize):
     db.create_function('search_label', 1, normalize, deterministic=True)
     value = normalize(q).replace('%', '!%').replace('_', '!_')
     rows = db.execute("""SELECT s.guild_id id, COALESCE(g.name,'Unknown server') name,
-        COUNT(*) messages, CAST(record_id(MAX(m.rowid)) AS TEXT) latest_id
-        FROM message_index m JOIN message_sources s ON s.ref=m.source_id
+        SUM(m.messages) messages, CAST(record_id(MAX(m.latest)) AS TEXT) latest_id
+        FROM (SELECT source_id, COUNT(*) messages, MAX(rowid) latest
+              FROM message_index WHERE author_id=? GROUP BY source_id) m
+        JOIN message_sources s ON s.ref=m.source_id
         LEFT JOIN guilds g ON g.id=s.guild_id
-        WHERE m.author_id=? AND s.guild_id IS NOT NULL
+        WHERE s.guild_id IS NOT NULL
           AND (search_label(g.name) LIKE ? ESCAPE '!' OR s.guild_id=?)
         GROUP BY s.guild_id ORDER BY messages DESC, CAST(s.guild_id AS INTEGER)
         LIMIT ? OFFSET ?""", (ref[0], '%' + value + '%', q.strip(), limit+1, offset)).fetchall()

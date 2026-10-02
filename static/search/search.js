@@ -94,7 +94,7 @@ function messageAvatar(authorId, avatarUrl) {
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
     img.onload = () => avatar.replaceChildren(img);
-    img.onerror = fallback; img.src = avatarUrl;
+    img.onerror = fallback; avatar.appendChild(img); img.src = avatarUrl;
   }
   return avatar;
 }
