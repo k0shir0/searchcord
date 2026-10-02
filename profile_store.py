@@ -89,12 +89,14 @@ def profile_servers(db, uid, q='', offset=0, limit=30):
     db.create_function('search_label', 1, search_label, deterministic=True)
     pattern = '%' + search_label(q).replace('%', '!%').replace('_', '!_') + '%'
     rows = db.execute('''SELECT CAST(m.guild_id AS TEXT) AS id,
-        COALESCE(g.name, 'Unknown server') AS name, COUNT(*) AS messages,
-        CAST(MAX(m.id) AS TEXT) AS latest_id
-        FROM messages m LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
-        WHERE m.author_id=? AND m.guild_id IS NOT NULL
-          AND (search_label(g.name) LIKE ? ESCAPE '!' OR CAST(m.guild_id AS TEXT)=?)
-        GROUP BY m.guild_id ORDER BY messages DESC,m.guild_id LIMIT ? OFFSET ?''',
+        COALESCE(g.name, 'Unknown server') AS name, m.messages,
+        CAST(m.latest_id AS TEXT) AS latest_id
+        FROM (SELECT guild_id, COUNT(*) AS messages, MAX(id) AS latest_id
+              FROM messages WHERE author_id=? AND guild_id IS NOT NULL
+              GROUP BY guild_id) m
+        LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
+        WHERE search_label(g.name) LIKE ? ESCAPE '!' OR CAST(m.guild_id AS TEXT)=?
+        ORDER BY messages DESC,m.guild_id LIMIT ? OFFSET ?''',
         (int(uid), pattern, q.strip(), limit+1, offset)).fetchall()
     return {'servers': [dict(row) for row in rows[:limit]], 'has_more': len(rows)>limit, 'offset': offset}
 

@@ -73,7 +73,7 @@ class Archive:
                 db.close()
 
     def search(self, q="", guild_id=None, channel_id=None, author_id=None,
-               date_from=None, date_to=None, before=None, limit=40):
+               date_from=None, date_to=None, before=None, limit=40, refresh_images=False):
         started = time.perf_counter()
         q = q.strip()
         # A literal run preserves trigram acceleration, including queries with % or _.
@@ -136,9 +136,12 @@ class Archive:
                         f"https://cdn.discordapp.com/avatars/{message['author_id']}/{avatar}.png?size=64"
                         if isinstance(avatar, str) and re.fullmatch(r"(?:a_)?[A-Za-z0-9]+", avatar)
                         and str(message['author_id']).isdigit() else None)
-                    # No credential lookup, external fetch or expiring-link refresh in display mode.
+                    # Display mode never fetches credentials or refreshes expiring links.
                     urls = (message.pop("image_urls") or "").splitlines()
-                    message["attachments"] = [url for url in urls if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
+                    message["attachments"] = [
+                        f"/api/images/{message['id']}/{i}" if refresh_images else url
+                        for i, url in enumerate(urls)
+                        if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
                     messages.append(message)
         return {"messages": messages, "has_more": has_more,
                 "next_cursor": messages[-1]['id'] if has_more else None,
@@ -149,7 +152,10 @@ def create_app(path=None, immutable=None):
     directory = Path(os.environ.get("SEARCHCORD_DATA_DIR", "data")).expanduser()
     if not directory.is_absolute():
         directory = ROOT / directory
-    archive = Archive(path or directory / "searchcord.db", immutable if immutable is not None else os.environ.get("SEARCHCORD_IMMUTABLE") == "1")
+    database = Path(path or os.environ.get("SEARCHCORD_DB") or directory / "searchcord.db").expanduser()
+    if not database.is_absolute():
+        database = ROOT / database
+    archive = Archive(database, immutable if immutable is not None else os.environ.get("SEARCHCORD_IMMUTABLE") == "1")
     app = FastAPI(title="Searchcord display", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
@@ -228,9 +234,12 @@ app = create_app()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", type=Path, help="Directory containing searchcord.db")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--data-dir", type=Path, help="Directory containing searchcord.db")
+    source.add_argument("--db", type=Path, help="Path to an existing archive .db file")
     parser.add_argument("--snapshot", action="store_true", help="Read a closed, unchanging archive without creating SQLite sidecars")
     parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--host", default="127.0.0.1", help="Listen address (default: loopback only)")
     args = parser.parse_args()
     import uvicorn
-    uvicorn.run(create_app(args.data_dir / "searchcord.db" if args.data_dir else None, True if args.snapshot else None), host="127.0.0.1", port=args.port, access_log=False)
+    uvicorn.run(create_app(args.db or (args.data_dir / "searchcord.db" if args.data_dir else None), True if args.snapshot else None), host=args.host, port=args.port, access_log=False)

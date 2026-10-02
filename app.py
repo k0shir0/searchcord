@@ -24,6 +24,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database
 from profile_api import profile_router, collect_profile, ProfileStopped
+from search_app import Archive, MAX_ID
 
 # Resolve paths against this file, not the process working directory, so the
 # app behaves the same however it was launched.
@@ -1263,7 +1264,7 @@ def _snowflake_bound(value: str, upper: bool = False) -> int:
 
 @app.get("/api/search")
 async def search(
-    q: Optional[str] = None,
+    q: Annotated[Optional[str], Query(max_length=200)] = None,
     guild_id: Optional[str] = None,
     channel_id: Optional[str] = None,
     author_id: Optional[str] = None,
@@ -1271,7 +1272,14 @@ async def search(
     date_to: Optional[str] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: bool = False,
+    before: Annotated[Optional[int], Query(ge=1, le=MAX_ID)] = None,
 ):
+    if cursor:
+        result = await asyncio.to_thread(
+            Archive(DB_PATH).search, q or '', guild_id, channel_id, author_id,
+            date_from, date_to, before, limit, True)
+        return {"total": None, "pages": None, "page": page, "limit": limit, **result}
     conditions, params = [], []
     if q:
         if len(q) >= 3:
