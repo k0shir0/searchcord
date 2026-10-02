@@ -82,4 +82,6 @@ docker run --rm -p 127.0.0.1:8001:8001 \
 
 The container runs as an unprivileged user. The mounted directory must contain
 `searchcord.db` and be readable by that user. Use a closed snapshot. The
-Dockerfile is supplied for deployment convenience; check its build on your host.
+build context explicitly allows only the search runtime files; local archives,
+worktrees, credentials and collector assets are excluded. The Dockerfile is
+supplied for deployment convenience; check its build on your host.

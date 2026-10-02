@@ -82,8 +82,10 @@ async function boot() {
   if (params.has('search') || [...Object.keys(searchFields)].some(key => params.has(key))) {
     submittedSearch = new URLSearchParams(params);
     const cursor = params.get('cursor') === 'true';
-    searchCursors = [params.get('before')];
-    await doSearch(cursor ? 1 : Math.max(1, Number(params.get('page')) || 1), false, true);
+    const page = cursor && !params.has('before') ? 1 : Math.max(1, Number(params.get('page')) || 1);
+    searchCursors = [null];
+    if (cursor && params.has('before')) searchCursors[page - 1] = params.get('before');
+    await doSearch(page, false, true);
   }
   await switchView(view, true, false);
 }
@@ -1199,7 +1201,11 @@ function renderResults(data, query) {
 function renderPagination(page, pages, hasMore) {
   const pagination = $('pagination');
   pagination.replaceChildren(); pagination.hidden = pages === null ? page === 1 && !hasMore : pages <= 1;
-  for (const [label, target, disabled] of [['previous', page - 1, page === 1], ['next', page + 1, pages === null ? !hasMore : page >= pages]]) {
+  // Shared or reloaded links may lack earlier cursors. Never label a jump to
+  // the beginning as "previous" or silently reset the current page number.
+  const previousPage = pages === null && searchCursors[page - 2] === undefined ? 1 : page - 1;
+  const previousLabel = previousPage < page - 1 ? 'first page' : 'previous';
+  for (const [label, target, disabled] of [[previousLabel, previousPage, page === 1], ['next', page + 1, pages === null ? !hasMore : page >= pages]]) {
     const button = ce('button', 'page-control'); button.type = 'button'; button.textContent = label; button.disabled = disabled;
     button.addEventListener('click', () => doSearch(target, true, true));
     if (label === 'next') {

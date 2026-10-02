@@ -46,6 +46,10 @@ try {
   const screenshot=async name=>{await delay(220);const r=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});writeFileSync(path.join(output,name+'.png'),Buffer.from(r.data,'base64'));};
   const settled=`document.querySelector('#resultBody').getAttribute('aria-busy')==='false' && !document.querySelector('#results').hidden`;
   await command('Page.enable');await command('Runtime.enable');await command('Network.enable');
+  if (process.env.SEARCHCORD_OFFLINE_TEST === '1') {
+    await command('Network.setBlockedURLs', {urls: ['https://*']});
+    report.externalRequestsBlocked = true;
+  }
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await command('Page.navigate',{url:base});
   await until(`document.body?.dataset.archiveReady==='true'`);

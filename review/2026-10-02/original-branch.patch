@@ -1,0 +1,1198 @@
+diff --git a/README.md b/README.md
+index 8559f20..7be81f1 100644
+--- a/README.md
++++ b/README.md
+@@ -1,326 +1,143 @@
+-# Searchcord
+-
+-A local, self-hosted tool for archiving and searching Discord messages. Runs
+-entirely on your machine as a single FastAPI app with a browser UI — scrape
+-channels into SQLite, then search, filter, and chart what you collected.
+-
+-> **Read the [wrongful use warning](LICENSE) before running this.** This tool
+-> archives other people's private conversations, automating a user account
+-> against Discord's API violates their Terms of Service, and the risk is
+-> entirely yours. Use it on your own history or with the consent of the people
+-> involved.
+-
+----
+-
+-## Features
+-
+-- **Archived profiles**: click a result author for their saved Discord-style card,
+-  avatar, bio, connections and searchable server history. Fetch one extended
+-  profile from the card, or use **backfill saved profiles** near the top of Scrape to backfill
+-  existing authors with explicit start/stop controls. Rate limits and temporary
+-  failures wait and retry the same user; unavailable users are skipped. See
+-  [profiles](docs/profiles.md).
+-
+-- **Three workspaces**: Browse for local search, Scrape for channels, DMs,
+-  a shared collection queue and live monitoring, and Stats for archive exploration.
+-- **Queue and scrape** any number of channels at once, with an optional
+-  per-channel message cap, live per-channel counts and stopping in the queue, and an optional
+-  expanded-profile fetch for message authors.
+-- **Resume and update** channel archives from saved message cursors, without
+-  re-reading completed history on later scrape jobs.
+-- **Live monitor** channels and watch new messages stream in as they arrive.
+-- **Search** everything you have collected, filtered by server, channel,
+-  author, and date range, with match highlighting and pagination. Author
+-  suggestions are fetched as you type instead of loading the whole author list.
+-- **Bauhaus home** with an integrated search and expanding filter tray, indexed
+-  archive totals, cool outline geometry, and compact previous/next pagination.
+-  Search URLs preserve filters and page selection across reloads.
+-- **Stats**: one scrollable view, starting with searchable server and contributor
+-  leaderboards, then archive totals, server and channel charts, and daily,
+-  monthly, weekday, and hourly activity. Select a contributor, server, channel,
+-  date, or month to search its messages. Accessible data tables stay visible
+-  beneath every chart. Timeline windows end at the latest archived message.
+-- **ChatML export** — turn a conversation into a `.jsonl` file in the
+-  OpenAI/ChatML message format.
+-
+-Message text and image links are stored in one SQLite file at `data/searchcord.db`.
+-Image bytes are never downloaded into the database. Archive data stays local;
+-Chart.js is bundled locally, so charts work without a CDN connection.
+-
+----
+-
+-## Requirements
+-
+-- Python 3.9 or newer
+-- SQLite with the FTS5 trigram tokenizer (included in the tested Python build)
+-- A Discord token for collection; search-only display needs no token
+-
+-## Installation
++<p align="center">
++  <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
++</p>
++
++<p align="center">Archive Discord messages. Search them locally. Share a separate, read-only viewer.</p>
++
++<p align="center">
++  <a href="#get-started">Get started</a> ·
++  <a href="#search-only">Search only</a> ·
++  <a href="#your-data">Your data</a> ·
++  <a href="#release-timeline">Release timeline</a>
++</p>
++
++| Workspace | What you can do |
++| --- | --- |
++| Browse | Search message text, filter by server, channel, author or date, and open saved profiles. |
++| Scrape | Queue channels or DMs, resume collection, monitor new messages and save profiles. |
++| Stats | Explore activity and contributors, then open the matching messages. |
++| Search only | Run the viewer with an existing archive, without Discord credentials or collection controls. |
++
++## Get started
++
++Use **Python 3.12 or newer** with SQLite's FTS5 trigram support.
++Collection requires a Discord token. Searching an existing archive does not.
++Read the [use warning in the license](LICENSE) before collecting data.
+ 
+ ```bash
+ git clone https://github.com/k0shir0/searchcord.git
+ cd searchcord
+-pip install -r requirements.txt
++python -m venv .venv
+ ```
+ 
+-## Running
+-
+-### Search-only display
+-
+-Run the separate frontend against an existing schema v9 archive:
++Activate the environment:
+ 
+ ```bash
+-python search_app.py --data-dir /path/to/archive-directory
++# Linux / macOS
++source .venv/bin/activate
+ ```
+ 
+-Open <http://127.0.0.1:8001>. `start-search.bat` accepts the same arguments on
+-Windows. The frontend keeps the existing search, filters, profiles and theme.
+-Results load 50 at a time with public message-ID cursors, literal highlighting,
+-full text, and inclusive UTC dates. Saved profiles are read locally; profile
+-collection stays in the main application.
++```bat
++:: Windows Command Prompt
++.venv\Scripts\activate
++```
+ 
+-For a smaller deployment file, export the collector archive into a **new** directory:
++Install and start:
+ 
+ ```bash
+-python search_snapshot.py /path/to/collector/searchcord.db packed/searchcord.db --report packed/build-report.json
+-python search_app.py --data-dir packed --snapshot
++python -m pip install -r requirements.txt
++python app.py
+ ```
+ 
+-This schema v101 search snapshot preserves message text, IDs, historical names,
+-exact timestamps, image links and saved profiles. It compresses blocks of 128
+-messages and keeps separate substring indexes, including short queries. The
+-verified 5,574,147-message archive uses **118.31 bytes/message instead of 260.03**,
+-a **54.5% reduction**. Settings, tokens and collection cursors are omitted.
+-Existing output files and reports are never overwritten. The exporter opens the
+-source read-only and pins a coherent read transaction, including pending WAL data.
++Open <http://127.0.0.1:8000>. Windows users can also run `start.bat`.
++A first upgrade of a large archive may take several minutes. The browser opens
++when the database is ready.
++
++## Use SearchCord
+ 
+-SQLite's optional `dbstat` extension supplies the per-table storage breakdown.
+-If unavailable, the exporter still measures total bytes and verifies all data;
+-the report's `source_pages` and `snapshot_pages` fields are `null`.
++1. Open the settings gear, name your Discord token and select **save & use token**.
++2. Open **Scrape**, select **connect Discord**, then choose channels or direct messages.
++3. Add conversations to the queue and select **start scraping**. Leave the message
++   limit blank for full history. Later runs resume or collect newer messages.
++4. Open **Browse** to search. Choose filter suggestions or paste Discord IDs.
++   Date filters use UTC and include the selected end date.
+ 
+-The packed file stays unchanged while being served. Export a new snapshot after
+-collecting more messages or profiles, then restart the display app with its new
+-directory. Use the original schema v9 file for the collection app.
++Click a message author to open their saved profile. **Fetch expanded profiles**
++saves missing profile details during collection; **backfill saved profiles**
++collects details for authors already in the archive. Both can be stopped.
+ 
+-Normal display mode also supports a schema v9 archive being updated by a collector.
+-`--snapshot` enables SQLite immutable mode for a closed, unchanging archive and
+-rejects a nonempty WAL. Neither display mode runs migrations, reads saved tokens,
+-or exposes collection, settings, deletion or export routes. The service binds to
+-loopback; API responses use `no-store`. Valid saved avatars load lazily from
+-Discord, and saved image links open their original URLs without credential-based
+-refresh. Those URLs may have expired.
++Search results load one page at a time. Collection retries temporary failures
++and keeps saved messages when stopped. Message IDs prevent duplicate records.
+ 
+-See [search storage and latency measurements](SEARCH-ONLY-SCALE-RESULTS.md) for
+-the storage breakdown, first-request costs, HTTP and browser checks, and repeatable
+-commands.
++## Search only
+ 
+-### Collection and archive administration
++Run the separate frontend in `static/search` with an existing SearchCord archive:
+ 
+ ```bash
+-python app.py
++python search_app.py --db /path/to/archive.db
+ ```
+ 
+-The app starts on <http://127.0.0.1:8000> and opens your browser when it is
+-ready. On Windows you can double-click `start.bat` instead. A first database
+-upgrade can take several minutes for a large archive; the console reports
+-progress every 30 seconds, and the port opens after the upgrade completes.
+-If the port is already in use, this launch reports an error instead of opening
+-another Searchcord instance.
++Open <http://127.0.0.1:8001>. You can also use
++`--data-dir /path/to/folder` when the file is named `searchcord.db`.
++Windows users can pass the same arguments to `start-search.bat`.
++Without either option, the reader opens `data/searchcord.db`.
+ 
+-It binds to loopback only. There is **no authentication** — anyone who can
+-reach the port gets your token and your entire archive — so only change the
+-host if you understand that:
++For a smaller file to deploy, export to a **new** destination:
+ 
+ ```bash
+-SEARCHCORD_HOST=0.0.0.0 SEARCHCORD_PORT=8000 python app.py
++python search_snapshot.py data/searchcord.db packed/searchcord.db
++python search_app.py --data-dir packed --snapshot
+ ```
+ 
+-## First run
+-
+-Search your local archive straight from the home page, without connecting to
+-Discord. Select server, channel, and author suggestions or paste their IDs.
+-Date filters use UTC and include the entire selected end date. Clear filters
+-keeps the text query. Queries and filter IDs appear in the browser URL.
++The export preserves message text, names, timestamps, image links and saved
++profiles. It excludes saved tokens and collection settings. After collecting
++more data, export a new file and restart the viewer against it.
++Use the original database for collection.
+ 
+-For collection, use the outline gear beside the wordmark, give each Discord
+-token a name, and choose **save & use token**. The saved-token menu lets you
+-switch accounts without re-entering credentials. Open **Scrape** and use
+-**connect Discord** to load servers with the selected token. Switch between **channels** and
+-**direct messages**, filter by name, and use the labeled queue/monitor/export
+-controls. Live monitoring and its incoming feed remain in the same workspace.
++To prepare a standalone folder containing only the search service and its assets:
+ 
+-### Data directory
+-
+-The default database is `data/searchcord.db`, resolved relative to the application
+-directory, independently of the working directory. To use another archive, set
+-`SEARCHCORD_DATA_DIR` to its directory before starting the server. Relative paths
+-are resolved against the application directory. No private machine path is
+-embedded in the application. For example, in PowerShell:
+-
+-```powershell
+-$env:SEARCHCORD_DATA_DIR = 'data/my-archive'
+-python app.py
+-```
+-
+-Opening an older archive runs the storage migration described below. For testing
+-an existing archive, use a separate copy first. Keep database directories and
+-exports out of version control.
+-
+-To scrape: use **queue** beside a channel or conversation, optionally set a
+-**Messages per channel** limit, then **start scraping**. Leave the limit blank to pull the
+-full history. The queue shows the current channel, messages saved per channel,
+-the total, and a stop button while the job runs. You can keep using the rest of
+-the workspace without closing a progress dialog. Later jobs fetch only messages
+-newer than each channel's saved cursor. If a first run is limited or stopped, a
+-later job can resume the remaining older history. Check **fetch expanded
+-profiles** to save each newly encountered user's extended profile immediately
+-after its message page is committed, before requesting another page. The toggle
+-is off by default; saved extended profiles are not fetched again, and webhooks
+-are skipped. Earlier missing profiles can be collected with **backfill saved
+-profiles**. Profile waits show their retry/cooldown and can be stopped without
+-losing saved work. Searchcord stores the
+-documented public user fields needed for identity and appearance, including
+-username, display name, avatar/banner hashes, accent color, bot flag, and
+-public flags.
+-
+-Temporary Discord/network failures and SQLite busy errors pause the scrape and
+-retry the same page with a 2–60 second backoff (longer when Discord asks for it).
+-The progress panel shows the retry, and **stop scraping** still works during the
+-wait. The terminal logs the job, channel ID, cursor, retry count, and failure
+-type without printing tokens or message contents. Permanent access errors are
+-shown for that channel; saved cursors and the queue remain available to resume.
+-
+-Message IDs are unique in the archive. If Discord returns an overlapping page,
+-existing IDs are ignored by SQLite; only newly inserted messages increase the
+-scrape count, archive totals, and search index. An extra database lookup or
+-message cache is not needed for this check.
+-
+-Archives created before the cursor migration resume older history from their
+-oldest stored message. The old schema did not record whether a scrape finished,
+-so the next job makes one older-history request even for an archive that was
+-already complete. A stopped or capped job also retains a pending gap of new
+-messages so the next job can fill it without walking completed history.
+-
+----
+-
+-## Project structure
+-
+-```
+-searchcord/
+-├── app.py             # FastAPI backend — API, scraper, live poller, export
+-├── storage.py         # SQLite schema, backup, migration
+-├── search_app.py      # Separate read-only search frontend
+-├── search_snapshot.py # Lossless packed snapshot exporter and reader
+-├── requirements.txt
+-├── start.bat          # Windows launcher
+-├── static/
+-│   ├── index.html
+-│   ├── app.js         # Frontend logic
+-│   ├── stats.js       # Contributor pagination, charts and drilldowns
+-│   ├── workspace.css  # Production three-view layout
+-│   ├── vendor/        # Pinned Chart.js and its license
+-│   └── style.css      # Base controls, extended by the Bauhaus styles
+-└── data/              # Created at runtime — gitignored, never commit
+-    └── searchcord.db
++```bash
++python deploy/search/package.py dist/searchcord-search
+ ```
+ 
+----
+-
+-## Data & privacy
+-
+-`data/searchcord.db` contains **your saved Discord tokens in plaintext** in the
+-`settings` table, alongside every message you have scraped. Only token names
+-and IDs are returned to the browser for the saved-token menu; new tokens are
+-sent to the local app when you save them. A one-time schema
+-migration creates a recovery backup named
+-`data/searchcord.db.pre-compact-*.bak.gz` (or `.bak` if compression fails)
+-that also contains the token and archived messages. The backup stays in place
+-after verification; remove it only after checking the upgraded archive and
+-keeping any recovery copy you need. Decompress `.bak.gz` before opening it with
+-SQLite. The `data/`
+-directory is gitignored for that reason. Do not commit it, do not share it,
+-and delete it when you are done. **Clear All Data** asks for a second click
+-inside the button before it wipes archived messages and derived metadata.
+-Saved tokens remain; deleting the database file removes them too.
+-
+-The search-only frontend owns the **privacy & data** page and footer link.
+-The page currently contains only its title and a
+-return link to the Searchcord home page that also works when opened as a local
+-file. This README holds the current data-handling details; the page is
+-not a completed privacy policy.
+-
+-The first start after upgrading makes the backup and assigns small internal row
+-numbers to reduce search-index storage. Discord message IDs stay unchanged and
+-still order results correctly when older history is collected later. Message
+-text, IDs, and historical per-message names are checked before the old table is
+-replaced. Original timestamps are reproduced exactly from message IDs where
+-possible; exceptions remain stored. Older raw attachment metadata is removed
+-from the active database, while image links used by the app remain available.
+-SQLite and full-text-index integrity checks run after migration. Allow several
+-gigabytes of temporary disk headroom while the original, backup, migration
+-journal, and compact file coexist. Later starts skip migration. Historical
+-names or attachment fields already discarded by an earlier compact migration
+-can only be recovered from an original archive or older backup.
+-
+-Search results and the live feed send short local image links. Opening an image
+-redirects to its stored Discord URL; if its signature has expired, Searchcord
+-fetches that message once to get a fresh link. Refresh requires a valid token
+-and access to the original message. Discord's [signed attachment URLs](https://github.com/discord/discord-api-docs/blob/main/developers/reference.mdx#signed-attachment-cdn-urls)
+-expire, so link-only storage cannot preserve an image after its message becomes
+-unavailable. Non-image attachments are not stored in new archives.
+-
+-The search snapshot contains the preserved message data and saved profiles, so
+-it remains private archive data even though it excludes saved tokens. It is a
+-separate deployment file; it does not replace or migrate the collection archive.
+-API responses use gzip when supported. Message blocks are compressed at rest,
+-and index candidates are checked against full decoded content with the original
+-literal substring rules. The server retains a bounded cache of 64 decoded blocks
+-across requests, plus small per-connection caches.
+-
+-If you ever push this database anywhere by accident, treat your token as
+-compromised and reset it immediately by changing your Discord password.
+-
+-## License
+-
+-MIT, with a wrongful use warning — see [LICENSE](LICENSE).
++Copy that folder and your chosen database to the server. Follow the included
++[deployment guide](deploy/search/README.md) for setup and container commands.
++The viewer needs a Python server; a static host cannot run it on its own.
++
++## Your data
++
++- The collector stores messages, profiles and saved tokens in `data/searchcord.db`.
++  Tokens are stored in plaintext. Keep the database and its backups private.
++- To change the collector's location, set `SEARCHCORD_DATA_DIR` before launching.
++  The search service also accepts `SEARCHCORD_DB` for a specific file.
++  Relative paths resolve against the application folder.
++- Both apps start on loopback and have no built-in login. Put access control and
++  HTTPS in front of a hosted viewer. Share only data you are entitled to share.
++- Images remain on Discord. The database stores links, not image files.
++  The collector can refresh expired links when your token still has access;
++  the search-only viewer cannot.
++- An older archive upgrade keeps a recovery backup. Allow extra disk space and
++  check the upgraded archive before removing a backup.
++- **Clear All Data** removes archived messages and derived metadata after
++  confirmation. Saved tokens remain.
+ 
+ ## Release timeline
+ 
+-### 2026-09-29
+-
+-- Added verified, compressed search-only snapshots and short-query indexing,
+-  reducing the measured archive to 118.31 bytes per message.
+-- Save missing extended profiles as each message page is collected, retry the
+-  same user through temporary failures, and keep backfill stoppable during
+-  requests and Discord cooldowns.
+-
+-### 2026-09-25
++These are dated project updates. See [GitHub Releases](https://github.com/k0shir0/searchcord/releases)
++for published release packages.
++
++| Date | Update |
++| --- | --- |
++| 2026-10-02 | Faster Browse pagination and profile history queries, a standalone search package, refreshed setup guide and SearchCord logo. |
++| 2026-09-30 | Verified compressed search snapshots, short-query indexes and support for stock SQLite exports. |
++| 2026-09-29 | Save profiles during collection, retry temporary failures and stop profile backfill safely. |
++| 2026-09-28 | More resilient scrape retries, resume-safe queues and duplicate checks. |
++| 2026-09-25 | Smaller archive storage with verified backups and preserved message history. |
++| 2026-09-24 | Unified Scrape workspace, contributor rankings and activity charts. |
++| 2026-09-23 | Bauhaus search layout, expanding filters and resumable collection. |
++| 2026-07-23 | Combined the scraper and viewer in one FastAPI app with SQLite. |
++| 2025-09-20 | First Discord scraper and Flask viewer for JSON archives. |
+ 
+-- Reduced full-archive storage by packing the search index, reconstructing exact
+-  timestamps, compressing verified recovery backups, and removing unused raw
+-  attachment metadata while retaining historical per-message names, IDs, text,
+-  and image links.
+-
+-### 2026-09-24
+-
+-- Unified channels, DMs, the collection queue, and live monitoring in the new
+-  Bauhaus Scrape workspace.
+-- Added searchable contributor rankings and six interactive, offline-ready
+-  charts with search drilldowns and accessible data tables.
+-
+-### 2026-09-23
+-
+-- Promoted the Bauhaus home design with integrated search, expanding filters,
+-  real archive totals, and shareable search URLs.
+-- Added resumable incremental collection, optional profile harvesting, indexed
+-  substring search, and cached statistics for large archives.
+-
+-### 2026-07-23
+-
+-- Replaced the separate scraper and search scripts with one self-hosted FastAPI
+-  application and SQLite archive, including live monitoring and ChatML export.
+-
+-### 2025-09-20
++## License
+ 
+-- Introduced the Discord scraper and Flask search interface for per-channel
+-  JSON datasets, message search, and paginated conversation results.
++[MIT, with a wrongful use warning](LICENSE).
+diff --git a/app.py b/app.py
+index f67361c..e224ba6 100644
+--- a/app.py
++++ b/app.py
+@@ -24,6 +24,7 @@ from fastapi.middleware.gzip import GZipMiddleware
+ from pydantic import BaseModel, Field
+ from storage import EPOCH_MS, image_urls, init_database
+ from profile_api import profile_router, collect_profile, ProfileStopped
++from search_app import Archive, MAX_ID
+ 
+ # Resolve paths against this file, not the process working directory, so the
+ # app behaves the same however it was launched.
+@@ -1263,7 +1264,7 @@ def _snowflake_bound(value: str, upper: bool = False) -> int:
+ 
+ @app.get("/api/search")
+ async def search(
+-    q: Optional[str] = None,
++    q: Annotated[Optional[str], Query(max_length=200)] = None,
+     guild_id: Optional[str] = None,
+     channel_id: Optional[str] = None,
+     author_id: Optional[str] = None,
+@@ -1271,7 +1272,14 @@ async def search(
+     date_to: Optional[str] = None,
+     page: Annotated[int, Query(ge=1)] = 1,
+     limit: Annotated[int, Query(ge=1, le=100)] = 50,
++    cursor: bool = False,
++    before: Annotated[Optional[int], Query(ge=1, le=MAX_ID)] = None,
+ ):
++    if cursor:
++        result = await asyncio.to_thread(
++            Archive(DB_PATH).search, q or '', guild_id, channel_id, author_id,
++            date_from, date_to, before, limit, True)
++        return {"total": None, "pages": None, "page": page, "limit": limit, **result}
+     conditions, params = [], []
+     if q:
+         if len(q) >= 3:
+diff --git a/checks/benchmark_review.py b/checks/benchmark_review.py
+new file mode 100644
+index 0000000..8afec92
+--- /dev/null
++++ b/checks/benchmark_review.py
+@@ -0,0 +1,125 @@
++"""Reproduce read latency on synthetic data, never a personal Discord archive.
++
++python checks/benchmark_review.py /new/fixture --rows 9000000 --report /new/results.json
++Bulk fixture construction bypasses ingestion triggers, then rebuilds the same
++indexes and counters. Build time is not a collector-throughput benchmark.
++"""
++import argparse
++import asyncio
++import json
++import platform
++import sqlite3
++import statistics
++import sys
++import time
++from contextlib import closing
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++import app
++from profile_store import profile_servers
++from storage import init_database
++
++
++def create(path, rows):
++    if path.exists():
++        with sqlite3.connect(path) as db:
++            if db.execute('SELECT COUNT(*) FROM messages').fetchone()[0] != rows:
++                raise ValueError('Existing fixture has a different row count; use a new directory.')
++        return
++    path.parent.mkdir(parents=True, exist_ok=True)
++    init_database(str(path))
++    with closing(sqlite3.connect(path)) as db, db:
++        triggers = db.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger'").fetchall()
++        for name, _ in triggers:
++            db.execute('DROP TRIGGER "' + name + '"')
++        db.executemany('INSERT INTO guilds VALUES (?,?)', [(str(100+i), f'Example server {i}') for i in range(20)])
++        db.executemany('INSERT INTO channels VALUES (?,?,?)', [(str(200+i),str(100+i%20),f'channel-{i}') for i in range(100)])
++        db.executemany('INSERT INTO authors(id,name) VALUES (?,?)', [(str(i),f'Example author {i}') for i in range(50,10050)])
++        db.executemany('INSERT INTO profiles(user_id,username,fetched_at) VALUES (?,?,?)', [(str(i),f'user{i}','2026-10-02') for i in range(50,10050)])
++        for start in range(0, rows, 100000):
++            batch = ((1000000000000000000+i*4194304, 200+i%100,100+i%20,
++                      50 if i%4==0 else 50+i%10000,
++                      ('release notes ' if i%10007==0 else 'hello ' if i%5==0 else '')+
++                      f'Synthetic archive message {i} with ordinary searchable text.')
++                     for i in range(start,min(start+100000,rows)))
++            db.executemany('INSERT INTO messages(id,channel_id,guild_id,author_id,content) VALUES (?,?,?,?,?)',batch)
++            print(f'Inserted {min(start+100000,rows):,}',flush=True)
++        print('Rebuilding FTS and counters',flush=True)
++        db.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
++        db.execute("INSERT INTO messages_fts(messages_fts) VALUES ('optimize')")
++        db.execute("INSERT INTO stats_counts VALUES ('total','',?)",(rows,))
++        for kind,expr in [('guild','guild_id'),('channel','channel_id'),('author','author_id'),
++                          ('day',"date(((id >> 22)+1420070400000)/1000.0,'unixepoch')"),
++                          ('hour',"strftime('%H',((id >> 22)+1420070400000)/1000.0,'unixepoch')")]:
++            db.execute(f'INSERT INTO stats_counts SELECT ?,CAST({expr} AS TEXT),COUNT(*) FROM messages GROUP BY {expr}',(kind,))
++        for _,sql in triggers:
++            db.execute(sql)
++        db.commit()
++        db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
++        db.execute('ANALYZE')
++        db.commit()
++        db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
++
++
++def measure(fn, rounds):
++    timings=[]
++    for _ in range(rounds):
++        start=time.perf_counter();result=fn();timings.append((time.perf_counter()-start)*1000)
++    return {'median_ms':round(statistics.median(timings),3),'max_ms':round(max(timings),3),'samples_ms':[round(v,3) for v in timings]},result
++
++
++def run(path, rounds):
++    app.DB_PATH=str(path)
++    report={'python':platform.python_version(),'sqlite':sqlite3.sqlite_version,'rounds':rounds,
++            'cache':'Fresh SQLite connections; OS cache not flushed; sequential in-process calls, not HTTP.',
++            'database_bytes':path.stat().st_size,'queries':[]}
++    with sqlite3.connect(path) as db:
++        report['messages']=db.execute('SELECT COUNT(*) FROM messages').fetchone()[0]
++        report['profile_index_bytes']=db.execute("SELECT SUM(pgsize) FROM dbstat WHERE name='idx_profiles_username'").fetchone()[0]
++    for name,filters in [('browse',{}),('common',{'q':'hello'}),('phrase',{'q':'release notes'}),
++                         ('absent',{'q':'zzzzunlikelymatch'}),('author',{'author_id':'50'}),
++                         ('combined',{'q':'hello','author_id':'50'})]:
++        old,a=measure(lambda filters=filters:asyncio.run(app.search(**filters,limit=50)),rounds)
++        new,b=measure(lambda filters=filters:asyncio.run(app.search(**filters,limit=50,cursor=True)),rounds)
++        assert [m['id'] for m in a['messages']]==[m['id'] for m in b['messages']]
++        report['queries'].append({'class':name,'legacy':old,'cursor':new,'same_ids':True})
++        print(name,old['median_ms'],new['median_ms'],flush=True)
++    # The original profile query from reviewed base 6ee9255.
++    def legacy_profile(db, uid):
++        from profile_store import search_label
++        db.row_factory=sqlite3.Row
++        db.create_function('search_label',1,search_label,deterministic=True)
++        rows=db.execute("""SELECT CAST(m.guild_id AS TEXT) AS id,
++            COALESCE(g.name, 'Unknown server') AS name, COUNT(*) AS messages,
++            CAST(MAX(m.id) AS TEXT) AS latest_id
++            FROM messages m LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
++            WHERE m.author_id=? AND m.guild_id IS NOT NULL
++              AND (search_label(g.name) LIKE ? ESCAPE '!' OR CAST(m.guild_id AS TEXT)=?)
++            GROUP BY m.guild_id ORDER BY messages DESC,m.guild_id LIMIT ? OFFSET ?""",
++            (int(uid),'%%','',31,0)).fetchall()
++        return {'servers':[dict(row) for row in rows[:30]],'has_more':len(rows)>30,'offset':0}
++    def profiles(fn):
++        with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True)) as db:
++            return fn(db,'50')
++    old,a=measure(lambda:profiles(legacy_profile),rounds)
++    new,b=measure(lambda:profiles(profile_servers),rounds)
++    assert a==b
++    report['profiles']={'legacy':old,'group_first':new,'same_results':True}
++    return report
++
++
++if __name__=='__main__':
++    parser=argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('directory',type=Path)
++    parser.add_argument('--rows',type=int,default=1000000)
++    parser.add_argument('--rounds',type=int,default=5)
++    parser.add_argument('--report',type=Path,required=True)
++    args=parser.parse_args()
++    if args.rows<1 or not 1<=args.rounds<=20 or args.report.exists():
++        parser.error('Use positive rows, 1-20 rounds and a new report path.')
++    path=args.directory.resolve()/'searchcord.db'
++    create(path,args.rows)
++    report=run(path,args.rounds)
++    args.report.write_text(json.dumps(report,indent=2)+'\n')
++    print(json.dumps(report,indent=2))
+diff --git a/checks/test_browse_cursor.mjs b/checks/test_browse_cursor.mjs
+new file mode 100644
+index 0000000..a1fa93f
+--- /dev/null
++++ b/checks/test_browse_cursor.mjs
+@@ -0,0 +1,70 @@
++// Behavioral checks without browser layout or network dependencies.
++// node checks/test_browse_cursor.mjs
++import assert from 'node:assert/strict';
++import {readFileSync} from 'node:fs';
++import vm from 'node:vm';
++
++class Element {
++  value = ''; children = []; attributes = {}; hidden = false;
++  classList = {toggle() {}, add() {}, remove() {}};
++  setAttribute(key, value) { this.attributes[key] = value; }
++  removeAttribute(key) { delete this.attributes[key]; }
++  setCustomValidity() {} reportValidity() {} focus() {} scrollIntoView() {}
++  addEventListener() {}
++  appendChild(child) { child.parent = this; this.children.push(child); }
++  append(...children) { children.forEach(child => this.appendChild(child)); }
++  replaceChildren(...children) { this.children = []; this.append(...children); }
++}
++const nodes = new Map();
++const document = {
++  addEventListener() {}, querySelectorAll: () => [],
++  getElementById(id) { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); },
++  createElement: () => new Element(),
++};
++const requests = [];
++const responses = [];
++const context = vm.createContext({document, URLSearchParams, AbortController, Intl,
++  Image: Element, location: {pathname: '/', search: '', hash: ''},
++  history: {replaceState() {}}, matchMedia: () => ({matches: true}),
++  fetch: async url => {
++    requests.push(new URL(url, 'http://localhost'));
++    return {ok: true, json: async () => responses.shift()};
++  },
++});
++vm.runInContext(readFileSync(new URL('../static/app.js', import.meta.url), 'utf8'), context);
++vm.runInContext('switchView = async () => {}; renderResults = data => { globalThis.result = data; };', context);
++const run = code => vm.runInContext(code, context);
++const page = next => ({total: null, pages: null, page: 1, limit: 50, messages: [], has_more: !!next, next_cursor: next});
++document.getElementById('searchInput').value = 'hello';
++responses.push(page('100')); await run('doSearch(1)');
++assert.equal(requests.at(-1).searchParams.get('cursor'), 'true');
++assert.equal(requests.at(-1).searchParams.has('before'), false);
++responses.push(page('50')); await run('doSearch(2, false, true)');
++assert.equal(requests.at(-1).searchParams.get('before'), '100');
++responses.push(page('100')); await run('doSearch(1, false, true)');
++assert.equal(requests.at(-1).searchParams.has('before'), false);
++document.getElementById('searchInput').value = 'new query';
++responses.push(page(null)); await run('doSearch(1)');
++assert.equal(requests.at(-1).searchParams.get('q'), 'new query');
++assert.equal(requests.at(-1).searchParams.has('before'), false);
++run("submittedSearch = new URLSearchParams('q=hello&page=3');");
++responses.push({total: 200, pages: 4, page: 3, messages: []}); await run('doSearch(3, false, true)');
++assert.equal(requests.at(-1).searchParams.get('page'), '3');
++assert.equal(requests.at(-1).searchParams.has('cursor'), false);
++run('renderPagination(1, null, true)');
++assert.equal(nodes.get('pagination').children.at(-1).disabled, false);
++run('renderPagination(2, null, false)');
++assert.equal(nodes.get('pagination').children.at(-1).disabled, true);
++assert.equal(nodes.get('pagination').children[0].disabled, false);
++for (const path of ['../static/app.js', '../static/search/search.js']) {
++  const source = readFileSync(new URL(path, import.meta.url), 'utf8');
++  run('globalThis.element = ce;');
++  const start = source.indexOf('function messageAvatar(');
++  const end = source.indexOf('\n}\n', start) + 3;
++  vm.runInContext(source.slice(start, end), context);
++  const avatar = run("messageAvatar('50', 'https://cdn.discordapp.com/test.png')");
++  assert.equal(avatar.children.length, 1, path + ': lazy image is attached before loading');
++  const image = avatar.children[0]; image.onload();
++  assert.equal(avatar.children[0], image);
++}
++console.log('PASS: cursor next/previous/reset, legacy page links, pagination controls and attached lazy avatars in both frontends. DOM model only; no browser layout validation.');
+diff --git a/checks/test_review_changes.py b/checks/test_review_changes.py
+new file mode 100644
+index 0000000..37a0716
+--- /dev/null
++++ b/checks/test_review_changes.py
+@@ -0,0 +1,83 @@
++"""Regressions for bounded collector search and standalone packaging."""
++import hashlib
++import importlib.util
++import os
++import sqlite3
++import tempfile
++import unittest
++from contextlib import closing
++from pathlib import Path
++from unittest.mock import patch
++
++from fastapi.testclient import TestClient
++
++import app
++import profile_store
++from search_app import create_app
++from storage import init_database
++
++
++class ReviewTests(unittest.TestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.path = Path(self.temp.name) / 'archive.db'
++        init_database(str(self.path))
++        with closing(sqlite3.connect(self.path)) as db, db:
++            db.execute("INSERT INTO authors(id,name) VALUES ('50','Example')")
++            db.execute("INSERT INTO guilds VALUES ('10','🌿 Garden')")
++            for i in range(120):
++                db.execute('INSERT INTO messages(id,guild_id,author_id,content,image_urls) VALUES (?,?,?,?,?)',
++                           (1000000000000000000+i,10 if i%2 else 20,50,
++                            'literal %_ marker' if i==0 else 'hello',
++                            'javascript:bad\nhttps://cdn.discordapp.com/attachments/image.png'))
++        self.patch = patch.object(app,'DB_PATH',str(self.path)); self.patch.start()
++        self.client = TestClient(app.app)
++
++    def tearDown(self):
++        self.client.close(); self.patch.stop(); self.temp.cleanup()
++
++    def test_cursor_compatibility_validation_and_attachment_positions(self):
++        legacy = self.client.get('/api/search',params={'q':'hello','limit':7}).json()
++        first = self.client.get('/api/search',params={'q':'hello','limit':7,'cursor':True}).json()
++        self.assertEqual([m['id'] for m in legacy['messages']],[m['id'] for m in first['messages']])
++        self.assertEqual(legacy['total'],119); self.assertIsNone(first['total'])
++        self.assertTrue(first['messages'][0]['attachments'][0].endswith('/1'))
++        ids=[]; before=None
++        while True:
++            result = self.client.get('/api/search',params={'cursor':True,'limit':7,**({'before':before} if before else {})}).json()
++            ids.extend(m['id'] for m in result['messages'])
++            if not result['has_more']: break
++            before=result['next_cursor']
++        self.assertEqual(len(ids),120); self.assertEqual(len(set(ids)),120)
++        literal=self.client.get('/api/search',params={'cursor':True,'q':'%_'}).json()
++        self.assertEqual(len(literal['messages']),1)
++        for params,status in [({'cursor':True,'before':-1},422),({'cursor':True,'q':'x'*201},422),({'cursor':True,'author_id':'name'},400)]:
++            self.assertEqual(self.client.get('/api/search',params=params).status_code,status)
++
++    def test_profile_aggregation_preserves_unknown_guilds_and_limits_work(self):
++        with patch.object(profile_store,'search_label',wraps=profile_store.search_label) as normalize, closing(sqlite3.connect(self.path)) as db:
++            result=profile_store.profile_servers(db,'50',limit=1)
++            self.assertTrue(result['has_more'])
++            self.assertEqual(result['servers'][0]['messages'],60)
++            self.assertEqual(normalize.call_count,3)
++            self.assertEqual(profile_store.profile_servers(db,'50','Garden')['servers'][0]['id'],'10')
++            self.assertEqual(profile_store.profile_servers(db,'50',offset=1)['servers'][0]['name'],'Unknown server')
++
++    def test_explicit_database_environment_is_readonly_and_has_no_admin_routes(self):
++        before=hashlib.sha256(self.path.read_bytes()).digest()
++        with patch.dict(os.environ,{'SEARCHCORD_DB':str(self.path)}), TestClient(create_app(immutable=True)) as client:
++            self.assertEqual(client.get('/api/summary').json()['messages'],120)
++            for route in ['/archive.db','/data/searchcord.db','/api/settings','/app.js']:
++                self.assertEqual(client.get(route).status_code,404)
++        self.assertEqual(before,hashlib.sha256(self.path.read_bytes()).digest())
++
++    def test_package_is_allowlisted_and_never_overwrites(self):
++        source=Path(__file__).resolve().parents[1]/'deploy/search/package.py'
++        spec=importlib.util.spec_from_file_location('search_package',source)
++        package=importlib.util.module_from_spec(spec); spec.loader.exec_module(package)
++        target=package.build(Path(self.temp.name)/'bundle')
++        self.assertTrue((target/'static/search/index.html').is_file())
++        self.assertFalse((target/'app.py').exists())
++        self.assertEqual(list((target/'data').iterdir()),[])
++        self.assertEqual(len(list(target.rglob('*.db'))),0)
++        with self.assertRaises(FileExistsError): package.build(target)
+diff --git a/deploy/search/Dockerfile b/deploy/search/Dockerfile
+new file mode 100644
+index 0000000..a8d9016
+--- /dev/null
++++ b/deploy/search/Dockerfile
+@@ -0,0 +1,9 @@
++FROM python:3.12-slim
++WORKDIR /app
++COPY deploy/search/requirements.txt /app/requirements.txt
++RUN pip install --no-cache-dir -r requirements.txt
++COPY search_app.py search_snapshot.py profile_store.py /app/
++COPY static /app/static
++USER 65534:65534
++EXPOSE 8001
++CMD ["python", "search_app.py", "--host", "0.0.0.0", "--snapshot"]
+diff --git a/deploy/search/Dockerfile.dockerignore b/deploy/search/Dockerfile.dockerignore
+new file mode 100644
+index 0000000..ccb675e
+--- /dev/null
++++ b/deploy/search/Dockerfile.dockerignore
+@@ -0,0 +1,7 @@
++data
++*.db
++*.db-*
++.git
++.venv
++.env*
++**/__pycache__
+diff --git a/deploy/search/README.md b/deploy/search/README.md
+new file mode 100644
+index 0000000..2a09a77
+--- /dev/null
++++ b/deploy/search/README.md
+@@ -0,0 +1,85 @@
++# Search-only deployment
++
++This package serves the frontend in `static/search` and reads one SearchCord
++archive. It includes no collector, Discord login, settings or deletion routes.
++A Python server is required. Uploading the HTML and a database to a static host
++will not make the database searchable.
++
++## Run an existing archive
++
++Use Python 3.12 or newer. From the package root:
++
++```bash
++python -m venv .venv
++# Windows: .venv\Scripts\activate
++# Linux / macOS: source .venv/bin/activate
++python -m pip install -r deploy/search/requirements.txt
++python search_app.py --db /path/to/archive.db
++```
++
++Open <http://127.0.0.1:8001>. Alternatively, put `searchcord.db` in `data/`
++and run `python search_app.py`, or pass `--data-dir /path/to/data`.
++Relative paths resolve against the package root. `--db` and `--data-dir`
++are mutually exclusive. `SEARCHCORD_DB` also accepts an explicit file path;
++`--db` takes precedence over that environment variable.
++
++The reader accepts SearchCord schema v9 or packed schema v101, not arbitrary
++SQLite databases. A missing or incompatible archive produces an error without
++creating or upgrading it. Normal read-only mode can follow a live v9 archive;
++its directory may need writable SQLite WAL sidecars.
++
++## Make a smaller deployment file
++
++Run this in the full repository, choosing a new destination:
++
++```bash
++python search_snapshot.py data/searchcord.db packed/searchcord.db --report packed/build-report.json
++```
++
++The exporter preserves the displayed message fields and verifies their hashes.
++It excludes settings and tokens, but includes messages and saved profiles.
++Review the included data before sharing it. Image files remain on Discord;
++expired attachment links are not refreshed by the search service.
++
++Copy the verified file to the host and run:
++
++```bash
++python search_app.py --db /path/to/packed/searchcord.db --snapshot
++```
++
++Snapshot mode requires a closed, unchanging file with no pending WAL. To update,
++stop the display service, point it to a newly verified file, and restart it.
++Keep data outside `static/`. Only the search file is needed on the display host.
++The original collector can stay on your own machine.
++
++## Host behind a reverse proxy
++
++Keep the application on loopback and put HTTPS and access control at the proxy.
++The search application itself has no login. Anyone who can reach its API can
++read included messages and profiles.
++
++For example, on a small Linux server with a closed snapshot:
++
++```bash
++SEARCHCORD_DB=/srv/searchcord/searchcord.db SEARCHCORD_IMMUTABLE=1 \
++  .venv/bin/uvicorn search_app:app --host 127.0.0.1 --port 8001 \
++  --workers 2 --limit-concurrency 16
++```
++
++This is a starting configuration, not a measured capacity guarantee. Each worker
++has its own connection and decoded-block caches. Measure memory and latency
++before increasing concurrency. Do not run the collector with multiple workers.
++
++## Container
++
++From the package root:
++
++```bash
++docker build -f deploy/search/Dockerfile -t searchcord-search .
++docker run --rm -p 127.0.0.1:8001:8001 \
++  -v /absolute/packed:/app/data:ro searchcord-search
++```
++
++The container runs as an unprivileged user. The mounted directory must contain
++`searchcord.db` and be readable by that user. Use a closed snapshot. The
++Dockerfile is supplied for deployment convenience; check its build on your host.
+diff --git a/deploy/search/package.py b/deploy/search/package.py
+new file mode 100644
+index 0000000..20644f8
+--- /dev/null
++++ b/deploy/search/package.py
+@@ -0,0 +1,36 @@
++"""Build a search-only directory without collector code, credentials or data."""
++import argparse
++import shutil
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[2]
++FILES = (
++    'search_app.py', 'search_snapshot.py', 'profile_store.py', 'LICENSE',
++    'deploy/search/requirements.txt', 'deploy/search/Dockerfile',
++    'deploy/search/Dockerfile.dockerignore', 'deploy/search/README.md',
++    'static/search/index.html', 'static/search/search.css', 'static/search/search.js',
++    'static/search/privacy.html', 'static/search/privacy.css',
++    'static/bauhaus.css', 'static/profile-view.css', 'static/profile-view.js',
++)
++
++
++def build(destination):
++    destination = Path(destination).resolve()
++    destination.mkdir(parents=True, exist_ok=False)
++    try:
++        for name in FILES:
++            target = destination / name
++            target.parent.mkdir(parents=True, exist_ok=True)
++            shutil.copy2(ROOT / name, target)
++        (destination / 'data').mkdir()
++    except BaseException:
++        shutil.rmtree(destination)
++        raise
++    return destination
++
++
++if __name__ == '__main__':
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('destination', type=Path)
++    args = parser.parse_args()
++    print(build(args.destination))
+diff --git a/deploy/search/requirements.txt b/deploy/search/requirements.txt
+new file mode 100644
+index 0000000..b0b6047
+--- /dev/null
++++ b/deploy/search/requirements.txt
+@@ -0,0 +1,2 @@
++fastapi==0.142.2
++uvicorn==0.54.0
+diff --git a/profile_store.py b/profile_store.py
+index 000753c..eaf99ff 100644
+--- a/profile_store.py
++++ b/profile_store.py
+@@ -89,12 +89,14 @@ def profile_servers(db, uid, q='', offset=0, limit=30):
+     db.create_function('search_label', 1, search_label, deterministic=True)
+     pattern = '%' + search_label(q).replace('%', '!%').replace('_', '!_') + '%'
+     rows = db.execute('''SELECT CAST(m.guild_id AS TEXT) AS id,
+-        COALESCE(g.name, 'Unknown server') AS name, COUNT(*) AS messages,
+-        CAST(MAX(m.id) AS TEXT) AS latest_id
+-        FROM messages m LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
+-        WHERE m.author_id=? AND m.guild_id IS NOT NULL
+-          AND (search_label(g.name) LIKE ? ESCAPE '!' OR CAST(m.guild_id AS TEXT)=?)
+-        GROUP BY m.guild_id ORDER BY messages DESC,m.guild_id LIMIT ? OFFSET ?''',
++        COALESCE(g.name, 'Unknown server') AS name, m.messages,
++        CAST(m.latest_id AS TEXT) AS latest_id
++        FROM (SELECT guild_id, COUNT(*) AS messages, MAX(id) AS latest_id
++              FROM messages WHERE author_id=? AND guild_id IS NOT NULL
++              GROUP BY guild_id) m
++        LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
++        WHERE search_label(g.name) LIKE ? ESCAPE '!' OR CAST(m.guild_id AS TEXT)=?
++        ORDER BY messages DESC,m.guild_id LIMIT ? OFFSET ?''',
+         (int(uid), pattern, q.strip(), limit+1, offset)).fetchall()
+     return {'servers': [dict(row) for row in rows[:limit]], 'has_more': len(rows)>limit, 'offset': offset}
+ 
+diff --git a/search_app.py b/search_app.py
+index 8d1ada1..8c12461 100644
+--- a/search_app.py
++++ b/search_app.py
+@@ -73,7 +73,7 @@ class Archive:
+                 db.close()
+ 
+     def search(self, q="", guild_id=None, channel_id=None, author_id=None,
+-               date_from=None, date_to=None, before=None, limit=40):
++               date_from=None, date_to=None, before=None, limit=40, refresh_images=False):
+         started = time.perf_counter()
+         q = q.strip()
+         # A literal run preserves trigram acceleration, including queries with % or _.
+@@ -136,9 +136,12 @@ class Archive:
+                         f"https://cdn.discordapp.com/avatars/{message['author_id']}/{avatar}.png?size=64"
+                         if isinstance(avatar, str) and re.fullmatch(r"(?:a_)?[A-Za-z0-9]+", avatar)
+                         and str(message['author_id']).isdigit() else None)
+-                    # No credential lookup, external fetch or expiring-link refresh in display mode.
++                    # Display mode never fetches credentials or refreshes expiring links.
+                     urls = (message.pop("image_urls") or "").splitlines()
+-                    message["attachments"] = [url for url in urls if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
++                    message["attachments"] = [
++                        f"/api/images/{message['id']}/{i}" if refresh_images else url
++                        for i, url in enumerate(urls)
++                        if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
+                     messages.append(message)
+         return {"messages": messages, "has_more": has_more,
+                 "next_cursor": messages[-1]['id'] if has_more else None,
+@@ -149,7 +152,10 @@ def create_app(path=None, immutable=None):
+     directory = Path(os.environ.get("SEARCHCORD_DATA_DIR", "data")).expanduser()
+     if not directory.is_absolute():
+         directory = ROOT / directory
+-    archive = Archive(path or directory / "searchcord.db", immutable if immutable is not None else os.environ.get("SEARCHCORD_IMMUTABLE") == "1")
++    database = Path(path or os.environ.get("SEARCHCORD_DB") or directory / "searchcord.db").expanduser()
++    if not database.is_absolute():
++        database = ROOT / database
++    archive = Archive(database, immutable if immutable is not None else os.environ.get("SEARCHCORD_IMMUTABLE") == "1")
+     app = FastAPI(title="Searchcord display", docs_url=None, redoc_url=None, openapi_url=None)
+     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+ 
+@@ -228,9 +234,12 @@ app = create_app()
+ 
+ if __name__ == "__main__":
+     parser = argparse.ArgumentParser(description=__doc__)
+-    parser.add_argument("--data-dir", type=Path, help="Directory containing searchcord.db")
++    source = parser.add_mutually_exclusive_group()
++    source.add_argument("--data-dir", type=Path, help="Directory containing searchcord.db")
++    source.add_argument("--db", type=Path, help="Path to an existing archive .db file")
+     parser.add_argument("--snapshot", action="store_true", help="Read a closed, unchanging archive without creating SQLite sidecars")
+     parser.add_argument("--port", type=int, default=8001)
++    parser.add_argument("--host", default="127.0.0.1", help="Listen address (default: loopback only)")
+     args = parser.parse_args()
+     import uvicorn
+-    uvicorn.run(create_app(args.data_dir / "searchcord.db" if args.data_dir else None, True if args.snapshot else None), host="127.0.0.1", port=args.port, access_log=False)
++    uvicorn.run(create_app(args.db or (args.data_dir / "searchcord.db" if args.data_dir else None), True if args.snapshot else None), host=args.host, port=args.port, access_log=False)
+diff --git a/search_snapshot.py b/search_snapshot.py
+index 525a39f..23bf819 100644
+--- a/search_snapshot.py
++++ b/search_snapshot.py
+@@ -203,10 +203,12 @@ def profile_servers(db, uid, q, offset, limit, normalize):
+     db.create_function('search_label', 1, normalize, deterministic=True)
+     value = normalize(q).replace('%', '!%').replace('_', '!_')
+     rows = db.execute("""SELECT s.guild_id id, COALESCE(g.name,'Unknown server') name,
+-        COUNT(*) messages, CAST(record_id(MAX(m.rowid)) AS TEXT) latest_id
+-        FROM message_index m JOIN message_sources s ON s.ref=m.source_id
++        SUM(m.messages) messages, CAST(record_id(MAX(m.latest)) AS TEXT) latest_id
++        FROM (SELECT source_id, COUNT(*) messages, MAX(rowid) latest
++              FROM message_index WHERE author_id=? GROUP BY source_id) m
++        JOIN message_sources s ON s.ref=m.source_id
+         LEFT JOIN guilds g ON g.id=s.guild_id
+-        WHERE m.author_id=? AND s.guild_id IS NOT NULL
++        WHERE s.guild_id IS NOT NULL
+           AND (search_label(g.name) LIKE ? ESCAPE '!' OR s.guild_id=?)
+         GROUP BY s.guild_id ORDER BY messages DESC, CAST(s.guild_id AS INTEGER)
+         LIMIT ? OFFSET ?""", (ref[0], '%' + value + '%', q.strip(), limit+1, offset)).fetchall()
+diff --git a/start-search.bat b/start-search.bat
+index 85d9475..dfe6e15 100644
+--- a/start-search.bat
++++ b/start-search.bat
+@@ -1,9 +1,13 @@
+ @echo off
+ cd /d "%~dp0"
+-python -u search_app.py %*
++if exist ".venv\Scripts\python.exe" (
++  .venv\Scripts\python.exe -u search_app.py %*
++) else (
++  python -u search_app.py %*
++)
+ if errorlevel 1 (
+   echo.
+-  echo Could not start. Check that Python 3.9+ is on PATH,
++  echo Could not start. Check that Python 3.12+ is on PATH,
+   echo install requirements.txt, and pass --data-dir with your archive directory.
+ )
+ pause
+diff --git a/start.bat b/start.bat
+index 681a5f1..09ad790 100644
+--- a/start.bat
++++ b/start.bat
+@@ -3,10 +3,14 @@ cd /d "%~dp0"
+ if defined SEARCHCORD_PORT (set "SEARCHCORD_DISPLAY_PORT=%SEARCHCORD_PORT%") else (set "SEARCHCORD_DISPLAY_PORT=8000")
+ echo Preparing Searchcord on http://127.0.0.1:%SEARCHCORD_DISPLAY_PORT%
+ echo On a first database upgrade, this may take several minutes. The browser opens when ready.
+-python -u app.py
++if exist ".venv\Scripts\python.exe" (
++  .venv\Scripts\python.exe -u app.py
++) else (
++  python -u app.py
++)
+ if errorlevel 1 (
+   echo.
+-  echo Could not start. Check that Python 3.9+ is installed and on your PATH,
++  echo Could not start. Check that Python 3.12+ is installed and on your PATH,
+   echo then install dependencies with:
+   echo     pip install -r requirements.txt
+ )
+diff --git a/static/app.js b/static/app.js
+index 37825cb..6d38832 100644
+--- a/static/app.js
++++ b/static/app.js
+@@ -80,7 +80,10 @@ async function boot() {
+   populateChannelFilter(resolveFilter(S.guildMap, $('fGuild').value));
+   const view = location.hash.slice(1) || 'browse';
+   if (params.has('search') || [...Object.keys(searchFields)].some(key => params.has(key))) {
+-    await doSearch(Math.max(1, Number(params.get('page')) || 1), false);
++    submittedSearch = new URLSearchParams(params);
++    const cursor = params.get('cursor') === 'true';
++    searchCursors = [params.get('before')];
++    await doSearch(cursor ? 1 : Math.max(1, Number(params.get('page')) || 1), false, true);
+   }
+   await switchView(view, true, false);
+ }
+@@ -958,6 +961,7 @@ const searchFields = {q: 'searchInput', guild_id: 'fGuild', channel_id: 'fChanne
+ let searchController;
+ let searchRequest = 0;
+ let submittedSearch = new URLSearchParams();
++let searchCursors = [null];
+ 
+ function setFilterTrayExpanded(expanded) {
+   $('queryBlock').classList.toggle('is-expanded', expanded);
+@@ -1107,6 +1111,14 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
+       return;
+     }
+   }
++  if (!reuseSubmitted) {
++    params.set('cursor', 'true');
++    searchCursors = [null];
++  }
++  if (params.get('cursor') === 'true') {
++    params.delete('before');
++    if (searchCursors[page - 1]) params.set('before', searchCursors[page - 1]);
++  }
+   params.set('page', page); params.set('limit', 50);
+   submittedSearch = new URLSearchParams(params);
+   S.searchPage = page;
+@@ -1123,6 +1135,7 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
+   try {
+     const data = await api(`/api/search?${params}`, {signal: searchController.signal});
+     if (request !== searchRequest) return;
++    if (params.get('cursor') === 'true') searchCursors[page] = data.next_cursor;
+     renderResults(data, params.get('q') || '');
+     if (shouldScroll && activeView === 'browse') $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+   } catch (error) {
+@@ -1144,7 +1157,7 @@ function messageAvatar(authorId, avatarUrl) {
+   if (avatarUrl) {
+     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+     img.onload = () => avatar.replaceChildren(img);
+-    img.onerror = fallback; img.src = avatarUrl;
++    img.onerror = fallback; avatar.appendChild(img); img.src = avatarUrl;
+   }
+   return avatar;
+ }
+@@ -1152,7 +1165,9 @@ function messageAvatar(authorId, avatarUrl) {
+ function renderResults(data, query) {
+   const results = $('searchResults');
+   results.replaceChildren();
+-  $('resultsStatus').textContent = data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
++  $('resultsStatus').textContent = data.total === null
++    ? (data.messages.length ? `${n(data.messages.length)} messages on this page` : 'No messages match these filters')
++    : data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
+   if (!data.messages.length) results.innerHTML = '<p class="no-results">No results found. Try another query or clear the filters.</p>';
+   data.messages.forEach(msg => {
+     const row = ce('article', 'result-row');
+@@ -1178,18 +1193,18 @@ function renderResults(data, query) {
+     }
+     row.append(messageAvatar(msg.author_id, msg.avatar_url), content); results.appendChild(row);
+   });
+-  renderPagination(data.page, data.pages);
++  renderPagination(data.page, data.pages, data.has_more);
+ }
+ 
+-function renderPagination(page, pages) {
++function renderPagination(page, pages, hasMore) {
+   const pagination = $('pagination');
+-  pagination.replaceChildren(); pagination.hidden = pages <= 1;
+-  for (const [label, target, disabled] of [['previous', page - 1, page === 1], ['next', page + 1, page >= pages]]) {
++  pagination.replaceChildren(); pagination.hidden = pages === null ? page === 1 && !hasMore : pages <= 1;
++  for (const [label, target, disabled] of [['previous', page - 1, page === 1], ['next', page + 1, pages === null ? !hasMore : page >= pages]]) {
+     const button = ce('button', 'page-control'); button.type = 'button'; button.textContent = label; button.disabled = disabled;
+     button.addEventListener('click', () => doSearch(target, true, true));
+     if (label === 'next') {
+       const readout = ce('div', 'page-readout');
+-      readout.innerHTML = `<span class="page-current">page ${n(page)}</span><span class="page-rule" aria-hidden="true"></span><span>${n(pages)} pages</span>`;
++      readout.innerHTML = `<span class="page-current">page ${n(page)}</span><span class="page-rule" aria-hidden="true"></span><span>${pages === null ? (hasMore ? 'next page available' : 'last page') : `${n(pages)} pages`}</span>`;
+       pagination.appendChild(readout);
+     }
+     pagination.appendChild(button);
+diff --git a/static/brand/searchcord-logo.png b/static/brand/searchcord-logo.png
+new file mode 100644
+index 0000000..2435659
+Binary files /dev/null and b/static/brand/searchcord-logo.png differ
+diff --git a/static/search/search.js b/static/search/search.js
+index 37c3b65..7f8d84e 100644
+--- a/static/search/search.js
++++ b/static/search/search.js
+@@ -94,7 +94,7 @@ function messageAvatar(authorId, avatarUrl) {
+   if (avatarUrl) {
+     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+     img.onload = () => avatar.replaceChildren(img);
+-    img.onerror = fallback; img.src = avatarUrl;
++    img.onerror = fallback; avatar.appendChild(img); img.src = avatarUrl;
+   }
+   return avatar;
+ }
+diff --git a/storage.py b/storage.py
+index f875048..6685945 100644
+--- a/storage.py
++++ b/storage.py
+@@ -309,6 +309,7 @@ def init_database(path: str) -> dict:
+             db.execute("CREATE INDEX IF NOT EXISTS idx_gd_id ON messages(guild_id,id) WHERE guild_id IS NOT NULL")
+             db.execute("CREATE INDEX IF NOT EXISTS idx_au_id ON messages(author_id,id)")
+             db.execute("CREATE INDEX IF NOT EXISTS idx_authors_name ON authors(name COLLATE NOCASE)")
++            db.execute("CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username COLLATE NOCASE)")
+ 
+             db.execute("""CREATE TABLE IF NOT EXISTS stats_counts (
+                 kind TEXT NOT NULL, key TEXT NOT NULL, count INTEGER NOT NULL,

@@ -38,6 +38,9 @@ try {
   const key=async key=>{await command('Input.dispatchKeyEvent',{type:'keyDown',key});await command('Input.dispatchKeyEvent',{type:'keyUp',key});};
   const click=async selector=>{
     await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({behavior:'instant',block:'center'})`);
+    // A prior search may still be scrolling the page; wait before measuring
+    // the target so a real pointer click cannot land on the previous layout.
+    await delay(400);
     const point=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
     await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
     await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
@@ -45,6 +48,10 @@ try {
   const screenshot=async name=>{await delay(220);const r=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});writeFileSync(path.join(output,name+'.png'),Buffer.from(r.data,'base64'));};
   const settled=`document.querySelector('#resultBody').getAttribute('aria-busy')==='false' && !document.querySelector('#results').hidden`;
   await command('Page.enable');await command('Runtime.enable');await command('Network.enable');
+  if (process.env.SEARCHCORD_OFFLINE_TEST === '1') {
+    await command('Network.setBlockedURLs', {urls: ['https://*']});
+    report.externalRequestsBlocked = true;
+  }
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await command('Page.navigate',{url:base});
   await until(`document.body?.dataset.archiveReady==='true'`);
