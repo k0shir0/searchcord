@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FILES = (
     'search_app.py', 'search_snapshot.py', 'profile_store.py', 'LICENSE',
     'deploy/search/requirements.txt', 'deploy/search/Dockerfile',
-    'deploy/search/.dockerignore', 'deploy/search/README.md',
+    'deploy/search/Dockerfile.dockerignore', 'deploy/search/README.md',
     'static/search/index.html', 'static/search/search.css', 'static/search/search.js',
     'static/search/privacy.html', 'static/search/privacy.css',
     'static/bauhaus.css', 'static/profile-view.css', 'static/profile-view.js',
