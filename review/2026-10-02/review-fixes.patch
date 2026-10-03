@@ -1,8 +1,18 @@
 diff --git a/README.md b/README.md
-index 7be81f1..ae79070 100644
+index 7be81f1..53b0626 100644
 --- a/README.md
 +++ b/README.md
-@@ -69,6 +69,12 @@ collects details for authors already in the archive. Both can be stopped.
+@@ -1,5 +1,8 @@
+ <p align="center">
+-  <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
++  <picture>
++    <source media="(prefers-color-scheme: dark)" srcset="static/brand/searchcord-logo-dark.png">
++    <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
++  </picture>
+ </p>
+ 
+ <p align="center">Archive Discord messages. Search them locally. Share a separate, read-only viewer.</p>
+@@ -69,6 +72,12 @@ collects details for authors already in the archive. Both can be stopped.
  Search results load one page at a time. Collection retries temporary failures
  and keeps saved messages when stopped. Message IDs prevent duplicate records.
  
@@ -15,7 +25,7 @@ index 7be81f1..ae79070 100644
  ## Search only
  
  Run the separate frontend in `static/search` with an existing SearchCord archive:
-@@ -121,6 +127,24 @@ The viewer needs a Python server; a static host cannot run it on its own.
+@@ -121,6 +130,24 @@ The viewer needs a Python server; a static host cannot run it on its own.
  - **Clear All Data** removes archived messages and derived metadata after
    confirmation. Saved tokens remain.
  

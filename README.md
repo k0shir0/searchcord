@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="static/brand/searchcord-logo-dark.png">
+    <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
+  </picture>
 </p>
 
 <p align="center">Archive Discord messages. Search them locally. Share a separate, read-only viewer.</p>
