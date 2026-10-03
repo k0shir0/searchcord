@@ -89,7 +89,16 @@ Public searches found similar stock chat/search symbols, but did not establish
 an exact company match. Exclusivity is unresolved. See the linked comparisons
 in the report. These are visual trials, not a claim of trademark clearance.
 
-The selected branding has not been applied to the app or README. Main and the
-remote branch remain unchanged pending review. The separate, unmerged
+The user selected option A and authorized publishing the reviewed branch to
+main on 2026-10-02. The README now uses menu blue with real Arial Bold and mint
+Cord, with light/dark PNG variants to preserve the approved typography on every
+platform. The in-app hero keeps its existing theme and layout. See
+`static/brand/README.md` for the asset palette and source.
+
+After applying A, all 45 backend tests and the cursor DOM regression check
+passed again. Chrome passed 16 report/branding checks, including loading the
+README's actual picture markup in both light and dark color schemes.
+
+The separate, unmerged
 `codex/scrape-automation` branch (`7043918`) is not part of this diff; this branch
 does not remove it, and merging this branch alone will not install its features.
