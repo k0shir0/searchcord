@@ -136,17 +136,17 @@ source archive. Migration checks SQLite and full-text integrity. Fields already
 discarded by an older migration can only be recovered from an original archive
 or backup. Test upgrades on a separate copy first.
 
-## Technical details and checks
+## Documentation
 
 - [Saved profiles and backfill](docs/profiles.md)
 - [Read-only search behavior](docs/search-display.md)
-- [Snapshot storage and latency measurements](SEARCH-ONLY-SCALE-RESULTS.md)
 - [Standalone deployment](deploy/search/README.md)
 
-Run the local regression checks with `python -m unittest discover -s checks -v`
-and `node checks/test_browse_cursor.mjs`. Tests create synthetic archives and
-mock Discord responses; no real token is required. For offline browser review,
-see [review and reproduction notes](REVIEW-NOTES.md).
+The production branch contains the application, required assets, deployment
+files, licenses and operating documentation. `.gitignore` explicitly lists the
+allowed files. Keep local checks, benchmarks, review reports, experiments and
+generated output ignored; add new production files to the allowlist before
+committing them.
 
 ## Release timeline
 
