@@ -1,65 +1,58 @@
-# ─── Scraped data — NEVER COMMIT ─────────────────────────────
-# The database holds your Discord token in the settings table plus every
-# message you have ever scraped. The JSONL files are datasets built from
-# those messages. None of this belongs in a public repository.
-data/
-*.db
-*.db-wal
-*.db-shm
-*.sqlite
-*.sqlite3
-*.jsonl
-# Legacy scrape output landed in the project root as <server>_<channel>.json.
-# Scoped to the root so it can't silently swallow real config files.
-/*.json
+# Production allowlist: everything else stays local and ignored.
+# Add new runtime, deployment, or operating-documentation files explicitly.
+*
 
-# Model / training artifacts
-*_lora/
-*.gguf
-*.safetensors
-checkpoint-*/
+# Repository metadata and operating documentation
+!/.gitattributes
+!/.gitignore
+!/LICENSE
+!/README.md
+!/docs/
+!/docs/profiles.md
+!/docs/search-display.md
 
-# ─── Python ──────────────────────────────────────────────────
-__pycache__/
-*.py[cod]
-*$py.class
-.Python
-build/
-dist/
-*.egg-info/
-.venv/
-venv/
-env/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Application, archive tools, dependencies, and launchers
+!/app.py
+!/profile_api.py
+!/profile_store.py
+!/storage.py
+!/search_app.py
+!/search_snapshot.py
+!/requirements.txt
+!/start.bat
+!/start-search.bat
 
-# ─── Secrets / local config ──────────────────────────────────
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-secrets.*
-token.txt
+# Production browser assets
+!/static/
+!/static/app.js
+!/static/bauhaus.css
+!/static/home.css
+!/static/index.html
+!/static/profile-view.css
+!/static/profile-view.js
+!/static/profiles.js
+!/static/stats.js
+!/static/style.css
+!/static/workspace.css
+!/static/search/
+!/static/search/index.html
+!/static/search/privacy.css
+!/static/search/privacy.html
+!/static/search/search.css
+!/static/search/search.js
+!/static/brand/
+!/static/brand/README.md
+!/static/brand/searchcord-logo-dark.png
+!/static/brand/searchcord-logo.png
+!/static/vendor/
+!/static/vendor/chart.LICENSE.md
+!/static/vendor/chart.umd.min.js
 
-# ─── Editor / OS ─────────────────────────────────────────────
-.claude/
-/agents/
-graphify-out/
-graph.json
-.vscode/
-.idea/
-*.swp
-Thumbs.db
-desktop.ini
-.DS_Store
-/tests
-
-# Local design documents and reports
-/BAUHAUS-DESIGN-PLAN.md
-/BAUHAUS-DESIGN-PREFERENCES.md
-/docs/
-
-# Standalone design trials
-/static/trials/
+# Standalone search deployment
+!/deploy/
+!/deploy/search/
+!/deploy/search/Dockerfile
+!/deploy/search/Dockerfile.dockerignore
+!/deploy/search/README.md
+!/deploy/search/package.py
+!/deploy/search/requirements.txt
