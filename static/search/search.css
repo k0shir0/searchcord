@@ -109,7 +109,6 @@ button {
 .search-surface { margin:24px 0 16px; --gold: var(--ice); --input-fill: #1b3048; --input-ink: #edf3f8; --input-placeholder: #aab9c8; }
 @media(min-width:901px) {
   .search-surface { min-height:490px; }
-  .search-surface .query-copy { max-width:46%; }
 }
 form { position: relative; z-index: 2; }
 
