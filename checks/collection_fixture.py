@@ -30,6 +30,7 @@ requests = []
 join_times = []
 slow_scrapes = False
 fail_probes = False
+page_scrapes = False
 
 
 def channel(cid, name, deny=0, guild_id="10"):
@@ -40,7 +41,7 @@ def channel(cid, name, deny=0, guild_id="10"):
 async def reply(request):
     path = request.url.path.removeprefix("/api/v10")
     params = dict(request.url.params)
-    requests.append({"method": request.method, "path": path, "params": params})
+    requests.append({"method": request.method, "path": path, "params": params, "at": time.monotonic()})
     if path == "/users/@me":
         body = {"id": "30", "username": "fixture-account"}
     elif path == "/users/@me/guilds":
@@ -77,9 +78,15 @@ async def reply(request):
         else:
             if slow_scrapes:
                 await asyncio.sleep(1.5)
-            body = [] if cid == "21" or "before" in params or "after" in params else [
-                {"id": str(1000000000000000000 + int(cid)), "content": "synthetic collection check",
-                 "author": {"id": "30", "username": "fixture-author"}, "attachments": []}]
+            if page_scrapes and cid == "20":
+                first = int(params.get("before", 1000000000000000501)) - 1
+                body = [{"id": str(first - index), "content": "synthetic page check",
+                         "author": {"id": "30", "username": "fixture-author"}, "attachments": []}
+                        for index in range(int(params["limit"]))]
+            else:
+                body = [] if cid == "21" or "before" in params or "after" in params else [
+                    {"id": str(1000000000000000000 + int(cid)), "content": "synthetic collection check",
+                     "author": {"id": "30", "username": "fixture-author"}, "attachments": []}]
     elif path.startswith("/invites/"):
         if path.endswith("expired"):
             return httpx.Response(404, json={"message": "Unknown Invite"})
@@ -134,9 +141,12 @@ async def state():
 
 @app.app.post("/__checks/scenario")
 async def scenario(body: dict):
-    global slow_scrapes, fail_probes
+    global slow_scrapes, fail_probes, page_scrapes
     slow_scrapes = body.get("slow_scrapes", False)
     fail_probes = body.get("fail_probes", False)
+    page_scrapes = body.get("page_scrapes", False)
+    if body.get("break_next"):
+        app.scrape_confirmed_requests = 99
     return {"ok": True}
 
 

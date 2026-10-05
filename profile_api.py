@@ -34,7 +34,7 @@ def retry_seconds(response):
         return 0
 
 
-async def collect_profile(db, uid, token, discord, cancelled, progress):
+async def collect_profile(db, uid, token, discord, cancelled, progress, *, checkpoint=None):
     """Retry the same user until saved, unavailable, or explicitly stopped."""
     attempts = 0
     while not cancelled():
@@ -69,6 +69,8 @@ async def collect_profile(db, uid, token, discord, cancelled, progress):
             while time.monotonic() < deadline:
                 if cancelled():
                     raise ProfileStopped
+                if checkpoint and not isinstance(exc, sqlite3.OperationalError):
+                    await checkpoint()
                 await asyncio.sleep(min(0.25, max(0, deadline - time.monotonic())))
         finally:
             if not operation.done():

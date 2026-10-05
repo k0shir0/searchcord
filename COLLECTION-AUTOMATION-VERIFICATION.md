@@ -74,3 +74,44 @@ scans behind an active scrape continue from the page, so keep it open until they
 start. Active scrape jobs already run on the server. Discord verification,
 account restrictions, and server screening can require user action outside
 Searchcord; they are reported rather than bypassed.
+
+## Scrape pause and pacing, 2026-10-04
+
+- 66 Python tests passed, including nine new pause/pacing cases and the four
+  pre-existing untracked retry tests. Checks use synthetic Discord responses
+  and disposable SQLite archives.
+- The full Chrome run passed 36 checks, covering existing server scans, invite
+  queues, DM controls, in-flight page persistence, pause without further requests,
+  reload recovery, exact resume pagination and remaining limits, pause/resume
+  during a mandatory break, and layouts from 1440px down to 320px. No uncaught
+  browser errors occurred. A focused run also verified that empty successful
+  pages count toward the break.
+- The mandatory break measured **60.000 seconds** between request starts in the
+  full run and **60.016 seconds** in the focused run.
+  The browser fixture seeds the success counter at 99 to exercise the real
+  production 60-second wait. A separate fake-clock test runs all 100 successful
+  responses, excludes failed responses, checks randomized intervals on retries,
+  and verifies that different jobs share the count.
+- Real-time concurrent-job tests confirm at least 0.5 seconds after a slow
+  response finishes before another scrape request starts. Profile requests made
+  by the scrape use the same gate. Pause/stop remain responsive during fetch
+  retries, profile retries, and breaks; pausing does not reset a cooldown.
+- Multiple progress subscribers each receive a snapshot and pause events, and
+  disconnecting removes their subscriptions. Paused channels remain reserved
+  against overlapping jobs. Python compilation, JavaScript syntax checks, and
+  `git diff --check` passed.
+- These new controls were not tested against a live Discord account. No running
+  personal collector or production archive was changed or restarted.
+
+To run only the scrape control browser checks against a fresh fixture:
+
+```powershell
+$env:SCRAPE_CONTROL_ONLY = '1'
+node checks/browser_collection.mjs http://127.0.0.1:8016 agents/scrape-control-browser
+Remove-Item Env:SCRAPE_CONTROL_ONLY
+```
+
+Restarting the server ends a paused in-memory job. Queue its channels again to
+resume from the saved database cursors. Page reloads preserve the active job
+while the server runs. Randomized intervals and the success counter are shared
+across scrape jobs for that server session.

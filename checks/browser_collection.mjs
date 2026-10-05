@@ -62,6 +62,7 @@ try {
   await until(`document.body.dataset.archiveReady==='true' && activeView==='scrape'`);
   await click('#connectDiscord');
   await until(`document.querySelectorAll('.server-item').length===2`);
+  if (!process.env.SCRAPE_CONTROL_ONLY) {
   await click('.server-item[data-id="10"]');
   await until(`document.querySelectorAll('#cpBody .ch-item').length===3`);
   await check('Single click browses without starting a scrape', `S.queue.length===0 && !S.activeJobKind`);
@@ -144,6 +145,72 @@ try {
   await until(`document.querySelectorAll('#dmBody .ch-item').length===1`);
   await check('DM queue, monitor, and export controls remain available', `!!document.querySelector('#dmBody [aria-label="Toggle scrape queue"]') && !!document.querySelector('#dmBody [aria-label="Export to ChatML JSONL"]') && !!$('liveMonitorList')`);
   await click('#sourceChannels');
+  }
+
+  await scenario({slow_scrapes:true,page_scrapes:true});
+  await click('.server-item[data-id="10"]');
+  await until(`document.querySelector('#cpBody .ch-item[data-id="20"]')`);
+  await click('#cpBody .ch-item[data-id="20"] .ch-btn');
+  await evaluate(`$('scrapeLimit').value='250'`);
+  let before=(await state()).requests.filter(r=>r.path.endsWith('/messages') && r.params.limit!=='1').length;
+  const storedBefore=(await state()).stored['20'] || 0;
+  await click('#startScrape');
+  await until(`fetch('/__checks/state').then(r=>r.json()).then(s=>s.requests.filter(r=>r.path.endsWith('/messages') && r.params.limit!=='1').length>${before})`);
+  await click('#pauseQueueScrape');
+  await until(`S.scrapePaused && $('queueProgressTitle').textContent==='Scrape paused'`);
+  await check('Pause saves the in-flight page and retains its count and queue', `S.scrapeRun.total===100 && S.queue.length===1 && !$('stopQueueScrape').disabled && $('pauseQueueScrape').textContent==='resume scraping'`);
+  let pausedState=await state();
+  assert.equal(pausedState.stored['20'],storedBefore+100);
+  const pausedRequests=pausedState.requests.length;
+  await delay(600);
+  assert.equal((await state()).requests.length,pausedRequests);
+  report.checks.push('Paused scrape sends no further requests');
+  const pausedJob=await evaluate(`S.activeJobId`);
+  await command('Page.reload');
+  await until(`typeof S!=='undefined' && S.scrapePaused && S.activeJobId===${JSON.stringify(pausedJob)}`);
+  await check('Reload reconnects to the paused job with its remaining limit and progress', `S.scrapeRun.total===100 && $('scrapeLimit').value==='250' && $('queueProgressRows').querySelector('strong').textContent==='100 saved'`);
+  for(const width of [1440,375,320]) {
+    await command('Emulation.setDeviceMetricsOverride',{width,height:1080,deviceScaleFactor:1,mobile:width<600});
+    await evaluate(`$('queueProgress').scrollIntoView({behavior:'instant',block:'center'})`);
+    await check(`Pause and stop controls fit at ${width}px`, `document.documentElement.scrollWidth<=innerWidth && $('pauseQueueScrape').getBoundingClientRect().right<=innerWidth && $('stopQueueScrape').getBoundingClientRect().right<=innerWidth`);
+    const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
+    writeFileSync(path.join(output,`paused-${width}.png`),Buffer.from(shot.data,'base64'));
+  }
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1080,deviceScaleFactor:1,mobile:false});
+  await click('#pauseQueueScrape');
+  await until(`!S.scraping && $('queueProgressTitle').textContent==='Scrape finished'`,18000);
+  assert.equal((await state()).stored['20'],storedBefore+250);
+  const scrapePages=(await state()).requests.filter(r=>r.path.endsWith('/messages') && r.params.limit!=='1').slice(before);
+  assert.equal(scrapePages[1].params.before,'1000000000000000401');
+  assert.equal(scrapePages[2].params.limit,'50');
+  assert(scrapePages.every((request,index)=>!index || request.at-scrapePages[index-1].at>=0.5));
+  report.checks.push('Resume uses the exact next page and remaining per-channel limit, with real request pacing');
+
+  await click('#connectDiscord');
+  await until(`document.querySelector('.server-item[data-id="10"]')`);
+  await click('.server-item[data-id="10"]');
+  await until(`document.querySelector('#cpBody .ch-item[data-id="20"]')`);
+  await click('#cpBody .ch-item[data-id="20"] .ch-btn');
+  await evaluate(`$('scrapeLimit').value='200'`);
+  await scenario({page_scrapes:true,break_next:true});
+  before=(await state()).requests.filter(r=>r.path.endsWith('/messages') && r.params.limit!=='1').length;
+  await click('#startScrape');
+  await until(`$('queueProgressTitle').textContent==='Mandatory scrape break'`);
+  const breakMessages=await evaluate(`S.scrapeRun.total`);
+  assert([0,100].includes(breakMessages));
+  await check('Mandatory break keeps pause and stop available', `!$('pauseQueueScrape').disabled && !$('stopQueueScrape').disabled`);
+  if (!breakMessages) report.checks.push('Empty successful pages count toward the mandatory break');
+  await click('#pauseQueueScrape');
+  await until(`S.scrapePaused`);
+  await click('#pauseQueueScrape');
+  await until(`!S.scrapePaused`);
+  await until(`!S.scraping && $('queueProgressTitle').textContent==='Scrape finished'`,70000);
+  const breakPages=(await state()).requests.filter(r=>r.path.endsWith('/messages') && r.params.limit!=='1').slice(before);
+  assert.equal(breakPages.length,breakMessages ? 2 : 3);
+  report.scrapeBreakSeconds=breakPages[1].at-breakPages[0].at;
+  assert(report.scrapeBreakSeconds>=60);
+  report.checks.push('The production 60-second break survives pause/resume and is verified with real elapsed time');
+  await scenario({});
 
   for(const width of [1440,768,375,320]) {
     await command('Emulation.setDeviceMetricsOverride',{width,height:1080,deviceScaleFactor:1,mobile:width<600});
