@@ -216,7 +216,8 @@ a { color: inherit; }
 
 @media (min-width: 801px) and (max-width: 1200px) {
   .geometry-forms-right .geometry-bar { display: none; }
-  .query-block.is-expanded .geometry-forms-right .geometry-triangle { transform: translateY(-50px); }
+  .geometry-forms-right .geometry-triangle { transition: transform .26s var(--ease) .28s; }
+  .query-block.is-expanded .geometry-forms-right .geometry-triangle { transform: translateY(-50px); transition-delay: 0s; }
 }
 
 @media (max-width: 800px) {
