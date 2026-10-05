@@ -24,8 +24,8 @@ channels into SQLite, then search, filter, and chart what you collected.
 - **Three workspaces**: Browse for local search, Scrape for channels, DMs,
   a shared collection queue and live monitoring, and Stats for archive exploration.
 - **Queue and scrape** any number of channels at once, with an optional
-  per-channel message cap, live per-channel counts and stopping in the queue, and an optional
-  expanded-profile fetch for message authors.
+  per-channel message cap, live counts, pause/resume and stopping in the queue,
+  and an optional expanded-profile fetch for message authors.
 - **Join servers** from a single invite or a list of links/codes in Scrape.
   Duplicate codes are removed, join attempts are at least 30 seconds apart,
   and the server keeps the stoppable queue running through page navigation or reloads.
@@ -215,8 +215,8 @@ exports out of version control.
 To scrape: use **queue** beside a channel or conversation, optionally set a
 **Messages per channel** limit, then **start scraping**. Leave the limit blank to pull the
 full history. The queue shows the current channel, messages saved per channel,
-the total, and a stop button while the job runs. You can keep using the rest of
-the workspace without closing a progress dialog. Later jobs fetch only messages
+the total, and pause/resume and stop buttons while the job runs. You can keep
+using the rest of the workspace without closing a progress dialog. Later jobs fetch only messages
 newer than each channel's saved cursor. If a first run is limited or stopped, a
 later job can resume the remaining older history. Check **fetch expanded
 profiles** to save each newly encountered user's extended profile immediately
@@ -228,6 +228,22 @@ losing saved work. Searchcord stores the
 documented public user fields needed for identity and appearance, including
 username, display name, avatar/banner hashes, accent color, bot flag, and
 public flags.
+
+**Pause scraping** finishes the request already in flight and saves its page and
+cursor before pausing. **Resume scraping** continues the same channel, pagination
+position, remaining per-channel limit, and queue. A paused job stays available
+as long as the server runs, and reloading the page reconnects to it. It still
+reserves its channels, and **stop scraping** works while paused. After a server
+restart, queue the channels again to continue from their durable saved cursors.
+
+Scrape requests have a mandatory random **0.5–1 second minimum interval** after
+the previous request finishes, including retries and expanded-profile requests.
+After every **100 successful Discord responses**, further scrape requests wait at least
+**60 seconds** from the last response. Empty successful pages count; HTTP errors
+do not. These rules are shared across scrape jobs for the lifetime of the server,
+so changing channels, stopping/starting, and pause/resume cannot reset them.
+Discord rate limits and retry backoff can extend these waits. The progress panel
+shows mandatory breaks, and pause/stop remain available during them.
 
 Temporary Discord/network failures and SQLite busy errors pause the scrape and
 retry the same page with a 2–60 second backoff (longer when Discord asks for it).
