@@ -66,3 +66,8 @@
 !/deploy/Caddyfile
 !/deploy/README.md
 !/deploy/search.env.example
+
+# Production operating documentation
+!/docs/
+!/docs/profiles.md
+!/docs/search-display.md
