@@ -7,9 +7,6 @@
 !/.gitignore
 !/LICENSE
 !/README.md
-!/docs/
-!/docs/profiles.md
-!/docs/search-display.md
 
 # Application, archive tools, dependencies, and launchers
 !/app.py
