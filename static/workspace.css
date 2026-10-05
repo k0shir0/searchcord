@@ -148,10 +148,9 @@ button:disabled { cursor: default; opacity: .45; }
   .stat-cards { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .stats-grid { grid-template-columns: minmax(0,1fr); }
   .app-masthead h1 { font-size: clamp(60px,11vw,126px); }
-  .app-masthead { padding-right: 110px; }
 }
 @media(max-width:600px) {
-  .app-masthead { min-height: 64px; padding-right: 84px; }
+  .app-masthead { min-height: 64px; }
   .app-masthead h1 { font-size: clamp(38px,11.2vw,66px); }
   .settings-trigger { width: 44px; height: 44px; }
   .settings-trigger svg { width: 24px; height: 24px; }

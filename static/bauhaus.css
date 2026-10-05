@@ -107,8 +107,8 @@ a { color: inherit; }
 .geometry-forms-center .geometry-ring { left: 0; top: 8px; width: 136px; }
 .geometry-forms-center .geometry-triangle { left: 166px; top: 16px; width: 126px; }
 .geometry-forms-center .geometry-triangle { --outline-color: var(--geometry-mint); }
-.query-copy { margin-left: clamp(260px, 22vw, 318px); max-width: min(50%, 740px); position: relative; width: 100%; z-index: 2; }
-.query-block h2 { background: var(--banner-fill); box-shadow: 0 0 0 12px var(--banner-fill); font-size: clamp(34px, 4.2vw, 60px); letter-spacing: -.075em; line-height: .9; margin: 0 0 34px; max-width: 100%; width: fit-content; }
+.query-copy { margin-inline: auto; position: relative; width: 100%; z-index: 2; }
+.query-block h2 { background: var(--banner-fill); box-shadow: 0 0 0 12px var(--banner-fill); font-size: clamp(34px, 4.2vw, 60px); letter-spacing: -.075em; line-height: .9; margin: 0 auto 34px; max-width: 100%; text-align: center; width: fit-content; }
 .query-form { background: var(--banner-fill); border: 2px solid var(--gold); box-shadow: 0 0 0 12px var(--banner-fill); display: flex; max-width: 100%; position: relative; z-index: 2; }
 .query-form:focus-within { border-color: var(--cool-accent); }
 .query-form label { left: -9999px; position: absolute; }
@@ -211,7 +211,6 @@ a { color: inherit; }
 @media (max-width: 1200px) {
   .geometry-backdrop-disk { height: clamp(120px, 12vw, 144px); left: 20px; top: 72px; width: clamp(120px, 12vw, 144px); }
   .geometry-backdrop-square { height: clamp(76px, 7vw, 84px); left: 150px; top: 96px; width: clamp(76px, 7vw, 84px); }
-  .query-copy { margin-left: clamp(220px, 22vw, 264px); max-width: 48%; }
   .query-block h2 { font-size: clamp(34px, 4vw, 48px); margin-bottom: 28px; }
 }
 
@@ -224,7 +223,6 @@ a { color: inherit; }
   .workspace { padding-top: 22px; }
   .topline h1 { font-size: clamp(58px, 16vw, 120px); }
   .geometry-forms-backdrop { display: none; }
-  .query-copy { margin-left: 0; max-width: 68%; }
   .geometry-ornaments .ornament-rule-a, .geometry-ornaments .ornament-rule-b, .geometry-ornaments .ornament-rule-c, .geometry-ornaments .ornament-rule-d, .geometry-ornaments .ornament-rule-e { display: none; }
   .geometry-ring { width: min(100%, 164px); }
   .geometry-square { height: clamp(52px, 7vw, 64px); width: clamp(52px, 7vw, 64px); }
@@ -246,7 +244,6 @@ a { color: inherit; }
 
 @media (max-width: 560px) {
   .query-block { min-height: 390px; padding: 24px; }
-  .query-copy { margin-left: 0; max-width: 100%; }
   .query-block h2 { font-size: clamp(30px, 8.4vw, 42px); margin-bottom: 24px; max-width: 70%; }
   .query-block.is-expanded .filter-tray { max-height: 340px; }
   .query-block.is-expanded { padding-bottom: 110px; }
