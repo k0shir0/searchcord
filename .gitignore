@@ -13,6 +13,7 @@
 
 # Application, archive tools, dependencies, and launchers
 !/app.py
+!/cli.py
 !/profile_api.py
 !/profile_store.py
 !/storage.py
@@ -21,6 +22,7 @@
 !/requirements.txt
 !/start.bat
 !/start-search.bat
+!/run-python.bat
 
 # Production browser assets
 !/static/
