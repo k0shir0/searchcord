@@ -40,6 +40,8 @@
       </div>
       <p class="sg-hint">Stored in your configured local database. Sent externally only to Discord's API.</p>
       <button class="btn-mint" id="saveToken">save &amp; use token</button>
+      <p class="sg-hint" id="tokenCleanupHint">Remove every saved token and the active selection from this database. Stop scrapes, DM cleanup and live monitors first. Profile jobs stop. Messages and other settings stay. Older backups may still contain tokens.</p>
+      <button class="btn-danger" id="clearTokens" aria-describedby="tokenCleanupHint" aria-live="polite">remove all saved tokens</button>
       <div class="token-status" id="tokenStatus" role="status"></div>
     </div>
 

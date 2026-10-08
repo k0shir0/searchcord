@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from profile_store import read_profile, profile_servers, search_label
 from profile_store import user_id
 import search_snapshot
+from cli import local_url, print_banner
 
 ROOT = Path(__file__).resolve().parent
 EPOCH_MS = 1420070400000
@@ -242,4 +243,6 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="Listen address (default: loopback only)")
     args = parser.parse_args()
     import uvicorn
+    print_banner()
+    print(f"Searchcord: {local_url(args.host, args.port)}", flush=True)
     uvicorn.run(create_app(args.db or (args.data_dir / "searchcord.db" if args.data_dir else None), True if args.snapshot else None), host=args.host, port=args.port, access_log=False)

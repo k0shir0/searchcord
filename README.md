@@ -56,6 +56,21 @@ Open <http://127.0.0.1:8000>. Windows users can also run `start.bat`.
 A first upgrade of a large archive may take several minutes. The browser opens
 when the database is ready.
 
+Windows launchers discover `.venv`, then `venv`, then a working `py -3`, then
+`python` on PATH. They run from their own repository directory, including paths
+with spaces. Install dependencies into the selected interpreter with
+`run-python.bat -m pip install -r requirements.txt`.
+
+Both startup commands print a terminal-width-aware ASCII header. Supported
+interactive terminals use green; redirected output, `TERM=dumb` and `NO_COLOR`
+use plain text. The collector logs its save policy, request/retry intervals and
+live polling interval once at startup. Saving happens after each fetched page;
+there is no timed save interval or request randomizer on this branch.
+
+The collector opens the operating system's default browser after its health
+check succeeds. No browser executable paths are required. If launching fails,
+the app keeps running and prints its URL for manual opening.
+
 ## Use SearchCord
 
 1. Open the settings gear, name your Discord token and select **save & use token**.
@@ -129,6 +144,15 @@ The viewer needs a Python server; a static host cannot run it on its own.
   check the upgraded archive before removing a backup.
 - **Clear All Data** removes archived messages and derived metadata after
   confirmation. Saved tokens remain.
+- **remove all saved tokens** deletes only `token`, `saved_tokens` and
+  `active_token_id` from the configured database's `settings` table, after a
+  second-click confirmation. Stop scrapes, DM cleanup and live monitors first;
+  profile backfill stops during removal. Messages and unrelated settings stay.
+  Save a new token to connect again. Closing Settings cancels confirmation.
+
+Token removal is logical deletion from the active database. Older recovery
+backups and SQLite free/WAL pages may still contain credentials; this action
+does not erase or delete those copies.
 
 Recovery backups are named `searchcord.db.pre-compact-*.bak.gz` (or `.bak` if
 compression fails) and contain the same private tokens and messages as the
