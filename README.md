@@ -125,7 +125,9 @@ python deploy/search/package.py dist/searchcord-search
 ```
 
 Copy that folder and your chosen database to the server. Follow the included
-[deployment guide](deploy/search/README.md) for setup and container commands.
+[deployment guide](deploy/search/README.md) to run the search-only viewer directly
+with Python or build and run its Docker container. Both options serve existing
+archives; scraping and archive administration use the Python collector (`app.py`).
 The viewer needs a Python server; a static host cannot run it on its own.
 
 ## Your data
@@ -179,7 +181,8 @@ for published release packages.
 
 | Date | Update |
 | --- | --- |
-| 2026-10-02 | Faster Browse pagination and profile history queries, a standalone search package, refreshed setup guide and SearchCord logo. |
+| 2026-10-07 | Terminal ASCII header, startup timing logs, confirmed token cleanup, portable Windows launchers and default-browser fallback. |
+| 2026-10-02 | Faster Browse pagination and profile history queries, a standalone Python search package and Docker container setup for the read-only viewer, refreshed setup guide and SearchCord logo. |
 | 2026-09-30 | Verified compressed search snapshots, short-query indexes and support for stock SQLite exports. |
 | 2026-09-29 | Save profiles during collection, retry temporary failures and stop profile backfill safely. |
 | 2026-09-28 | More resilient scrape retries, resume-safe queues and duplicate checks. |
