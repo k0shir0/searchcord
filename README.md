@@ -176,21 +176,20 @@ committing them.
 
 ## Release timeline
 
-These are dated project updates. See [GitHub Releases](https://github.com/k0shir0/searchcord/releases)
-for published release packages.
+[GitHub Releases](https://github.com/k0shir0/searchcord/releases)
 
 | Date | Update |
 | --- | --- |
-| 2026-10-07 | Terminal ASCII header, startup timing logs, confirmed token cleanup, portable Windows launchers and default-browser fallback. |
-| 2026-10-02 | Faster Browse pagination and profile history queries, a standalone Python search package and Docker container setup for the read-only viewer, refreshed setup guide and SearchCord logo. |
-| 2026-09-30 | Verified compressed search snapshots, short-query indexes and support for stock SQLite exports. |
-| 2026-09-29 | Save profiles during collection, retry temporary failures and stop profile backfill safely. |
-| 2026-09-28 | More resilient scrape retries, resume-safe queues and duplicate checks. |
-| 2026-09-25 | Smaller archive storage with verified backups and preserved message history. |
-| 2026-09-24 | Unified Scrape workspace, contributor rankings and activity charts. |
-| 2026-09-23 | Bauhaus search layout, expanding filters and resumable collection. |
-| 2026-07-23 | Combined the scraper and viewer in one FastAPI app with SQLite. |
-| 2025-09-20 | First Discord scraper and Flask viewer for JSON archives. |
+| 2026-10-07 | Portable Windows startup and saved-token removal. |
+| 2026-10-02 | Faster search and a standalone viewer with Docker support. |
+| 2026-09-30 | Compressed search archives. |
+| 2026-09-29 | Saved profiles and resumable profile collection. |
+| 2026-09-28 | More reliable scraping and resume. |
+| 2026-09-25 | Reduced archive storage. |
+| 2026-09-24 | Unified scraping tools and activity charts. |
+| 2026-09-23 | New search layout, filters and resumable scraping. |
+| 2026-07-23 | Unified scraper and viewer. |
+| 2025-09-20 | Initial scraper and viewer. |
 
 ## License
 
