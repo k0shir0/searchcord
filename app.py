@@ -6,7 +6,6 @@ import math
 import sqlite3
 import uuid
 import time
-import webbrowser
 from http.client import HTTPConnection, HTTPException as HTTPClientException
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +24,7 @@ from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database
 from profile_api import profile_router, collect_profile, ProfileStopped
 from search_app import Archive, MAX_ID
+from cli import local_url, open_url, print_banner
 
 # Resolve paths against this file, not the process working directory, so the
 # app behaves the same however it was launched.
@@ -42,6 +42,8 @@ DISCORD_API = "https://discord.com/api/v10"
 MAX_RATE_LIMIT_RETRIES = 5
 SCRAPE_RETRY_BASE_SECONDS = 2
 SCRAPE_RETRY_MAX_SECONDS = 60
+DISCORD_INTERVAL_SECONDS = 0.025
+LIVE_POLL_SECONDS = 3
 # Cap on buffered scrape-progress events, so a job whose SSE client never
 # connects (or goes away mid-scrape) can't grow its queue without bound.
 PROGRESS_QUEUE_MAX = 1000
@@ -100,6 +102,12 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global http_client
+    print_banner()
+    scrape_log.info("timing save_interval=each fetched page (up to 100 messages); "
+                    "randomizer_interval=disabled; request_interval_min=%gs; "
+                    "retry_interval=%g-%gs; live_poll_interval=%gs",
+                    DISCORD_INTERVAL_SECONDS, SCRAPE_RETRY_BASE_SECONDS,
+                    SCRAPE_RETRY_MAX_SECONDS, LIVE_POLL_SECONDS)
     await init_db()
     http_client = httpx.AsyncClient(
         timeout=30,
@@ -141,7 +149,6 @@ async def health():
 def open_browser_when_ready(host: str, port: int):
     """Open this app only after its startup has completed and it answers HTTP."""
     browser_host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
-    url_host = f"[{browser_host}]" if ":" in browser_host else browser_host
     while True:
         connection = HTTPConnection(browser_host, port, timeout=1)
         try:
@@ -150,7 +157,7 @@ def open_browser_when_ready(host: str, port: int):
             if (response.status == 200
                     and response.getheader("X-Searchcord-Instance") == APP_INSTANCE_ID
                     and response.read() == b"searchcord-ready"):
-                webbrowser.open(f"http://{url_host}:{port}")
+                open_url(local_url(host, port))
                 return
         except (OSError, HTTPClientException):
             pass
@@ -224,7 +231,7 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
         for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
             # Stay below the documented global request ceiling even when many
             # jobs are active. Route-specific headers and 429s take precedence.
-            wait = max(last_discord_request + 0.025, discord_ready_at) - time.monotonic()
+            wait = max(last_discord_request + DISCORD_INTERVAL_SECONDS, discord_ready_at) - time.monotonic()
             if wait > 0:
                 if on_wait and wait >= 0.1:
                     on_wait(wait)
@@ -1023,7 +1030,7 @@ async def poll_channel(channel_id: str, channel_name: str, guild_id: str, guild_
                           "channel": channel_name, "guild": guild_name, "guild_id": guild_id})
 
         while channel_id in live_monitors:
-            await asyncio.sleep(3)
+            await asyncio.sleep(LIVE_POLL_SECONDS)
             if channel_id not in live_monitors:
                 break
 
@@ -1622,6 +1629,23 @@ async def update_settings(s: SettingsIn):
         await db.commit()
     return {"ok": True, "active_token_id": active_id,
             "tokens": [{"id": item["id"], "label": item["label"]} for item in tokens]}
+
+
+@app.delete("/api/settings/tokens")
+async def clear_tokens(confirm: bool = False):
+    if not confirm:
+        raise HTTPException(400, "Confirm removal of all saved tokens")
+    if (any(job.get("running") for job in active_jobs.values())
+            or delete_jobs or live_monitors):
+        raise HTTPException(409, "Stop scrapes, DM cleanup and live monitors before removing tokens")
+    try:
+        async with aiosqlite.connect(DB_PATH, timeout=5) as db:
+            await db.execute("DELETE FROM settings WHERE key IN ('token', 'saved_tokens', 'active_token_id')")
+            await db.commit()
+    except sqlite3.Error:
+        raise HTTPException(503, "Could not remove saved tokens from the database; try again") from None
+    await shutdown_profile_jobs()
+    return {"ok": True, "tokens": [], "active_token_id": None, "token_set": False}
 
 
 @app.delete("/api/messages")
