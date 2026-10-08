@@ -3,6 +3,7 @@
 !search_app.py
 !search_snapshot.py
 !profile_store.py
+!cli.py
 !static/
 static/**
 !static/search/

@@ -4,6 +4,7 @@
 const S = {
   guilds:        [],
   guild:         null,
+  accountRevision: 0,
   queue:         [],
   scraping:      false,
   activeJobId:   null,
@@ -244,6 +245,47 @@ function initSettings() {
     finally { $('saveToken').disabled = false; }
   });
 
+  $('clearTokens').addEventListener('click', async () => {
+    const clear = $('clearTokens');
+    if (!clear.classList.contains('pending-confirm')) {
+      clear.classList.add('pending-confirm');
+      clear.textContent = 'confirm removal of every saved token';
+      return;
+    }
+    clear.classList.remove('pending-confirm');
+    clear.disabled = true;
+    $('saveToken').disabled = true;
+    $('savedTokenSelect').disabled = true;
+    try {
+      const saved = await api('/api/settings/tokens?confirm=true', {method: 'DELETE'});
+      renderSavedTokens(saved);
+      inp.value = '';
+      $('tokenName').value = '';
+      inp.type = 'password';
+      tog.textContent = 'show';
+      tog.setAttribute('aria-label', 'Show new token');
+      S.accountRevision++;
+      S.guild = null;
+      S.guilds = [];
+      S.queue = [];
+      renderQueue();
+      $('serverList').replaceChildren();
+      $('cpBody').replaceChildren();
+      $('channelsPane').classList.remove('visible');
+      $('emptyState').style.display = '';
+      $('dmBody').innerHTML = '<p class="placeholder-msg">Save a new token to load conversations.</p>';
+      $('connectionStatus').textContent = 'No token saved. Add a new token to connect.';
+      setTokenStatus('Saved tokens removed. Add a new token to connect. Older backups are unchanged.', 'ok');
+    } catch (error) {
+      setTokenStatus(`Could not remove saved tokens: ${error.message}`, 'fail');
+      await loadSavedTokens();
+    } finally {
+      clear.disabled = false;
+      clear.textContent = 'remove all saved tokens';
+      $('saveToken').disabled = false;
+    }
+  });
+
   $('clearDb').addEventListener('click', async () => {
     const clear = $('clearDb');
     if (!clear.classList.contains('pending-confirm')) {
@@ -286,6 +328,7 @@ async function loadSavedTokens() {
 }
 
 async function verifyActiveToken() {
+  S.accountRevision++;
   try {
     const verified = await api('/api/token/validate');
     if (!verified.valid) {
@@ -316,6 +359,8 @@ function openSettings() {
   loadDbStats();
 }
 function closeSettings() {
+  $('clearTokens').classList.remove('pending-confirm');
+  if (!$('clearTokens').disabled) $('clearTokens').textContent = 'remove all saved tokens';
   $('clearDb').classList.remove('pending-confirm');
   if (!$('clearDb').disabled) $('clearDb').textContent = 'Clear All Data';
   $('menuBtn').classList.remove('open');
@@ -340,13 +385,16 @@ async function loadDbStats() {
 
 // ── Guilds ───────────────────────────────────────────────────
 async function loadGuilds() {
+  const revision = S.accountRevision;
   const list = $('serverList');
   list.innerHTML = spinnerHTML();
   try {
-    S.guilds = await api('/api/guilds');
+    const guilds = await api('/api/guilds');
+    if (S.accountRevision !== revision) return;
+    S.guilds = guilds;
     renderGuilds();
   } catch {
-    list.innerHTML = '<div class="error-msg">Failed to load servers</div>';
+    if (S.accountRevision === revision) list.innerHTML = '<div class="error-msg">Failed to load servers</div>';
   }
 }
 
@@ -403,14 +451,16 @@ async function selectGuild(guild) {
 
 // ── Direct Messages / Group DMs ───────────────────────────────
 async function loadDms() {
+  const revision = S.accountRevision;
   const body = $('dmBody');
   body.innerHTML = spinnerHTML();
 
   try {
     const dms = await api('/api/dms');
+    if (S.accountRevision !== revision) return;
     renderDmList(dms, body);
   } catch {
-    body.innerHTML = '<div class="error-msg">Failed to load DMs</div>';
+    if (S.accountRevision === revision) body.innerHTML = '<div class="error-msg">Failed to load DMs</div>';
   }
 }
 
