@@ -4,12 +4,18 @@
 const S = {
   guilds:        [],
   guild:         null,
+  guildLoad:     null,
+  channelViewRevision: 0,
   accountRevision: 0,
+  autoStartPending: false,
+  queueStopRevision: 0,
   queue:         [],
   scraping:      false,
   activeJobId:   null,
   activeJobKind: null,
   scrapeRun:     null,
+  scrapePaused:  false,
+  restoringScrape: true,
   searchPage:    1,
   filterChans:   [],
   liveChannels:  new Set(),
@@ -28,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initNav();
   initSettings();
   initQueue();
+  restoreScrape();
+  initCollectionAutomation();
   initSearch();
   initModal();
   initExportModal();
@@ -267,8 +275,15 @@ function initSettings() {
       S.accountRevision++;
       S.guild = null;
       S.guilds = [];
+      S.guildLoad = null;
+      S.channelViewRevision++;
+      S.autoStartPending = false;
+      S.queueStopRevision++;
       S.queue = [];
       renderQueue();
+      $('scanServer').disabled = true;
+      $('scanStatus').textContent = '';
+      refreshInvites();
       $('serverList').replaceChildren();
       $('cpBody').replaceChildren();
       $('channelsPane').classList.remove('visible');
@@ -340,6 +355,8 @@ async function verifyActiveToken() {
     $('connectionStatus').textContent = `Connected as ${verified.username}`;
     if (!S.scraping) { S.queue = []; renderQueue(); }
     S.guild = null;
+    S.guildLoad = null;
+    $('scanServer').disabled = true;
     $('channelsPane').classList.remove('visible');
     $('emptyState').style.display = '';
     $('cpBody').replaceChildren();
@@ -423,12 +440,22 @@ function renderGuilds() {
 
     el.append(icon, name);
     el.addEventListener('click', () => selectGuild(g));
+    el.addEventListener('dblclick', () => scanGuild(g));
+    el.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && event.shiftKey) { event.preventDefault(); scanGuild(g); }
+    });
+    el.title = 'Select server. Double-click or Shift+Enter to scan and scrape.';
+    el.setAttribute('aria-describedby', 'scanHint');
+    el.classList.toggle('active', S.guild?.id === g.id);
     list.appendChild(el);
   });
 }
 
-async function selectGuild(guild) {
+async function selectGuild(guild, includeThreads = false) {
+  const revision = S.accountRevision;
+  const viewRevision = ++S.channelViewRevision;
   S.guild = guild;
+  $('scanServer').disabled = scanningGuilds.has(guild.id);
   document.querySelectorAll('.server-item').forEach(el =>
     el.classList.toggle('active', el.dataset.id === guild.id)
   );
@@ -439,13 +466,25 @@ async function selectGuild(guild) {
   $('cpHead').textContent = guild.name;
   $('cpBody').innerHTML = spinnerHTML();
 
+  if (S.guildLoad?.id !== guild.id || S.guildLoad.revision !== revision || (includeThreads && !S.guildLoad.includeThreads)) {
+    const load = {id: guild.id, revision, includeThreads};
+    load.promise = api(`/api/guilds/${encodeURIComponent(guild.id)}/channels${includeThreads ? '?include_threads=true' : ''}`)
+      .finally(() => { if (S.guildLoad === load) S.guildLoad = null; });
+    S.guildLoad = load;
+  }
+  const load = S.guildLoad;
   try {
-    const channels = await api(`/api/guilds/${guild.id}/channels`);
-    if (S.guild.id !== guild.id) return;
+    const channels = await load.promise;
+    if (S.guild?.id !== guild.id || S.accountRevision !== revision || S.channelViewRevision !== viewRevision) return channels;
     renderChannels(channels, guild);
-  } catch {
-    if (S.guild.id !== guild.id) return;
-    $('cpBody').innerHTML = '<div class="error-msg">Failed to load channels</div>';
+    return channels;
+  } catch (error) {
+    if (S.guild?.id === guild.id && S.accountRevision === revision && S.channelViewRevision === viewRevision) {
+      $('cpBody').replaceChildren();
+      const message = ce('div', 'error-msg'); message.textContent = `Could not check channels: ${error.message}`;
+      $('cpBody').appendChild(message);
+    }
+    return null;
   }
 }
 
@@ -666,12 +705,14 @@ function finishDmClear(errMsg) {
   }
 
   if (errMsg) logLine($('moLog'), `Error: ${errMsg}`, 'err');
+  if (S.autoStartPending && S.queue.length) { S.autoStartPending = false; startScraping(); }
 }
 
 // ── Channels ─────────────────────────────────────────────────
 function renderChannels(channels, guild) {
   const body = $('cpBody');
   body.innerHTML = '';
+  if (!channels.length) body.innerHTML = '<p class="placeholder-msg">No readable message channels found. Complete any server screening in Discord, then try again.</p>';
 
   const categories = {};
   const uncategorised = [];
@@ -755,6 +796,8 @@ function toggleQueue(ch, guild, rowEl, btnEl) {
 
 function initQueue() {
   $('clearQueue').addEventListener('click', () => {
+    S.queueStopRevision++;
+    S.autoStartPending = false;
     S.queue = [];
     renderQueue();
     document.querySelectorAll('.ch-item.queued').forEach(el => {
@@ -765,6 +808,7 @@ function initQueue() {
   });
   $('startScrape').addEventListener('click', startScraping);
   $('stopQueueScrape').addEventListener('click', stopQueueScrape);
+  $('pauseQueueScrape').addEventListener('click', toggleScrapePause);
   $('dismissQueueProgress').addEventListener('click', () => {
     $('queueProgress').hidden = true;
     renderQueue();
@@ -789,7 +833,7 @@ function renderQueue() {
   $('clearQueue').disabled = S.scraping;
   $('scrapeLimit').disabled = S.scraping;
   $('harvestProfiles').disabled = S.scraping;
-  $('startScrape').disabled = !!S.activeJobKind || S.queue.length === 0;
+  $('startScrape').disabled = S.restoringScrape || !!S.activeJobKind || S.queue.length === 0;
   if (S.queue.length === 0) {
     bar.classList.toggle('visible', !$('queueProgress').hidden);
     chips.innerHTML = '<p class="queue-empty">Select channels or conversations to build a queue.</p>';
@@ -816,47 +860,93 @@ function renderQueue() {
 
 // ── Scraping ─────────────────────────────────────────────────
 async function startScraping() {
-  if (!S.queue.length || S.activeJobKind) return;
+  if (S.restoringScrape || !S.queue.length || S.activeJobKind) return;
   S.scraping = true;
   S.activeJobKind = 'scrape';
   renderQueue();
 
   const limitVal = parseInt($('scrapeLimit').value, 10);
   const limit = (!isNaN(limitVal) && limitVal > 0) ? limitVal : 0;
-  S.scrapeRun = {index: -1, total: 0, completed: 0};
+  const channels = S.queue.map(channel => ({...channel}));
+  prepareScrapeProgress(channels, limit);
+
+  let resp;
+  try {
+    resp = await api('/api/scrape/start', { method: 'POST', body: {
+      channels, limit, harvest_profiles: $('harvestProfiles').checked,
+    } });
+  } catch (error) {
+    finishScrape(`Could not start: ${error.message}`, 'Scrape could not start', false);
+    return;
+  }
+  connectScrapeProgress(resp.job_id);
+}
+
+function prepareScrapeProgress(channels, limit) {
+  S.scrapeRun = {index: -1, total: 0, completed: 0, channels};
+  S.scrapePaused = false;
   $('queueProgress').hidden = false;
   $('queueProgressTitle').textContent = 'Starting scrape…';
   $('queueProgressSummary').textContent = limit ? `Limit: ${n(limit)} messages per channel` : 'Waiting for the first channel.';
-  $('queueProgressBar').max = S.queue.length;
+  $('queueProgressBar').max = channels.length;
   $('queueProgressBar').value = 0;
   $('stopQueueScrape').hidden = false;
   $('stopQueueScrape').disabled = true;
+  $('pauseQueueScrape').hidden = false;
+  $('pauseQueueScrape').disabled = true;
+  $('pauseQueueScrape').textContent = 'pause scraping';
   $('dismissQueueProgress').hidden = true;
   const rows = $('queueProgressRows'); rows.replaceChildren();
-  S.queue.forEach((channel, index) => {
+  channels.forEach((channel, index) => {
     const row = ce('div', 'queue-progress-row'); row.dataset.index = index;
     const name = ce('span'); name.textContent = `${channel.guild_name || 'Direct messages'} · #${channel.name}`;
     const count = ce('strong'); count.textContent = 'waiting';
     row.append(name, count); rows.appendChild(row);
   });
   renderQueue();
+}
 
-  let resp;
+async function restoreScrape() {
   try {
-    resp = await api('/api/scrape/start', { method: 'POST', body: {
-      channels: S.queue, limit, harvest_profiles: $('harvestProfiles').checked,
-    } });
+    const jobs = await api('/api/scrape/active');
+    S.restoringScrape = false;
+    const job = jobs.find(item => item.job_id === sessionStorage.getItem('searchcord.scrapeJob')) || jobs[0];
+    if (!job) return;
+    S.scraping = true;
+    S.activeJobKind = 'scrape';
+    S.queue = job.channels.map(channel => ({...channel}));
+    $('scrapeLimit').value = job.limit || '';
+    $('harvestProfiles').checked = job.harvest_profiles;
+    prepareScrapeProgress(job.channels, job.limit);
+    connectScrapeProgress(job.job_id);
   } catch (error) {
-    finishScrape(`Could not start: ${error.message}`, 'Scrape could not start', false);
-    return;
+    $('queueProgress').hidden = false;
+    $('queueProgressTitle').textContent = 'Could not reconnect to scrape';
+    $('queueProgressSummary').textContent = `${error.message}. Reload to reconnect before starting another scrape.`;
+  } finally {
+    renderQueue();
   }
+}
 
-  const { job_id } = resp;
+function showScrapePaused(paused) {
+  S.scrapePaused = paused;
+  $('pauseQueueScrape').textContent = paused ? 'resume scraping' : 'pause scraping';
+  $('pauseQueueScrape').disabled = false;
+  $('queueProgressTitle').textContent = paused ? 'Scrape paused' : 'Scraping';
+  $('queueProgressSummary').textContent = paused
+    ? `${n(S.scrapeRun.total)} messages saved. Resume whenever you are ready.`
+    : 'Continuing from the saved position. Mandatory pacing and breaks still apply.';
+}
+
+function connectScrapeProgress(job_id) {
   S.activeJobId = job_id;
+  sessionStorage.setItem('searchcord.scrapeJob', job_id);
   $('stopQueueScrape').disabled = false;
+  $('pauseQueueScrape').disabled = false;
 
   const es = new EventSource(`/api/scrape/progress/${job_id}`);
-  const total = S.queue.length;
+  const channels = S.scrapeRun.channels;
+  const total = channels.length;
 
   es.onmessage = e => {
     const ev = JSON.parse(e.data);
@@ -864,6 +954,50 @@ async function startScraping() {
     const row = () => $('queueProgressRows').querySelector(`[data-index="${run.index}"]`);
 
     switch (ev.type) {
+      case 'snapshot':
+        run.index = ev.index - 1;
+        run.total = ev.total_messages;
+        run.completed = ev.completed;
+        $('queueProgressBar').value = run.completed;
+        ev.rows.forEach((state, index) => {
+          const savedRow = $('queueProgressRows').children[index];
+          savedRow.classList.toggle('failed', state.type === 'channel_error');
+          savedRow.querySelector('strong').textContent = state.type === 'channel_error' ? 'error'
+            : state.messages !== undefined ? `${n(state.messages)} saved`
+            : state.type === 'channel_start' ? 'scraping…' : 'waiting';
+        });
+        showScrapePaused(ev.paused);
+        if (ev.pause_requested && !ev.paused) {
+          $('pauseQueueScrape').disabled = true;
+          $('queueProgressTitle').textContent = 'Pausing scrape…';
+          $('queueProgressSummary').textContent = 'Finishing the current request and saving its progress.';
+        } else if (!ev.paused && ev.break_seconds) {
+          $('queueProgressTitle').textContent = 'Mandatory scrape break';
+          $('queueProgressSummary').textContent = `100 successful requests completed. Mandatory break: up to ${n(ev.break_seconds)}s remaining.`;
+        }
+        break;
+
+      case 'paused':
+        showScrapePaused(true);
+        break;
+
+      case 'resumed':
+        showScrapePaused(false);
+        if (ev.break_seconds) {
+          $('queueProgressTitle').textContent = 'Mandatory scrape break';
+          $('queueProgressSummary').textContent = `100 successful requests completed. Mandatory break: up to ${n(ev.break_seconds)}s remaining.`;
+        }
+        break;
+
+      case 'scrape_break':
+        $('queueProgressTitle').textContent = 'Mandatory scrape break';
+        $('queueProgressSummary').textContent = `100 successful requests completed. Mandatory break: up to ${n(ev.wait_seconds)}s remaining.`;
+        break;
+
+      case 'scrape_break_end':
+        $('queueProgressTitle').textContent = 'Scraping';
+        break;
+
       case 'channel_start':
         run.index = ev.index - 1;
         $('queueProgressTitle').textContent = `Scraping #${ev.channel}`;
@@ -879,12 +1013,12 @@ async function startScraping() {
       case 'retry_wait':
         row().querySelector('strong').textContent = `retry ${ev.attempt} in ${n(ev.wait_seconds)}s`;
         $('queueProgressSummary').textContent =
-          `${ev.reason} in #${S.queue[run.index].name}; retrying the same page in ${n(ev.wait_seconds)}s.`;
+          `${ev.reason} in #${channels[run.index].name}; retrying the same page in ${n(ev.wait_seconds)}s.`;
         break;
 
       case 'retry_resumed':
         row().querySelector('strong').textContent = 'scraping…';
-        $('queueProgressSummary').textContent = `Connection recovered; continuing #${S.queue[run.index].name}.`;
+        $('queueProgressSummary').textContent = `Connection recovered; continuing #${channels[run.index].name}.`;
         break;
 
       case 'channel_complete':
@@ -961,21 +1095,50 @@ function finishScrape(message, title = 'Scrape finished', clearQueue = true, ref
   S.scraping = false;
   S.activeJobId = null;
   S.activeJobKind = null;
+  S.scrapePaused = false;
+  sessionStorage.removeItem('searchcord.scrapeJob');
   $('queueProgressTitle').textContent = title;
   $('queueProgressSummary').textContent = message;
   $('stopQueueScrape').hidden = true;
+  $('pauseQueueScrape').hidden = true;
   $('dismissQueueProgress').hidden = false;
-  if (clearQueue) S.queue = [];
+  if (clearQueue) {
+    const finished = new Set(S.scrapeRun.channels.map(channel => channel.id));
+    S.queue = S.queue.filter(channel => !finished.has(channel.id));
+  }
   renderQueue();
   if (refreshData) {
     loadSearchFilters();
     if (activeView === 'stats') loadStats(true);
   }
+  const continueQueue = clearQueue && S.autoStartPending && S.queue.length;
+  S.autoStartPending = false;
+  if (continueQueue) startScraping();
+}
+
+async function toggleScrapePause() {
+  if (!S.activeJobId || S.activeJobKind !== 'scrape') return;
+  const action = S.scrapePaused ? 'resume' : 'pause';
+  const button = $('pauseQueueScrape');
+  button.disabled = true;
+  try {
+    await api(`/api/scrape/${S.activeJobId}/${action}`, {method: 'POST'});
+    if (action === 'pause' && !S.scrapePaused && S.activeJobId) {
+      $('queueProgressTitle').textContent = 'Pausing scrape…';
+      $('queueProgressSummary').textContent = 'Finishing the current request and saving its progress.';
+    }
+  } catch (error) {
+    $('queueProgressSummary').textContent = `Could not ${action}: ${error.message}. Try again.`;
+    button.disabled = false;
+  }
 }
 
 async function stopQueueScrape() {
   if (!S.activeJobId || S.activeJobKind !== 'scrape') return;
+  S.queueStopRevision++;
+  S.autoStartPending = false;
   $('stopQueueScrape').disabled = true;
+  $('pauseQueueScrape').disabled = true;
   $('queueProgressTitle').textContent = 'Stopping scrape…';
   try {
     await api(`/api/scrape/${S.activeJobId}/stop`, {method: 'POST'});
@@ -983,6 +1146,7 @@ async function stopQueueScrape() {
     $('queueProgressTitle').textContent = 'Scraping';
     $('queueProgressSummary').textContent = `Could not stop: ${error.message}. Try again.`;
     $('stopQueueScrape').disabled = false;
+    $('pauseQueueScrape').disabled = false;
   }
 }
 
