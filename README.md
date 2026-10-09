@@ -17,7 +17,7 @@
 | Workspace | What you can do |
 | --- | --- |
 | Browse | Search message text, filter by server, channel, author or date, and open saved profiles. |
-| Scrape | Queue channels or DMs, resume collection, monitor new messages and save profiles. |
+| Scrape | Join servers, scan readable channels, pause/resume collection, monitor messages and save profiles. |
 | Stats | Explore activity and contributors, then open the matching messages. |
 | Search only | Run the viewer with an existing archive, without Discord credentials or collection controls. |
 
@@ -63,9 +63,10 @@ with spaces. Install dependencies into the selected interpreter with
 
 Both startup commands print a terminal-width-aware ASCII header. Supported
 interactive terminals use green; redirected output, `TERM=dumb` and `NO_COLOR`
-use plain text. The collector logs its save policy, request/retry intervals and
-live polling interval once at startup. Saving happens after each fetched page;
-there is no timed save interval or request randomizer on this branch.
+use plain text. The collector logs its save policy, request/retry intervals,
+mandatory breaks and live polling interval once at startup. Saving happens after
+each fetched page. Scrape requests wait a random 0.5–1 second after the previous
+scrape response, with a 60-second break after every 100 successful responses.
 
 The collector opens the operating system's default browser after its health
 check succeeds. No browser executable paths are required. If launching fails,
@@ -83,6 +84,20 @@ the app keeps running and prints its URL for manual opening.
 Click a message author to open their saved profile. **Fetch expanded profiles**
 saves missing profile details during collection; **backfill saved profiles**
 collects details for authors already in the archive. Both can be stopped.
+
+Scrape also accepts invite links or codes in a stoppable server-owned queue,
+with join attempts at least 30 seconds apart. Double-click a server, press
+**Shift+Enter**, or choose **scan & scrape** to queue readable channels and
+accessible threads automatically. Automatic scans skip names containing `bot`;
+those readable channels remain available for manual collection.
+
+**Pause scraping** saves the current in-flight page before pausing. **Resume
+scraping** continues the same job, channel, cursor and remaining message limit.
+Reloading the page recovers the job while the server stays running. After a
+server restart, re-queue its channels to continue from saved database cursors.
+Request pacing and mandatory breaks are shared across scrape jobs and cannot
+be bypassed by pause/resume or starting another job.
+See [collection controls and limits](docs/collection.md) for the full behavior.
 
 Search results load one page at a time. Collection retries temporary failures
 and keeps saved messages when stopped. Message IDs prevent duplicate records.
@@ -149,7 +164,7 @@ The viewer needs a Python server; a static host cannot run it on its own.
 - **remove all saved tokens** deletes only `token`, `saved_tokens` and
   `active_token_id` from the configured database's `settings` table, after a
   second-click confirmation. Stop scrapes, DM cleanup and live monitors first;
-  profile backfill stops during removal. Messages and unrelated settings stay.
+  invite joining and profile backfill stop during removal. Messages and unrelated settings stay.
   Save a new token to connect again. Closing Settings cancels confirmation.
 
 Token removal is logical deletion from the active database. Older recovery
@@ -164,6 +179,7 @@ or backup. Test upgrades on a separate copy first.
 
 ## Documentation
 
+- [Collection, invites, scanning and pause/resume](docs/collection.md)
 - [Saved profiles and backfill](docs/profiles.md)
 - [Read-only search behavior](docs/search-display.md)
 - [Standalone deployment](deploy/search/README.md)
@@ -183,6 +199,7 @@ have been published.
 
 | Date | Update |
 | --- | --- |
+| 2026-10-09 | Invite queues, readable server/thread scans and reload-recoverable scrape pause/resume, with enforced request pacing and breaks. |
 | 2026-10-07 | Portable Windows startup, terminal banner and saved-token removal. |
 | 2026-10-02 | Faster cursor-based search and standalone viewer packaging with Docker support. |
 | 2026-09-30 | Compressed search archives that exclude saved tokens. |

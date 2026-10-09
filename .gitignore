@@ -10,10 +10,13 @@
 !/docs/
 !/docs/profiles.md
 !/docs/search-display.md
+!/docs/collection.md
 
 # Application, archive tools, dependencies, and launchers
 !/app.py
 !/cli.py
+!/channel_access.py
+!/invite_api.py
 !/profile_api.py
 !/profile_store.py
 !/storage.py
@@ -27,6 +30,7 @@
 # Production browser assets
 !/static/
 !/static/app.js
+!/static/collection.js
 !/static/bauhaus.css
 !/static/home.css
 !/static/index.html

@@ -28,6 +28,24 @@
 .collection-toolbar p, .panel-heading p, .stats-toolbar p { color: var(--ink-soft); font-size: 12px; margin-top: 8px; line-height: 1.5; }
 .collection-grid { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(280px,1fr); gap: 24px; align-items: start; }
 .collection-panel, .chart-card, .queue-bar { background: var(--panel); border: 1px solid var(--rule); border-radius: 0; padding: 24px; min-width: 0; }
+.invite-panel { margin-bottom: 24px; }
+.invite-cadence { color: var(--ice); font-size: 11px; }
+.invite-form { display: flex; align-items: end; gap: 24px; margin-top: 18px; }
+.invite-form label { display: grid; gap: 8px; flex: 1; min-width: 0; font-size: 11px; color: var(--ink-soft); }
+.invite-form textarea { width: 100%; min-height: 72px; resize: vertical; font: inherit; font-size: 13px; padding: 10px 12px; background: var(--input-fill); color: var(--input-ink); border: 1px solid var(--ice); border-radius: 0; }
+.invite-form textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.invite-form textarea[aria-invalid="true"] { border-color: var(--signal); }
+.invite-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.collection-status { color: var(--ice); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.collection-status:empty { display: none; }
+.invite-results { list-style: none; margin: 16px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.invite-result { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; border-top: 1px solid var(--rule); padding: 12px 0; font-size: 12px; overflow-wrap: anywhere; }
+.invite-result > span:first-child { flex: 1; min-width: 120px; }
+.invite-detail { flex: 2; color: var(--ink-soft); }
+.invite-result strong { color: var(--cool-accent); font-weight: 400; }
+.scan-hint { margin: 14px 0; }
+.channel-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 18px 0 12px; }
+.channel-heading .cp-head { padding: 0; margin: 0; }
 .source-tabs { display: flex; gap: 12px; margin-bottom: 22px; }
 .source-tabs button { flex: 1; border: 1px solid var(--rule); color: var(--ink-soft); background: transparent; min-height: 46px; cursor: pointer; padding: 10px; font-family: var(--display); font-size: 15px; }
 .source-tabs button[aria-selected="true"] { color: var(--ice); border-color: var(--ice); background: var(--accent-soft); }
@@ -91,7 +109,7 @@ button:disabled { cursor: default; opacity: .45; }
 .queue-progress-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
 .queue-progress-head h4 { font-family: var(--display); font-size: 19px; margin: 0; }
 .queue-progress-head p { color: var(--ink-soft); font-size: 12px; line-height: 1.5; margin: 6px 0 0; }
-.queue-progress-actions { flex-shrink: 0; }
+.queue-progress-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
 .queue-progress progress { display: block; width: 100%; height: 8px; margin: 18px 0; accent-color: var(--cool-accent); }
 .queue-progress-rows { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
 .queue-progress-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 12px; background: var(--paper-deep); border: 1px solid var(--rule); color: var(--ink-soft); font-size: 12px; }
@@ -150,6 +168,8 @@ button:disabled { cursor: default; opacity: .45; }
   .app-masthead h1 { font-size: clamp(60px,11vw,126px); }
 }
 @media(max-width:600px) {
+  .invite-form { flex-direction: column; align-items: stretch; gap: 16px; }
+  .invite-panel .panel-heading { align-items: start; flex-wrap: wrap; gap: 8px; }
   .app-masthead { min-height: 64px; }
   .app-masthead h1 { font-size: clamp(38px,11.2vw,66px); }
   .settings-trigger { width: 44px; height: 44px; }
