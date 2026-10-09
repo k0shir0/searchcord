@@ -176,19 +176,23 @@ committing them.
 
 ## Release timeline
 
-[GitHub Releases](https://github.com/k0shir0/searchcord/releases)
+Major development milestones in the current `main` history. Dates use
+America/Chicago and reflect commits, not deployment dates. As of 2026-10-09,
+no versioned [GitHub Releases](https://github.com/k0shir0/searchcord/releases)
+have been published.
 
 | Date | Update |
 | --- | --- |
-| 2026-10-07 | Portable Windows startup and saved-token removal. |
-| 2026-10-02 | Faster search and a standalone viewer with Docker support. |
-| 2026-09-30 | Compressed search archives. |
-| 2026-09-29 | Saved profiles and resumable profile collection. |
-| 2026-09-28 | More reliable scraping and resume. |
-| 2026-09-25 | Reduced archive storage. |
+| 2026-10-07 | Portable Windows startup, terminal banner and saved-token removal. |
+| 2026-10-02 | Faster cursor-based search and standalone viewer packaging with Docker support. |
+| 2026-09-30 | Compressed search archives that exclude saved tokens. |
+| 2026-09-29 | Immediate profile collection while scraping and stoppable, retryable profile backfill. |
+| 2026-09-28 | Separate read-only viewer, archived profile cards and more reliable scraping. |
+| 2026-09-26 | Multiple saved accounts, confirmed archive cleanup and expanded server/contributor rankings. |
+| 2026-09-25 | Reduced archive storage and compressed recovery backups. |
 | 2026-09-24 | Unified scraping tools and activity charts. |
-| 2026-09-23 | New search layout, filters and resumable scraping. |
-| 2026-07-23 | Unified scraper and viewer. |
+| 2026-09-23 | New search layout, filters, resumable scraping and DM message cleanup. |
+| 2026-07-23 | Unified web app with live monitoring and ChatML export. |
 | 2025-09-20 | Initial scraper and viewer. |
 
 ## License
