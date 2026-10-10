@@ -5,12 +5,14 @@
 # Repository metadata and operating documentation
 !/.gitattributes
 !/.gitignore
+!/.dockerignore
 !/LICENSE
 !/README.md
 !/docs/
 !/docs/profiles.md
 !/docs/search-display.md
 !/docs/collection.md
+!/docs/archive-reliability.md
 
 # Application, archive tools, dependencies, and launchers
 !/app.py
@@ -20,6 +22,10 @@
 !/profile_api.py
 !/profile_store.py
 !/storage.py
+!/credential_store.py
+!/collection_state.py
+!/media_store.py
+!/chat_export.py
 !/search_app.py
 !/search_snapshot.py
 !/requirements.txt

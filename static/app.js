@@ -305,14 +305,14 @@ function initSettings() {
     const clear = $('clearDb');
     if (!clear.classList.contains('pending-confirm')) {
       clear.classList.add('pending-confirm');
-      clear.textContent = 'You really want to delete your data?';
+      clear.textContent = 'confirm removal of messages, profiles and cached media';
       return;
     }
     clear.classList.remove('pending-confirm');
     clear.textContent = 'deleting…';
     clear.disabled = true;
     try {
-      await api('/api/messages', { method: 'DELETE' });
+      await api('/api/messages?confirm=true', { method: 'DELETE' });
       searchController?.abort(); ++searchRequest;
       $('searchResults').replaceChildren(); $('resultsStatus').textContent = 'Archive cleared';
       $('pagination').hidden = true;
@@ -648,7 +648,7 @@ async function startDmClear(dm) {
     switch (ev.type) {
       case 'progress':
         $('moChannel').textContent = `Deleted ${n(ev.deleted)} messages…`;
-        $('moStats').textContent = `${n(ev.deleted)} deleted · ${n(ev.scanned)} scanned`;
+        $('moStats').textContent = `${n(ev.deleted)} deleted · ${n(ev.failed || 0)} failed · ${n(ev.already_missing || 0)} already missing · ${n(ev.scanned)} scanned`;
         break;
 
       case 'warning':
@@ -659,7 +659,7 @@ async function startDmClear(dm) {
         es.close();
         $('moBar').style.width = '100%';
         $('moChannel').textContent = 'Done.';
-        $('moStats').textContent = `Deleted ${n(ev.deleted)} messages`;
+        $('moStats').textContent = `${n(ev.deleted)} deleted · ${n(ev.failed || 0)} failed · ${n(ev.already_missing || 0)} already missing`;
         logLine(log, `Complete — ${n(ev.deleted)} messages deleted`, 'ok');
         finishDmClear();
         break;
@@ -674,6 +674,7 @@ async function startDmClear(dm) {
 
       case 'error':
         es.close();
+        $('moStats').textContent = `${n(ev.deleted || 0)} deleted · ${n(ev.failed || 0)} failed · ${n(ev.already_missing || 0)} already missing`;
         logLine(log, `${ev.message}`, 'err');
         finishDmClear(ev.message);
         break;
@@ -1351,7 +1352,13 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   try {
     const data = await api(`/api/search?${params}`, {signal: searchController.signal});
     if (request !== searchRequest) return;
-    if (params.get('cursor') === 'true') searchCursors[page] = data.next_cursor;
+    if (params.get('cursor') === 'true') {
+      searchCursors[page] = data.next_cursor;
+      if (data.scan) {
+        submittedSearch.set('scan', 'true'); url.set('scan', 'true');
+        history.replaceState(null, '', `${location.pathname}?${url}#browse`);
+      }
+    }
     renderResults(data, params.get('q') || '');
     if (shouldScroll && activeView === 'browse') $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
   } catch (error) {
@@ -1382,9 +1389,9 @@ function renderResults(data, query) {
   const results = $('searchResults');
   results.replaceChildren();
   $('resultsStatus').textContent = data.total === null
-    ? (data.messages.length ? `${n(data.messages.length)} messages on this page` : 'No messages match these filters')
+    ? (data.partial ? `${n(data.messages.length)} matches in the checked history. More history remains; search older.` : data.messages.length ? `${n(data.messages.length)} messages on this page` : 'No messages match these filters')
     : data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
-  if (!data.messages.length) results.innerHTML = '<p class="no-results">No results found. Try another query or clear the filters.</p>';
+  if (!data.messages.length) results.innerHTML = data.partial ? '<p class="no-results">No matches in this part of the archive. More history remains; search older.</p>' : '<p class="no-results">No results found. Try another query or clear the filters.</p>';
   data.messages.forEach(msg => {
     const row = ce('article', 'result-row');
     const content = ce('div', 'message-body');
@@ -1399,10 +1406,11 @@ function renderResults(data, query) {
     const text = ce('p', 'result-copy');
     text.innerHTML = msg.content ? (query ? highlight(msg.content, query) : esc(msg.content)) : '(no text content)';
     content.append(heading, text);
-    if (msg.attachments?.length) {
+    if (msg.attachment_files?.length || msg.attachments?.length) {
       const attachments = ce('div', 'rc-attachments');
-      msg.attachments.forEach((url, i) => {
-        const link = ce('a', 'rc-att'); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = `image ${i + 1}`;
+      const files = msg.attachment_files?.length ? msg.attachment_files : msg.attachments.map((url, i) => ({url, filename: `image ${i + 1}`}));
+      files.forEach(file => {
+        const link = ce('a', 'rc-att'); link.href = file.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = file.filename || 'attachment';
         attachments.appendChild(link);
       });
       content.appendChild(attachments);
@@ -1509,7 +1517,7 @@ function connectLiveSSE() {
     const ev = JSON.parse(e.data);
     if (ev.type === 'ping') return;
 
-    if (ev.type === 'monitor_start') {
+    if (ev.type === 'monitor_start' || ev.type === 'monitor_paused') {
       S.liveChannels.add(ev.channel_id);
       updateLiveBadge();
       renderMonitorList();
@@ -1560,6 +1568,12 @@ function renderMonitorList() {
       item.querySelector('.lm-stop').addEventListener('click', () =>
         stopLiveChannels([ch.channel_id])
       );
+      if (ch.paused) {
+        item.querySelector('.lm-guild').textContent += ' · recovered, paused';
+        const resume = ce('button', 'lm-stop'); resume.type = 'button'; resume.textContent = 'resume';
+        resume.addEventListener('click', () => startLiveChannels([{id: ch.channel_id, name: ch.channel_name, guild_id: ch.guild_id, guild_name: ch.guild_name}]));
+        item.appendChild(resume);
+      }
       list.appendChild(item);
     });
     if (!data.channels.length) {

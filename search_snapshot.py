@@ -24,6 +24,7 @@ METADATA = ('guilds', 'channels', 'authors', 'profiles', 'profile_details', 'sta
 
 SCHEMA = """
 CREATE TABLE snapshot_info(key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE message_attachments(message_id INTEGER PRIMARY KEY,payload TEXT NOT NULL);
 CREATE TABLE ref_values(ref INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE record_names(id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE message_sources(ref INTEGER PRIMARY KEY, channel_id TEXT, guild_id TEXT,
@@ -199,9 +200,10 @@ def search_ids(db, q, filters, lower, upper, before, take, literal):
 def profile_servers(db, uid, q, offset, limit, normalize):
     ref = db.execute('SELECT ref FROM ref_values WHERE value=?', (uid,)).fetchone()
     if ref is None:
-        return {'servers': [], 'has_more': False, 'offset': offset}
+        return {'servers': [], 'has_more': False, 'offset': offset,
+                'observation_kind':'archived_messages','current_membership':None}
     db.create_function('search_label', 1, normalize, deterministic=True)
-    value = normalize(q).replace('%', '!%').replace('_', '!_')
+    value = normalize(q).replace('!', '!!').replace('%', '!%').replace('_', '!_')
     rows = db.execute("""SELECT s.guild_id id, COALESCE(g.name,'Unknown server') name,
         SUM(m.messages) messages, CAST(record_id(MAX(m.latest)) AS TEXT) latest_id
         FROM (SELECT source_id, COUNT(*) messages, MAX(rowid) latest
@@ -212,7 +214,8 @@ def profile_servers(db, uid, q, offset, limit, normalize):
           AND (search_label(g.name) LIKE ? ESCAPE '!' OR s.guild_id=?)
         GROUP BY s.guild_id ORDER BY messages DESC, CAST(s.guild_id AS INTEGER)
         LIMIT ? OFFSET ?""", (ref[0], '%' + value + '%', q.strip(), limit+1, offset)).fetchall()
-    return {'servers': [dict(r) for r in rows[:limit]], 'has_more': len(rows)>limit, 'offset': offset}
+    return {'servers': [dict(r) for r in rows[:limit]], 'has_more': len(rows)>limit, 'offset': offset,
+            'observation_kind':'archived_messages','current_membership':None}
 
 
 def page_usage(db, schema='main'):
@@ -252,9 +255,13 @@ def build_snapshot(source, destination, *, block_rows=BLOCK_ROWS, progress=None)
             # rows. mode=ro never migrates or changes the source database.
             db.execute('ATTACH DATABASE ? AS source', (source.as_uri() + '?mode=ro',))
             db.execute('BEGIN')
-            if db.execute('PRAGMA source.user_version').fetchone()[0] != 9:
-                raise ValueError('Export needs a schema v9 collection archive')
+            if db.execute('PRAGMA source.user_version').fetchone()[0] not in (9, 10):
+                raise ValueError('Export needs a schema v9/v10 collection archive')
             expected = db.execute('SELECT COUNT(*) FROM source.messages').fetchone()[0]
+            if db.execute("SELECT 1 FROM source.sqlite_master WHERE name='message_payloads' AND type='table'").fetchone():
+                db.execute("""INSERT INTO message_attachments
+                    SELECT message_id,json_extract(payload,'$.attachments') FROM source.message_payloads
+                    WHERE json_array_length(json_extract(payload,'$.attachments'))>0""")
             source_bytes = db.execute('PRAGMA source.page_count').fetchone()[0] * db.execute('PRAGMA source.page_size').fetchone()[0]
             source_pages = page_usage(db, 'source')
             for table in METADATA:
@@ -355,7 +362,11 @@ def main():
     parser.add_argument('destination', type=Path)
     parser.add_argument('--block-rows', type=int, default=BLOCK_ROWS)
     parser.add_argument('--report', type=Path, help='Save aggregate measurements without message data')
+    parser.add_argument('--with-media', action='store_true', help='Copy saved referenced media to a new sibling media directory')
     args = parser.parse_args()
+    media_destination = args.destination.resolve().parent/'media'
+    if args.with_media and (media_destination.exists() or media_destination.is_symlink()):
+        parser.error('Media export needs a new destination directory without an existing media cache')
     if args.report:
         if args.report.resolve() in (args.source.resolve(), args.destination.resolve()):
             parser.error('The report must be separate from both archive files')
@@ -363,11 +374,40 @@ def main():
             parser.error('Refusing to replace an existing report')
     report = build_snapshot(args.source, args.destination, block_rows=args.block_rows,
                            progress=lambda value: print(json.dumps(value), flush=True))
+    if args.with_media:
+        report['media'] = export_media(args.source,args.destination)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         with args.report.open('x', encoding='utf-8') as output:
             output.write(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
+
+
+def export_media(source, destination):
+    """Copy references from the verified snapshot, never unrelated cached files."""
+    from media_store import copy_referenced_media
+    from profile_store import image_url
+
+    def references():
+        with closing(sqlite3.connect(Path(destination).resolve().as_uri()+'?mode=ro&immutable=1',uri=True)) as db:
+            install_reader(db)
+            for row in db.execute('SELECT image_urls FROM message_records'):
+                yield from (row[0] or '').splitlines()
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='message_attachments'").fetchone():
+                for row in db.execute('SELECT payload FROM message_attachments'):
+                    for attachment in json.loads(row[0]):
+                        if isinstance(attachment,dict):
+                            yield attachment.get('url')
+            for uid,avatar,banner in db.execute('SELECT user_id,avatar_hash,banner_hash FROM profiles'):
+                yield image_url(uid,avatar)
+                yield image_url(uid,banner,'banners',1024)
+            for uid,payload in db.execute('SELECT user_id,payload FROM profile_details'):
+                details = json.loads(payload)
+                user = details.get('user') or {}
+                profile = details.get('user_profile') or {}
+                yield image_url(uid,user.get('avatar'))
+                yield image_url(uid,profile.get('banner') or user.get('banner'),'banners',1024)
+    return copy_referenced_media(source,destination,references())
 
 
 if __name__ == '__main__':

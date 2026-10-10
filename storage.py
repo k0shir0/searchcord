@@ -3,11 +3,15 @@
 import gzip
 import hashlib
 import json
+import os
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+from credential_store import migrate_credentials
+
+COLLECTION_VERSION = 10
 
 EPOCH_MS = 1420070400000
 IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".jfif", ".gif",
@@ -57,9 +61,27 @@ def _backup(path):
     target = path.with_name(f"{path.name}.pre-compact-{stamp}.bak")
     # The caller holds the write reservation. Read from another connection so
     # SQLite's backup API does not wait on its own uncommitted transaction.
-    with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as source:
-        with closing(sqlite3.connect(target)) as backup:
-            source.backup(backup)
+    # Only publish the recovery copy after credential removal and a rebuild of
+    # this disposable file. Earlier backups and the source file are untouched.
+    temporary = target.with_suffix('.private-tmp')
+    try:
+        descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(descriptor)
+        with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as source:
+            with closing(sqlite3.connect(temporary)) as backup:
+                source.backup(backup)
+                backup.execute('PRAGMA journal_mode=DELETE')
+                backup.execute('PRAGMA secure_delete=ON')
+                if backup.execute("SELECT 1 FROM sqlite_master WHERE name='settings' AND type='table'").fetchone():
+                    backup.execute("DELETE FROM settings WHERE key IN ('token','saved_tokens','active_token_id')")
+                backup.commit()
+                backup.execute('VACUUM')
+                if backup.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                    raise RuntimeError('Recovery backup failed integrity check')
+        os.replace(temporary, target)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
     return str(target)
 
 
@@ -146,6 +168,12 @@ def _migrate(db, legacy):
         FROM messages ORDER BY CAST(id AS INTEGER)""")
     if db.execute("SELECT COUNT(*) FROM messages_compact").fetchone()[0] != count:
         raise RuntimeError("Message migration row count mismatch")
+    if 'attachments' in columns:
+        # Old compact formats cannot recover missing message JSON, but every
+        # attachment value still present in older schemas remains available.
+        db.execute("""INSERT OR IGNORE INTO legacy_message_attachments(message_id,attachments)
+            SELECT CAST(id AS INTEGER),attachments FROM messages
+            WHERE attachments IS NOT NULL""")
     # NULL-safe comparison of every existing message value, not just counts or
     # text lengths. ID strings must round-trip exactly through integer storage.
     comparisons = [f'CAST(old.{key} AS TEXT) IS CAST(new.{key} AS TEXT)'
@@ -201,8 +229,9 @@ def init_database(path: str) -> dict:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(db_path, timeout=30)) as db:
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 9:
+        if version > COLLECTION_VERSION:
             raise RuntimeError('This archive uses a newer storage format; update Searchcord first')
+        credentials_migrated = migrate_credentials(db_path, db)
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA synchronous=NORMAL")
         db.execute("PRAGMA busy_timeout=30000")
@@ -238,6 +267,21 @@ def init_database(path: str) -> dict:
                 bot INTEGER, public_flags INTEGER, fetched_at TEXT NOT NULL)""")
             db.execute("""CREATE TABLE IF NOT EXISTS profile_details (
                 user_id TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS collection_jobs (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL,
+                state_json TEXT NOT NULL, updated_at REAL NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS message_payloads (
+                message_id INTEGER PRIMARY KEY, payload TEXT NOT NULL,
+                first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL,
+                deleted_at TEXT, complete INTEGER NOT NULL DEFAULT 1)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS message_revisions (
+                revision_id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL,
+                observed_at TEXT NOT NULL, event TEXT NOT NULL,
+                source TEXT NOT NULL, payload TEXT)""")
+            db.execute("""CREATE INDEX IF NOT EXISTS idx_revisions_message
+                ON message_revisions(message_id,revision_id)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS legacy_message_attachments (
+                message_id INTEGER PRIMARY KEY, attachments TEXT NOT NULL)""")
             db.execute("""CREATE TABLE IF NOT EXISTS channel_authors (
                 channel_id TEXT NOT NULL, author_id TEXT NOT NULL,
                 PRIMARY KEY (channel_id, author_id)) WITHOUT ROWID""")
@@ -270,6 +314,9 @@ def init_database(path: str) -> dict:
                 db.execute('DROP VIEW IF EXISTS message_records')
                 db.execute('DROP TRIGGER IF EXISTS messages_history_delete')
                 db.execute('ALTER TABLE message_history RENAME TO message_history_full')
+                db.execute("""INSERT OR IGNORE INTO legacy_message_attachments(message_id,attachments)
+                    SELECT m.id,h.attachments FROM message_history_full h
+                    JOIN messages m ON m.rowid=h.rowid WHERE h.attachments IS NOT NULL""")
                 db.execute("""CREATE TABLE message_history (
                     rowid INTEGER PRIMARY KEY, timestamp TEXT,
                     timestamp_override INTEGER NOT NULL DEFAULT 0,
@@ -371,6 +418,12 @@ def init_database(path: str) -> dict:
                 AFTER DELETE ON messages BEGIN
                 DELETE FROM message_history WHERE rowid=old.rowid;
                 END""")
+            db.execute("""CREATE TRIGGER IF NOT EXISTS messages_payload_delete
+                AFTER DELETE ON messages BEGIN
+                DELETE FROM message_payloads WHERE message_id=old.id;
+                DELETE FROM message_revisions WHERE message_id=old.id;
+                DELETE FROM legacy_message_attachments WHERE message_id=old.id;
+                END""")
             if migrate or not has_fts:
                 db.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
                 db.execute("INSERT INTO messages_fts(messages_fts) VALUES ('optimize')")
@@ -399,7 +452,7 @@ def init_database(path: str) -> dict:
                 LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
                 LEFT JOIN authors a ON a.id=CAST(m.author_id AS TEXT)""")
             db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-            db.execute("PRAGMA user_version=9")
+            db.execute(f"PRAGMA user_version={COLLECTION_VERSION}")
             db.commit()
         except Exception:
             db.rollback()
@@ -418,4 +471,123 @@ def init_database(path: str) -> dict:
                 backup = _pack_backup(backup)
             except (OSError, RuntimeError) as exc:
                 print(f"Could not compress recovery backup; uncompressed copy retained: {exc}")
-    return {"migrated": migrate or migrate_history, "backup": backup}
+    return {"migrated": migrate or migrate_history, "backup": backup,
+            "credentials_migrated": credentials_migrated}
+
+
+def _message_json(message):
+    return json.dumps(message, ensure_ascii=False, sort_keys=True,
+                      separators=(',', ':'), allow_nan=False)
+
+
+async def save_message_payloads(db, msgs, cid, cname, gid, gname, *, source='collection'):
+    """Save current content and every newly observed payload inside a transaction.
+
+    The caller commits metadata and cursors with this write. A return value only
+    counts previously unseen IDs, keeping collection limits independent of edits.
+    """
+    if not msgs:
+        return 0
+    incoming = {int(message['id']): message for message in msgs}
+    placeholders = ','.join('?' for _ in incoming)
+    async with db.execute(f"""SELECT m.id,m.rowid,m.channel_id,m.guild_id,m.author_id,
+        m.content,m.image_urls,p.payload,p.deleted_at
+        FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id
+        WHERE m.id IN ({placeholders})""", tuple(incoming)) as cursor:
+        previous = {row[0]: row for row in await cursor.fetchall()}
+    now = datetime.now(timezone.utc).isoformat()
+    rows, revisions, payloads = [], [], []
+    for ident, message in incoming.items():
+        author = message['author']
+        if message.get('channel_id') is not None and str(message['channel_id']) != str(cid):
+            raise ValueError('Received message belongs to a different channel')
+        old = previous.get(ident)
+        if old and (str(old[2]) != str(cid) or str(old[4]) != str(author['id'])):
+            raise ValueError('Received message has different immutable archive identifiers')
+        payload = _message_json(message)
+        rows.append((ident, int(cid), int(gid) if gid is not None else None,
+                     int(author['id']), message.get('content') or '',
+                     '\n'.join(image_urls(message.get('attachments'))) or None))
+        if old and old[7] is None:
+            # Preserve the last selective version before replacing its content.
+            legacy = {'id': str(ident), 'channel_id': str(old[2]),
+                      'guild_id': str(old[3]) if old[3] is not None else None,
+                      'author': {'id': str(old[4])}, 'content': old[5],
+                      'archived_image_urls': old[6].split('\n') if old[6] else []}
+            async with db.execute('SELECT attachments FROM legacy_message_attachments WHERE message_id=?',
+                                  (ident,)) as cursor:
+                attachments = await cursor.fetchone()
+            if attachments:
+                legacy['archived_attachments'] = attachments[0]
+            revisions.append((ident, now, 'message', 'legacy_archive', _message_json(legacy)))
+        if not old or old[7] != payload or old[8] is not None:
+            revisions.append((ident, now, 'message', source, payload))
+        payloads.append((ident, payload, now, now))
+    await db.executemany("""INSERT INTO messages
+        (id,channel_id,guild_id,author_id,content,image_urls) VALUES (?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET content=excluded.content,image_urls=excluded.image_urls
+        WHERE content IS NOT excluded.content OR image_urls IS NOT excluded.image_urls""", rows)
+    await db.executemany("""INSERT INTO message_payloads(message_id,payload,first_seen_at,last_seen_at)
+        VALUES (?,?,?,?) ON CONFLICT(message_id) DO UPDATE SET
+        payload=excluded.payload,last_seen_at=excluded.last_seen_at,deleted_at=NULL,complete=1""", payloads)
+    await db.executemany("""INSERT INTO message_revisions(message_id,observed_at,event,source,payload)
+        VALUES (?,?,?,?,?)""", revisions)
+    return len(incoming) - len(previous)
+
+
+async def mark_messages_deleted(db, ids, *, source='confirmed_delete'):
+    """Record confirmed upstream absence; retain searchable archived contents."""
+    now = datetime.now(timezone.utc).isoformat()
+    count = 0
+    for ident in dict.fromkeys(int(value) for value in ids):
+        async with db.execute('''SELECT m.content,m.channel_id,m.guild_id,m.author_id,m.image_urls,
+            p.deleted_at,p.payload FROM messages m
+            LEFT JOIN message_payloads p ON p.message_id=m.id WHERE m.id=?''', (ident,)) as cursor:
+            old = await cursor.fetchone()
+        if old is None or old[5] is not None:
+            continue
+        if old[6] is None:
+            legacy = _message_json({'id': str(ident), 'channel_id': str(old[1]),
+                                    'guild_id': str(old[2]) if old[2] is not None else None,
+                                    'author': {'id': str(old[3])}, 'content': old[0],
+                                    'archived_image_urls': old[4].split('\n') if old[4] else []})
+            await db.execute('''INSERT INTO message_payloads
+                (message_id,payload,first_seen_at,last_seen_at,deleted_at,complete) VALUES (?,?,?,?,?,0)''',
+                (ident, legacy, now, now, now))
+            await db.execute('''INSERT INTO message_revisions
+                (message_id,observed_at,event,source,payload) VALUES (?,?,'message','legacy_archive',?)''',
+                (ident, now, legacy))
+        else:
+            await db.execute('UPDATE message_payloads SET deleted_at=? WHERE message_id=?', (now, ident))
+        await db.execute('''INSERT INTO message_revisions
+            (message_id,observed_at,event,source,payload) VALUES (?,?,'deleted',?,NULL)''',
+            (ident, now, source))
+        count += 1
+    return count
+
+
+def read_message_archive(path, message_id, *, after_revision=0, limit=100):
+    """Read a bounded page of exact saved responses and observation history."""
+    limit = max(1, min(100, int(limit)))
+    ident = int(message_id)
+    with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)) as db:
+        row = db.execute('''SELECT m.id,p.payload,p.first_seen_at,p.last_seen_at,p.deleted_at,p.complete
+            FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id WHERE m.id=?''',
+            (ident,)).fetchone()
+        if row is None:
+            return None
+        legacy = db.execute('SELECT attachments FROM legacy_message_attachments WHERE message_id=?',
+                            (ident,)).fetchone()
+        revisions = db.execute('''SELECT revision_id,observed_at,event,source,payload
+            FROM message_revisions WHERE message_id=? AND revision_id>?
+            ORDER BY revision_id LIMIT ?''', (ident, int(after_revision), limit + 1)).fetchall()
+        return {'id': str(row[0]), 'payload': json.loads(row[1]) if row[1] else None,
+                'complete': bool(row[5]) if row[1] else False,
+                'first_seen_at': row[2], 'last_seen_at': row[3], 'deleted_at': row[4],
+                'legacy_attachments': legacy[0] if legacy else None,
+                'revisions': [{'revision_id': revision[0], 'observed_at': revision[1],
+                               'event': revision[2], 'source': revision[3],
+                               'payload': json.loads(revision[4]) if revision[4] else None}
+                              for revision in revisions[:limit]],
+                'has_more': len(revisions) > limit,
+                'next_revision': revisions[limit - 1][0] if len(revisions) > limit else None}

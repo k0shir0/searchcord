@@ -6,12 +6,13 @@ connections in Searchcord's palette. Its server panel is **observed archive
 history**, not a claim about live membership or mutual servers with your account.
 Servers are searchable, scrollable, paginated and sorted by saved message count
 descending. Selecting one searches that author's messages in that server.
-The avatar is displayed from its Discord CDN URL and opens that URL when clicked;
-Searchcord saves no image bytes to disk. The bio is labelled **About Me**.
+Available avatars and banners use verified local media copies; remote URLs remain
+a fallback when a download was unavailable. The card labels the saved observation
+time and marks profiles older than 24 hours as stale. The bio is labelled **About Me**.
 
 Basic saved profiles remain readable. **Scrape extended profile** (or **Refresh
 profile**) explicitly fetches the selected user with the currently selected
-Discord account. Near the top of Scrape, **backfill saved profiles**
+Discord account. Near the top of Scrape, **collect missing profiles**
 visits authors already in the archive in bounded batches. Stop preserves finished
 work. Restart skips saved extended profiles. Neither action fetches automatically
 when you open a card. Rate limits, timeouts, malformed responses, server errors,
@@ -30,7 +31,7 @@ delivers it through [Gateway presence events](https://discord.com/developers/doc
 with visibility restrictions. Backfill therefore cannot promise live or historical
 status for every saved user ID.
 
-`profile_details` is an additive table alongside the schema v9 `profiles` table.
+`profile_details` is an additive table alongside the `profiles` table.
 It stores the complete returned profile JSON and its fetch timestamp, preserving
 fields outside the initial card renderer. Supported card fields include avatar,
 banner, bio, pronouns, connected accounts, badges, creation date from user ID,
@@ -47,7 +48,9 @@ The public user-profile endpoint can return only what the active account is
 allowed to see. The upstream [client API documentation](https://discordpy-self.readthedocs.io/en/latest/api.html#discord.Client.fetch_user_profile)
 describes its access limitations. A successful basic user lookup alone cannot
 provide the full card. This prototype does not try to bypass account access.
-Saved CDN links display avatars and banners; image bytes are not stored locally.
+Use `refresh_stale=true` on profile backfill to revisit stale saved profiles.
+Presence remains a conditional snapshot and server lists remain archive observations.
+See [archive reliability](archive-reliability.md) for media limits and recovery.
 
 `profile_store.py` provides read functions shared with the display frontend;
 `profile_api.py` owns collection operations and job lifetime. No new package or

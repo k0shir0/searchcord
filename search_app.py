@@ -1,5 +1,6 @@
 """Read-only archive search. Run separately from the collection application."""
 import argparse
+import json
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -14,14 +15,16 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from profile_store import read_profile, profile_servers, search_label
-from profile_store import user_id
+from profile_store import user_id, image_url
 import search_snapshot
 from cli import local_url, print_banner
+from media_store import local_url as archived_media_url, media_router, media_status
 
 ROOT = Path(__file__).resolve().parent
 EPOCH_MS = 1420070400000
 MAX_ID = 9223372036854775807
 WINDOW = 16384
+QUERY_SECONDS = 4
 
 
 def snowflake_day(value: str, end=False) -> int:
@@ -56,11 +59,11 @@ class Archive:
             db = sqlite3.connect(uri, uri=True, timeout=1)
             db.row_factory = sqlite3.Row
             db.execute("PRAGMA query_only=ON")
-            deadline = time.monotonic() + 4
+            deadline = time.monotonic() + QUERY_SECONDS
             db.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (9, search_snapshot.VERSION):
-                raise HTTPException(503, "This display app needs a schema v9 archive or a verified search snapshot.")
+            if version not in (9, 10, search_snapshot.VERSION):
+                raise HTTPException(503, "This display app needs a schema v9/v10 archive or a verified search snapshot.")
             db.execute("BEGIN")
             if version == search_snapshot.VERSION:
                 search_snapshot.install_reader(db)
@@ -74,7 +77,22 @@ class Archive:
                 db.close()
 
     def search(self, q="", guild_id=None, channel_id=None, author_id=None,
-               date_from=None, date_to=None, before=None, limit=40, refresh_images=False):
+               date_from=None, date_to=None, before=None, limit=40, refresh_images=False, scan=False):
+        started = time.perf_counter()
+        args = (q, guild_id, channel_id, author_id, date_from, date_to, before, limit, refresh_images)
+        try:
+            result = self._search(*args, scan=scan)
+        except HTTPException as exc:
+            if exc.status_code != 408 or scan:
+                raise
+            # Retry in a fresh transaction over one bounded public-ID window.
+            # The continuation records examined rows, including an empty page.
+            result = self._search(*args, scan=True)
+        result['elapsed_ms'] = round((time.perf_counter()-started)*1000,1)
+        return result
+
+    def _search(self, q="", guild_id=None, channel_id=None, author_id=None,
+                date_from=None, date_to=None, before=None, limit=40, refresh_images=False, scan=False):
         started = time.perf_counter()
         q = q.strip()
         # A literal run preserves trigram acceleration, including queries with % or _.
@@ -98,9 +116,37 @@ class Archive:
                 params.append(value)
         where = " AND ".join(conditions) or "1"
         take = limit + 1
+        scan_cursor = None
         with self.connect() as db:
             packed = db.execute('PRAGMA user_version').fetchone()[0] == search_snapshot.VERSION
-            if packed:
+            if scan:
+                bounds, bound_params = [], []
+                for clause, value in (("id>=?", lower), ("id<?", upper), ("id<?", before)):
+                    if value is not None:
+                        bounds.append(clause)
+                        bound_params.append(value)
+                if packed:
+                    raw_bounds, raw_params = [], []
+                    for value, low in ((lower, True), (upper, False), (before, False)):
+                        if value is not None:
+                            boundary = db.execute('SELECT row_before_id(?)', (value,)).fetchone()[0]
+                            raw_bounds.append('rowid' + ('>=?' if low else '<=?'))
+                            raw_params.append(boundary+1 if low else boundary)
+                    window = [r[0] for r in db.execute('SELECT rowid FROM message_index WHERE ' +
+                        (' AND '.join(raw_bounds) or '1') + ' ORDER BY rowid DESC LIMIT ?', raw_params+[WINDOW+1])]
+                    floor = db.execute('SELECT record_id(?)', (window[min(WINDOW,len(window))-1],)).fetchone()[0] if window else None
+                    ids = search_snapshot.search_ids(db, q, selected, floor, upper, before, take,
+                                                    '%' + like_literal(q) + '%') if window else []
+                else:
+                    window = [r[0] for r in db.execute('SELECT id FROM messages WHERE ' +
+                        (' AND '.join(bounds) or '1') + ' ORDER BY id DESC LIMIT ?', bound_params+[WINDOW+1])]
+                    floor = window[min(WINDOW,len(window))-1] if window else None
+                    text_clause = "AND content LIKE ? ESCAPE '!' " if q else ''
+                    ids = [r[0] for r in db.execute(f"SELECT id FROM messages WHERE {where} AND id>=? " +
+                        text_clause + "ORDER BY id DESC LIMIT ?", params+[floor]+(['%'+like_literal(q)+'%'] if q else [])+[take])] if window else []
+                if len(window) > WINDOW and len(ids) <= limit:
+                    scan_cursor = str(floor)
+            elif packed:
                 ids = search_snapshot.search_ids(db, q, selected, lower, upper, before, take,
                                                 '%' + like_literal(q) + '%')
             elif q:
@@ -119,7 +165,7 @@ class Archive:
                         params + [floor] + (["%" + anchor + "%"] if indexed else []) + [literal, take-len(ids)])]
             else:
                 ids = [r[0] for r in db.execute(f"SELECT id FROM messages WHERE {where} ORDER BY id DESC LIMIT ?", params + [take])]
-            has_more = len(ids) > limit
+            has_more = len(ids) > limit or scan_cursor is not None
             ids = ids[:limit]
             messages = []
             if ids:
@@ -128,24 +174,44 @@ class Archive:
                 author_ids = list({row['author_id'] for row in rows})
                 avatars = {str(r[0]): r[1] for r in db.execute(
                     "SELECT user_id, avatar_hash FROM profiles WHERE user_id IN (" + ",".join("?" for _ in author_ids) + ")", author_ids)}
+                payload_table = 'message_attachments' if packed else 'message_payloads'
+                payloads = {}
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name=? AND type='table'", (payload_table,)).fetchone():
+                    public_ids = [row['id'] for row in rows]
+                    payloads = {str(r[0]):json.loads(r[1]) for r in db.execute(
+                        f'SELECT message_id,payload FROM {payload_table} WHERE message_id IN (' +
+                        ','.join('?' for _ in public_ids)+')',public_ids)}
                 for row in rows:
                     message = dict(row)
                     message.pop('storage_rowid', None)
                     message["id"] = str(message["id"])
                     avatar = avatars.get(message["author_id"])
                     message["avatar_url"] = (
-                        f"https://cdn.discordapp.com/avatars/{message['author_id']}/{avatar}.png?size=64"
+                        image_url(message['author_id'],avatar,size=64)
                         if isinstance(avatar, str) and re.fullmatch(r"(?:a_)?[A-Za-z0-9]+", avatar)
                         and str(message['author_id']).isdigit() else None)
+                    if message['avatar_url']:
+                        message['avatar_url'] = archived_media_url(self.path,message['avatar_url'])
                     # Display mode never fetches credentials or refreshes expiring links.
                     urls = (message.pop("image_urls") or "").splitlines()
                     message["attachments"] = [
-                        f"/api/images/{message['id']}/{i}" if refresh_images else url
+                        archived_media_url(self.path,url) if media_status(self.path,url)['status'] == 'saved' else
+                        (f"/api/images/{message['id']}/{i}" if refresh_images else url)
                         for i, url in enumerate(urls)
                         if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
+                    payload = payloads.get(message['id'], [] if packed else {})
+                    attachment_data = payload if packed else payload.get('attachments', [])
+                    message['attachment_files'] = [{
+                        'filename':attachment.get('filename') or 'attachment',
+                        'url':archived_media_url(self.path,attachment['url']),
+                        'media':media_status(self.path,attachment['url']),
+                    } for attachment in attachment_data if isinstance(attachment,dict) and
+                        isinstance(attachment.get('url'),str) and
+                        re.match(r'^https://(?:cdn|media)\.discordapp\.(?:com|net)/',attachment['url'])]
                     messages.append(message)
         return {"messages": messages, "has_more": has_more,
-                "next_cursor": messages[-1]['id'] if has_more else None,
+                "next_cursor": scan_cursor or (messages[-1]['id'] if has_more else None),
+                "scan": scan, "partial": scan_cursor is not None,
                 "elapsed_ms": round((time.perf_counter()-started)*1000, 1)}
 
 
@@ -159,6 +225,7 @@ def create_app(path=None, immutable=None):
     archive = Archive(database, immutable if immutable is not None else os.environ.get("SEARCHCORD_IMMUTABLE") == "1")
     app = FastAPI(title="Searchcord display", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+    app.include_router(media_router(database))
 
     @app.middleware("http")
     async def private_response(request, call_next):
@@ -181,8 +248,8 @@ def create_app(path=None, immutable=None):
                channel_id: Optional[str] = None, author_id: Optional[str] = None,
                date_from: Optional[str] = None, date_to: Optional[str] = None,
                before: Optional[int] = Query(None, ge=1, le=MAX_ID),
-               limit: int = Query(40, ge=1, le=100)):
-        return archive.search(q, guild_id, channel_id, author_id, date_from, date_to, before, limit)
+               limit: int = Query(40, ge=1, le=100), scan: bool = False):
+        return archive.search(q, guild_id, channel_id, author_id, date_from, date_to, before, limit, scan=scan)
 
     @app.get("/api/suggestions/{kind}")
     def suggestions(kind: Literal["server", "channel", "author"], q: str = Query("", max_length=100), guild_id: Optional[str] = None):

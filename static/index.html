@@ -38,9 +38,9 @@
         <input type="password" id="tokenInput" placeholder="Paste your token here…" autocomplete="off" spellcheck="false">
         <button class="token-toggle" id="tokenToggle" aria-label="Show new token">show</button>
       </div>
-      <p class="sg-hint">Stored in your configured local database. Sent externally only to Discord's API.</p>
+      <p class="sg-hint">Saved in an encrypted credential vault outside your archive. Sent externally only to Discord's API.</p>
       <button class="btn-mint" id="saveToken">save &amp; use token</button>
-      <p class="sg-hint" id="tokenCleanupHint">Remove every saved token and the active selection from this database. Stop scrapes, DM cleanup and live monitors first. Profile jobs stop. Messages and other settings stay. Older backups may still contain tokens.</p>
+      <p class="sg-hint" id="tokenCleanupHint">Remove all tokens from the encrypted vault and their database references. Stop active and paused scrapes, DM cleanup and live monitors first. Invite and profile jobs stop. Messages and other settings stay. Older backups and database pages may still contain past tokens.</p>
       <button class="btn-danger" id="clearTokens" aria-describedby="tokenCleanupHint" aria-live="polite">remove all saved tokens</button>
       <div class="token-status" id="tokenStatus" role="status"></div>
     </div>

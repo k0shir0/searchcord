@@ -1,4 +1,4 @@
-# Only the search runtime is sent to the builder, including from a full checkout.
+# Keep local archives and credentials out of legacy and BuildKit contexts.
 **
 !search_app.py
 !search_snapshot.py

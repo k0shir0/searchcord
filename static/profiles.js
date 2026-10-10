@@ -12,12 +12,13 @@
   close.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>view.close());
   document.addEventListener('click',event=>{const button=event.target.closest('[data-profile-id]');if(!button)return;dialog.showModal();view.open(button.dataset.profileId);});
   const panel=document.createElement('section');panel.className='profile-backfill';
-  panel.innerHTML='<h3>Archived profiles</h3><p class="profile-status">Fetch missing extended profiles for authors already in your archive using the selected Discord account. Discord profile lookup generally omits online and custom status.</p><button class="btn-mint" type="button" id="backfillProfiles">backfill saved profiles</button><button class="btn-ghost" type="button" id="stopProfileBackfill" hidden>stop</button><p class="profile-status" id="profileBackfillStatus" role="status"></p>';
+  panel.innerHTML='<h3>Archived profiles</h3><p class="profile-status">Collect missing profiles or refresh snapshots older than 24 hours using the selected Discord account. Discord may omit online and custom status.</p><button class="btn-mint" type="button" id="backfillProfiles">collect missing profiles</button><button class="btn-ghost" type="button" id="refreshStaleProfiles">refresh stale profiles</button><button class="btn-ghost" type="button" id="stopProfileBackfill" hidden>stop</button><p class="profile-status" id="profileBackfillStatus" role="status"></p>';
   document.querySelector('#view-scrape .collection-toolbar').after(panel);
-  const start=panel.querySelector('#backfillProfiles'),stop=panel.querySelector('#stopProfileBackfill'),status=panel.querySelector('#profileBackfillStatus');let timer;
-  const display=data=>{start.disabled=data.running;stop.hidden=!data.running;status.textContent=data.status==='idle'?'':`${data.status} ${data.saved} saved · ${data.failed} unavailable`;clearTimeout(timer);if(data.running)timer=setTimeout(poll,1000);};
+  const start=panel.querySelector('#backfillProfiles'),refresh=panel.querySelector('#refreshStaleProfiles'),stop=panel.querySelector('#stopProfileBackfill'),status=panel.querySelector('#profileBackfillStatus');let timer;
+  const display=data=>{start.disabled=data.running;refresh.disabled=data.running;stop.hidden=!data.running;status.textContent=data.status==='idle'?'':`${data.status} ${data.saved} saved · ${data.failed} unavailable`;clearTimeout(timer);if(data.running)timer=setTimeout(poll,1000);};
   async function poll(){try{display(await view.json('/api/profile-backfill'));}catch{status.textContent='Could not load progress; reconnecting…';clearTimeout(timer);timer=setTimeout(poll,1000);}}
-  start.addEventListener('click',async()=>{start.disabled=true;try{display(await view.json('/api/profile-backfill',{method:'POST'}));}catch(error){start.disabled=false;status.textContent=error.message;}});
+  async function collect(stale){start.disabled=true;refresh.disabled=true;try{display(await view.json(`/api/profile-backfill${stale?'?refresh_stale=true':''}`,{method:'POST'}));}catch(error){start.disabled=false;refresh.disabled=false;status.textContent=error.message;}}
+  start.addEventListener('click',()=>collect(false));refresh.addEventListener('click',()=>collect(true));
   stop.addEventListener('click',async()=>{try{display(await view.json('/api/profile-backfill/stop',{method:'POST'}));}catch(error){status.textContent=error.message;}});
   poll();
 })();

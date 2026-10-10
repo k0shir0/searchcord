@@ -51,16 +51,20 @@ window.SearchcordProfile = class {
       const collect=this.node('button','profile-fetch',data.extended?'Refresh profile':'Scrape extended profile');collect.type='button';
       collect.addEventListener('click',async()=>{
         collect.disabled=true;status.textContent='Fetching profile…';const version=this.version;
-        try{await this.json(`/api/profiles/${encodeURIComponent(this.uid)}/fetch`,{method:'POST'});if(version===this.version)await this.open(this.uid);}
+        try{await this.json(`/api/profiles/${encodeURIComponent(this.uid)}/refresh`,{method:'POST'});if(version===this.version)await this.open(this.uid);}
         catch(error){if(version===this.version){status.textContent=error.message;collect.disabled=false;}}
       });actions.append(collect);
     }
     if(actions.childElementCount)copy.append(actions);
-    const status=this.node('p','profile-status',!data.extended?(data.scraped?'Basic profile saved. Extended details have not been scraped.':'Profile has not been scraped. Showing archived identity.'):'');
+    const observed=data.fetched_at?new Date(data.fetched_at):null;
+    const savedAt=observed&&!Number.isNaN(observed.valueOf())?observed.toLocaleString():null;
+    const description=data.extended?'Saved profile snapshot':(data.scraped?'Basic profile snapshot':'Archived identity');
+    const freshness=savedAt?`${description} observed ${savedAt}.${data.profile_stale?' Older than 24 hours.':''}`:`${description}. Observation time is unavailable.`;
+    const status=this.node('p','profile-status',`${freshness}${!data.extended?' Extended details have not been collected.':''}`);
     status.setAttribute('role','status');copy.append(status);
     if(data.bio){const about=this.node('section','profile-about');about.append(this.node('h3','','About Me'),this.node('p','profile-bio',data.bio));copy.append(about);}
     if(data.extended){
-      const presence=this.node('section','profile-presence');presence.append(this.node('h3','','Status'));
+      const presence=this.node('section','profile-presence');presence.append(this.node('h3','','Status when observed'));
       const facts=this.node('dl');
       const online={online:'Online',idle:'Idle',dnd:'Do not disturb',offline:'Offline'}[data.online_status];
       facts.append(this.node('dt','','Online status at fetch'),this.node('dd','',online||'Not returned by Discord'));
@@ -79,7 +83,7 @@ window.SearchcordProfile = class {
       for(const connection of data.connections){const row=this.node('div','profile-connection');row.append(this.node('span','connection-type',connection.type||'Account'),this.node('strong','',connection.name||connection.id||''));if(connection.verified)row.append(this.node('span','','Verified'));connections.append(row);}copy.append(connections);
     }
     identity.append(banner,portrait,copy);
-    const history=this.node('section','profile-history');history.append(this.node('h3','','Seen in servers'),this.node('p','profile-order','Most messages first'));
+    const history=this.node('section','profile-history');history.append(this.node('h3','','Seen in archived servers'),this.node('p','profile-order','Archived message observations, most messages first. Current membership is unknown.'));
     const label=this.node('label','profile-server-search','Search servers');this.serverInput=this.node('input');this.serverInput.type='search';this.serverInput.placeholder='Server name';label.append(this.serverInput);history.append(label);
     this.serverInput.addEventListener('input',()=>{clearTimeout(this.timer);this.serverVersion++;this.serverController?.abort();this.timer=setTimeout(()=>this.servers(),180);});
     this.serverList=this.node('div','profile-server-list');this.serverList.setAttribute('role','list');this.serverList.setAttribute('aria-label','Servers seen in archive');history.append(this.serverList);
