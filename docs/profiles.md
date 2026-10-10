@@ -21,6 +21,7 @@ longer Discord cooldowns. Progress identifies the current user and wait. Stop
 interrupts an active request or cooldown. HTTP 403/404 skip that unavailable
 user; HTTP 401 stops bulk work so account authorization can be corrected.
 Successful profiles commit before the next request's cooldown begins.
+Stop and shutdown join an in-flight profile commit before closing its connection.
 Existing profile data is kept on failed requests. Unknown/unavailable fields are
 not invented and presence is not inferred.
 

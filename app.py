@@ -29,6 +29,7 @@ from cli import local_url, open_url, print_banner
 from channel_access import readable_channels
 from invite_api import invite_router
 from collection_state import save_job, persist_job, load_jobs, remove_job
+from durable_scrape import Scrapes, TransientScrapeError
 from credential_store import (load_credentials, save_credentials, clear_credentials,
                               credential_metadata, CredentialError)
 from media_store import archive_message_media, local_url as archived_media_url, cache_media, clear_media, media_router
@@ -64,9 +65,6 @@ PROGRESS_QUEUE_MAX = 1000
 # How long a finished job stays readable before it is discarded.
 JOB_RETENTION_SECONDS = 60
 
-# In-memory job tracker: job_id -> {queue, cancelled}
-active_jobs: dict = {}
-
 scrape_log = logging.getLogger("searchcord.scrape")
 if not scrape_log.handlers:
     handler = logging.StreamHandler()
@@ -97,47 +95,6 @@ credentials_clearing = False
 collection_write_lock = asyncio.Lock()
 settings_lock = asyncio.Lock()
 collection_persistence_ready = False
-
-
-def _scrape_state(job):
-    # Explicit fields keep tasks, subscriber queues and credentials out of storage.
-    return {key: job.get(key) for key in (
-        "running", "cancelled", "pause_requested", "paused", "channels", "limit",
-        "harvest_profiles", "index", "total_messages", "completed", "rows",
-        "last_event", "next_index", "channel_state", "failed_channels",
-        "credential_id", "profile_auth_failed")}
-
-
-async def _commit_scrape_transition(db, job_id, channel_id, state, *, history, before):
-    job = active_jobs[job_id]
-    async def commit():
-        await db.execute("BEGIN")
-        try:
-            if history and before:
-                await db.execute("UPDATE scrape_cursors SET history_complete=1 WHERE channel_id=?", (channel_id,))
-            elif not history and before:
-                await db.execute("""UPDATE scrape_cursors SET pending_after_message_id=NULL,
-                    pending_before_message_id=NULL WHERE channel_id=?""", (channel_id,))
-            checkpoint = {**_scrape_state(job), "channel_state": state}
-            await save_job(db, job_id, "scrape", checkpoint)
-            await db.commit()
-            job["channel_state"] = state
-        except BaseException:
-            await db.rollback()
-            raise
-    async with job.setdefault("checkpoint_lock", asyncio.Lock()):
-        task = asyncio.create_task(commit())
-        try:
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            await task
-            raise
-
-
-async def _persist_scrape(job_id):
-    job = active_jobs[job_id]
-    async with job.setdefault("checkpoint_lock", asyncio.Lock()):
-        await persist_job(DB_PATH, job_id, "scrape", _scrape_state(job))
 
 
 async def _credential_id():
@@ -173,7 +130,7 @@ def _require_credentials_available():
 
 
 async def _persist_pacing():
-    if not collection_persistence_ready and not any(job.get("durable") for job in active_jobs.values()):
+    if not collection_persistence_ready:
         return
     now = time.monotonic()
     wall = time.time()
@@ -195,32 +152,15 @@ async def _recover_collection_jobs():
             scrape_break_until = now + max(0, state.get("scrape_break_until", 0) - wall)
             last_scrape_request = now + state.get("last_scrape_request", 0) - wall
             scrape_confirmed_requests = state.get("scrape_confirmed_requests", 0)
-        elif kind == "scrape" and state.get("running") and not state.get("cancelled"):
-            state.update(paused=True, pause_requested=True, recovered=True,
-                         durable=True, inactive=True,
-                         queue=asyncio.Queue(maxsize=PROGRESS_QUEUE_MAX), subscribers=set(),
-                         channel_ids={ch["id"] for ch in state["channels"]})
-            active_jobs[job_id] = state
         elif kind == "monitor" and state.get("running"):
             live_monitors[job_id] = {**state, "paused": True, "task": None}
+    await scrapes.recover()
     collection_persistence_ready = True
 
 
 async def _suspend_collection_jobs():
     tasks = []
-    for job_id, job in list(active_jobs.items()):
-        if job.get("running"):
-            job["suspending"] = True
-            job["paused"] = job["pause_requested"] = True
-            task = job.get("task")
-            if task and not task.done():
-                task.cancel()
-                tasks.append(task)
-            else:
-                await _persist_scrape(job_id)
-        elif job.get("task") and not job["task"].done():
-            job["task"].cancel()
-            tasks.append(job["task"])
+    await scrapes.suspend()
     for cid, info in list(live_monitors.items()):
         info["suspending"] = True
         info["paused"] = True
@@ -288,7 +228,7 @@ async def lifespan(app: FastAPI):
         await http_client.aclose()
         http_client = None
         collection_persistence_ready = False
-        active_jobs.clear()
+        scrapes.reset()
         live_monitors.clear()
 
 app = FastAPI(lifespan=lifespan)
@@ -430,6 +370,26 @@ def _unknown_message(response) -> bool:
             and payload["code"] == 10008)
 
 
+@asynccontextmanager
+async def _discord_gate(scrape_job_id, cancelled):
+    # Check controls while waiting for another request, without acquiring the
+    # gate on behalf of a paused scrape.
+    while True:
+        if scrape_job_id:
+            await scrapes.checkpoint(scrape_job_id)
+        if cancelled and cancelled():
+            raise ProfileStopped
+        try:
+            await asyncio.wait_for(discord_request_lock.acquire(), timeout=0.1)
+            break
+        except asyncio.TimeoutError:
+            continue
+    try:
+        yield
+    finally:
+        discord_request_lock.release()
+
+
 async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                   cancelled=None, on_wait=None, scrape_job_id=None, **kwargs):
     global last_discord_request, discord_ready_at, last_scrape_request
@@ -448,15 +408,13 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
         interval = random.uniform(SCRAPE_INTERVAL_MIN_SECONDS, SCRAPE_INTERVAL_MAX_SECONDS) if scrape_job_id else 0
         while True:
             if scrape_job_id:
-                await _scrape_checkpoint(scrape_job_id)
+                await scrapes.checkpoint(scrape_job_id)
             if cancelled and cancelled():
                 raise ProfileStopped
-            async with discord_request_lock:
-                if scrape_job_id and active_jobs[scrape_job_id].get("cancelled"):
-                    raise _ScrapeStopped
+            async with _discord_gate(scrape_job_id, cancelled):
                 if cancelled and cancelled():
                     raise ProfileStopped
-                if scrape_job_id and active_jobs[scrape_job_id].get("pause_requested"):
+                if scrape_job_id and not scrapes.request_allowed(scrape_job_id):
                     continue
                 ready_at = max(last_discord_request + DISCORD_INTERVAL_SECONDS, discord_ready_at)
                 if scrape_job_id:
@@ -465,12 +423,16 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                 if wait <= 0:
                     last_discord_request = time.monotonic()
                     try:
-                        r = await http_client.request(method, url, headers=headers, **kwargs)
-                    finally:
-                        if scrape_job_id:
-                            # A slow response or network failure still gets a
-                            # full interval before the next scrape request.
-                            last_scrape_request = time.monotonic()
+                        try:
+                            r = await http_client.request(method, url, headers=headers, **kwargs)
+                        finally:
+                            if scrape_job_id:
+                                # Failures and slow responses also get the full
+                                # scrape interval before another request.
+                                last_scrape_request = time.monotonic()
+                    except BaseException:
+                        await _persist_pacing()
+                        raise
                     if scrape_job_id and 200 <= r.status_code < 300:
                         scrape_confirmed_requests += 1
                         if scrape_confirmed_requests == SCRAPE_BREAK_REQUESTS:
@@ -489,18 +451,15 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                     await _persist_pacing()
                     break
             if scrape_job_id and scrape_break_until > time.monotonic():
-                job = active_jobs[scrape_job_id]
-                if not job.get("on_break"):
-                    job["on_break"] = True
-                    _emit(job["queue"], {"type": "scrape_break", "wait_seconds": math.ceil(scrape_break_until - time.monotonic())})
+                scrapes.break_wait(scrape_job_id, math.ceil(scrape_break_until - time.monotonic()))
             if on_wait and wait >= 0.1:
                 on_wait(wait)
             if scrape_job_id:
-                await _wait_for_scrape_retry(scrape_job_id, min(0.25, wait))
+                await scrapes.wait(scrape_job_id, min(0.25, wait))
             else:
                 await asyncio.sleep(min(0.25, wait))
-        if scrape_job_id and active_jobs[scrape_job_id].pop("on_break", False):
-            _emit(active_jobs[scrape_job_id]["queue"], {"type": "scrape_break_end"})
+        if scrape_job_id:
+            scrapes.break_finished(scrape_job_id)
         if r.status_code == 429:
             if not retry_rate_limits or attempt == MAX_RATE_LIMIT_RETRIES:
                 return r
@@ -599,161 +558,52 @@ def _validated_channels(channels):
 
 
 @app.post("/api/scrape/start")
-async def start_scrape(req: ScrapeRequest, bg: BackgroundTasks):
-    _require_archive_available()
-    req.channels = _validated_channels(req.channels)
-    credential_id, _ = await _selected_credentials()
-    _require_archive_available()
-    channel_ids = {channel.get("id") for channel in req.channels
-                   if isinstance(channel, dict) and channel.get("id")}
-    if any(channel_ids & job.get("channel_ids", set())
-           for job in active_jobs.values() if job.get("running")):
-        raise HTTPException(409, "A selected channel is still being scraped")
-    job_id = str(uuid.uuid4())
-    queue: asyncio.Queue = asyncio.Queue(maxsize=PROGRESS_QUEUE_MAX)
-    active_jobs[job_id] = {"queue": queue, "cancelled": False,
-                           "running": True, "channel_ids": channel_ids,
-                           "pause_requested": False, "paused": False,
-                           "channels": req.channels, "limit": req.limit,
-                           "harvest_profiles": req.harvest_profiles,
-                           "subscribers": set(), "index": 0,
-                           "total_messages": 0, "completed": 0,
-                           "rows": [{} for _ in req.channels], "next_index": 0,
-                           "channel_state": None, "failed_channels": 0,
-                           "credential_id": credential_id, "durable": True}
-    try:
-        await _persist_scrape(job_id)
-    except Exception:
-        active_jobs.pop(job_id, None)
-        raise
-    active_jobs[job_id]["task"] = asyncio.create_task(
-        run_scrape(job_id, req.channels, req.limit, req.harvest_profiles))
-    return {"job_id": job_id}
-
-
-def _scrape_snapshot(job_id: str, job: dict):
-    return {"type": "snapshot", "job_id": job_id,
-            **{key: job.get(key) for key in (
-                "running", "cancelled", "pause_requested", "paused", "channels",
-                "limit", "harvest_profiles", "index", "total_messages", "completed", "rows", "recovered")},
-            "break_seconds": max(0, math.ceil(scrape_break_until - time.monotonic())),
-            "last_event": job.get("last_event")}
+async def start_scrape(req: ScrapeRequest):
+    channels = _validated_channels(req.channels)
+    return {"job_id": await scrapes.start(channels, req.limit, req.harvest_profiles)}
 
 
 @app.get("/api/scrape/active")
 async def scrape_active():
-    return [_scrape_snapshot(job_id, job) for job_id, job in active_jobs.items()
-            if job.get("running")]
-
-
-def _running_scrape(job_id: str):
-    job = active_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
-    if not job.get("running") or job.get("cancelled"):
-        raise HTTPException(409, "Scrape is no longer running")
-    return job
+    return scrapes.active()
 
 
 @app.post("/api/scrape/{job_id}/pause")
 async def pause_scrape(job_id: str):
-    job = _running_scrape(job_id)
-    job["pause_requested"] = True
-    await _persist_scrape(job_id)
-    return {"ok": True, "paused": job.get("paused", False)}
+    return await scrapes.pause(job_id)
 
 
 @app.post("/api/scrape/{job_id}/resume")
 async def resume_scrape(job_id: str):
-    job = _running_scrape(job_id)
-    _require_archive_available()
-    await _job_token(job)
-    requested = job.get("pause_requested")
-    job["pause_requested"] = job["paused"] = False
-    job["recovered"] = False
-    await _persist_scrape(job_id)
-    if job.get("inactive") or not job.get("task") or job["task"].done():
-        job.update(inactive=False, suspending=False)
-        job["task"] = asyncio.create_task(run_scrape(job_id, job["channels"], job["limit"], job["harvest_profiles"]))
-    if requested:
-        _emit(job["queue"], {"type": "resumed",
-              "break_seconds": max(0, math.ceil(scrape_break_until - time.monotonic()))})
-    return {"ok": True}
+    return await scrapes.resume(job_id)
 
 
 @app.post("/api/scrape/{job_id}/stop")
 async def stop_scrape(job_id: str):
-    if job_id not in active_jobs:
-        raise HTTPException(404, "Job not found")
-    active_jobs[job_id]["cancelled"] = True
-    job = active_jobs[job_id]
-    if job.get("inactive") or not job.get("task") or job["task"].done():
-        job["running"] = False
-        _emit(job["queue"], {"type": "cancelled", "total_messages": job.get("total_messages", 0)})
-    await _persist_scrape(job_id)
-    return {"ok": True}
+    return await scrapes.stop(job_id)
 
 
 @app.get("/api/scrape/progress/{job_id}")
 async def scrape_progress(job_id: str, request: Request):
-    job = active_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
+    scrapes.snapshot(job_id)
 
     async def stream():
-        queue = asyncio.Queue(maxsize=PROGRESS_QUEUE_MAX)
-        job.setdefault("subscribers", set()).add(queue)
-        try:
-            yield f"data: {json.dumps(_scrape_snapshot(job_id, job))}\n\n"
-            terminal = job.get("last_event", {})
-            if terminal.get("type") in ("complete", "cancelled", "error"):
-                yield f"data: {json.dumps(terminal)}\n\n"
-                return
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    evt = await asyncio.wait_for(queue.get(), timeout=25.0)
-                    yield f"data: {json.dumps(evt)}\n\n"
-                    if evt.get("type") in ("complete", "cancelled", "error"):
-                        break
-                except asyncio.TimeoutError:
-                    if job_id not in active_jobs:
-                        break
-                    yield "data: {\"type\":\"ping\"}\n\n"
-        finally:
-            job["subscribers"].discard(queue)
+        async for event in scrapes.events(job_id):
+            if await request.is_disconnected():
+                break
+            yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 def _emit(q: asyncio.Queue, event: dict):
-    """Queue a progress event without ever blocking the scrape.
+    """Queue a progress event without blocking its worker.
 
     Progress events are disposable: if the consumer has stalled or gone away,
     drop the oldest rather than letting a full queue back-pressure the loop
     that is actually doing the work.
     """
-    for job in active_jobs.values():
-        if job.get("queue") is q:
-            job["last_event"] = event
-            kind = event["type"]
-            if kind == "channel_start":
-                job["index"] = event["index"]
-            if "total_messages" in event:
-                job["total_messages"] = event["total_messages"]
-            if kind == "channel_complete":
-                job["completed"] = job.get("completed", 0) + 1
-            if kind in ("progress", "channel_start", "channel_complete", "channel_error") and job.get("rows"):
-                row = job["rows"][job["index"] - 1]
-                if kind == "channel_complete" and row.get("type") == "channel_error":
-                    row["messages"] = event["messages"]
-                else:
-                    job["rows"][job["index"] - 1] = event
-            for subscriber in job.get("subscribers", ()):
-                _emit(subscriber, event)
-            break
     while True:
         try:
             q.put_nowait(event)
@@ -798,7 +648,7 @@ async def _write_db():
 async def _save_messages(db, msgs: list, cid: str, cname: str, gid: str,
                          gname: str, history_page: bool = False,
                          pending: tuple = None, clear_pending: bool = False,
-                         job_checkpoint=None, monitor_checkpoint=None) -> int:
+                         checkpoint=None, history_complete=False, monitor_checkpoint=None) -> int:
     if not msgs:
         return 0
     author_names = [m["author"].get("global_name") or
@@ -858,76 +708,48 @@ async def _save_messages(db, msgs: list, cid: str, cname: str, gid: str,
             await db.execute("""UPDATE scrape_cursors SET
                 pending_after_message_id=NULL, pending_before_message_id=NULL
                 WHERE channel_id=?""", (cid,))
-        if job_checkpoint:
-            job_id, checkpoint = job_checkpoint
-            await save_job(db, job_id, "scrape", checkpoint(inserted))
+        if history_complete:
+            await db.execute("UPDATE scrape_cursors SET history_complete=1 WHERE channel_id=?", (cid,))
+        if checkpoint:
+            await checkpoint(inserted)
         if monitor_checkpoint:
             channel_id, checkpoint = monitor_checkpoint
             await save_job(db, channel_id, "monitor", checkpoint())
         await db.commit()
         return inserted
-    except Exception:
+    except BaseException:
         await db.rollback()
         raise
 
 
-async def _mark_history_complete(db, cid: str):
-    await db.execute("UPDATE scrape_cursors SET history_complete=1 WHERE channel_id=?", (cid,))
-    await db.commit()
-
-
-async def _clear_pending(db, cid: str):
-    await db.execute("""UPDATE scrape_cursors SET
-        pending_after_message_id=NULL, pending_before_message_id=NULL
-        WHERE channel_id=?""", (cid,))
-    await db.commit()
-
-
-async def _harvest_profiles(db, msgs: list, cid: str, token: str, job_id: str,
-                            q: asyncio.Queue, already_saved: int = 0) -> int:
-    # Fetch each newly encountered real user before requesting another message
-    # page. Do not scan every author ever archived in this channel.
-    missing = dict.fromkeys(m['author']['id'] for m in msgs if not m.get('webhook_id'))
-    saved = 0
-    async def scrape_discord(*args, **kwargs):
-        return await discord(*args, scrape_job_id=job_id, **kwargs)
-
-    for user_id in missing:
-        if active_jobs.get(job_id, {}).get("cancelled"):
+async def _collect_scrape_profile(db, user_id, token, *, job_id, cancelled, checkpoint, progress):
+    # Storage/transport remain profile responsibilities; pending work belongs to
+    # the scrape owner. Recheck after acquiring the shared profile lock.
+    while True:
+        await checkpoint()
+        try:
+            await asyncio.wait_for(profile_fetch_lock.acquire(), timeout=0.1)
             break
-        # Two scrape jobs can see the same missing author. Check again under the
-        # lock so each stable user ID is fetched at most once per process.
-        async with profile_fetch_lock:
-            async with db.execute("SELECT 1 FROM profile_details WHERE user_id=?", (user_id,)) as cur:
-                if await cur.fetchone():
-                    continue
-            try:
-                await collect_profile(db, user_id, token, scrape_discord,
-                    lambda: active_jobs.get(job_id, {}).get('cancelled', False),
-                    lambda info: _emit(q, {'type': 'profile_retry', 'channel_id': cid, **info}),
-                    checkpoint=lambda: _scrape_checkpoint(job_id))
-            except HTTPException as exc:
-                _emit(q, {"type": "profile_warning", "message": f"Profile HTTP {exc.status_code}"})
-                if exc.status_code == 401:
-                    active_jobs[job_id]['profile_auth_failed'] = True
-                    break
-                continue
-            saved += 1
-            state = active_jobs[job_id].get("channel_state")
-            if state is not None:
-                state["profiles"] = already_saved + saved
-                state["pending_profiles"] = [uid for uid in state["pending_profiles"] if uid != user_id]
-                await _persist_scrape(job_id)
-            _emit(q, {"type": "profile_progress", "channel_id": cid,
-                      "user_id": user_id, "saved": already_saved + saved})
-    return saved
+        except asyncio.TimeoutError:
+            continue
+    try:
+        await checkpoint()
+        async with db.execute("SELECT 1 FROM profile_details WHERE user_id=?", (user_id,)) as cursor:
+            if await cursor.fetchone():
+                return False
+        async def request(*args, **kwargs):
+            return await discord(*args, scrape_job_id=job_id, **kwargs)
+        await collect_profile(db, user_id, token, request, cancelled, progress, checkpoint=checkpoint)
+        return True
+    finally:
+        profile_fetch_lock.release()
 
 
 async def _fetch_messages(cid: str, token: str, params: dict, job_id: str) -> list:
     r = await discord("GET", f"/channels/{cid}/messages", token, params=params,
                       scrape_job_id=job_id)
     if r.status_code in (408, 425, 429) or 500 <= r.status_code <= 599:
-        raise _TransientScrapeError(f"HTTP {r.status_code}",
+        raise TransientScrapeError(f"HTTP {r.status_code}",
                                     _retry_after(r) if r.status_code in (429, 503) else 0)
     if r.status_code == 401:
         raise PermissionError("Token rejected (401)")
@@ -938,267 +760,27 @@ async def _fetch_messages(cid: str, token: str, params: dict, job_id: str) -> li
     try:
         messages = r.json()
     except (ValueError, TypeError) as exc:
-        raise _TransientScrapeError("Invalid JSON response") from exc
+        raise TransientScrapeError("Invalid JSON response") from exc
     if not isinstance(messages, list):
-        raise _TransientScrapeError("Unexpected messages response")
+        raise TransientScrapeError("Unexpected messages response")
     return messages
 
 
-class _TransientScrapeError(RuntimeError):
-    def __init__(self, reason: str, retry_after: float = 0):
-        super().__init__(reason)
-        self.retry_after = retry_after
+def create_scrapes():
+    return Scrapes(
+        path=lambda: DB_PATH, credentials=lambda: _selected_credentials(),
+        available=_require_archive_available, connect=lambda: _write_db(),
+        fetch=lambda *args: _fetch_messages(*args),
+        save=lambda *args, **kwargs: _save_messages(*args, **kwargs),
+        profile=lambda *args, **kwargs: _collect_scrape_profile(*args, **kwargs),
+        media=lambda *args, **kwargs: archive_message_media(DB_PATH, *args, **kwargs),
+        break_seconds=lambda: max(0, math.ceil(scrape_break_until - time.monotonic())),
+        queue_size=PROGRESS_QUEUE_MAX, retention=JOB_RETENTION_SECONDS,
+        retry_base=SCRAPE_RETRY_BASE_SECONDS, retry_max=SCRAPE_RETRY_MAX_SECONDS,
+        log=scrape_log)
 
 
-class _ScrapeStopped(Exception):
-    pass
-
-
-def _scrape_position(params: dict) -> str:
-    if "before" in params:
-        return f"before={params['before']}"
-    if "after" in params:
-        return f"after={params['after']}"
-    return "start"
-
-
-def _scrape_retry_reason(exc: Exception):
-    if isinstance(exc, _TransientScrapeError):
-        return str(exc), exc.retry_after
-    if isinstance(exc, httpx.RequestError):
-        return type(exc).__name__, 0
-    if isinstance(exc, TimeoutError):
-        return "TimeoutError", 0
-    if isinstance(exc, sqlite3.OperationalError) and any(
-            word in str(exc).lower() for word in ("locked", "busy")):
-        return "database busy", 0
-    return None
-
-
-async def _scrape_checkpoint(job_id: str):
-    job = active_jobs[job_id]
-    while True:
-        if job.get("cancelled"):
-            raise _ScrapeStopped
-        if not job.get("pause_requested"):
-            return
-        if not job.get("paused"):
-            job["paused"] = True
-            _emit(job["queue"], {"type": "paused"})
-            await _persist_scrape(job_id)
-        await asyncio.sleep(0.1)
-
-
-async def _wait_for_scrape_retry(job_id: str, seconds: float, pause: bool = True):
-    deadline = time.monotonic() + seconds
-    while True:
-        if active_jobs.get(job_id, {}).get("cancelled"):
-            raise _ScrapeStopped
-        if pause:
-            await _scrape_checkpoint(job_id)
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return
-        await asyncio.sleep(min(0.1, remaining))
-
-
-async def _retry_scrape_operation(job_id: str, cid: str, q: asyncio.Queue,
-                                  params: dict, stage: str, operation):
-    attempts = 0
-    position = _scrape_position(params)
-    while True:
-        if active_jobs.get(job_id, {}).get("cancelled"):
-            raise _ScrapeStopped
-        if stage == "fetch":
-            await _scrape_checkpoint(job_id)
-        try:
-            result = await operation()
-            if attempts:
-                scrape_log.info("job=%s channel=%s %s %s recovered after %s retries",
-                                job_id, cid, stage, position, attempts)
-                _emit(q, {"type": "retry_resumed", "channel_id": cid,
-                          "stage": stage, "attempts": attempts})
-            return result
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            retry = _scrape_retry_reason(exc)
-            if retry is None:
-                raise
-            attempts += 1
-            reason, retry_after = retry
-            backoff = min(SCRAPE_RETRY_MAX_SECONDS,
-                          SCRAPE_RETRY_BASE_SECONDS * 2 ** min(attempts - 1, 10))
-            delay = max(backoff, retry_after)
-            scrape_log.warning(
-                "job=%s channel=%s %s %s failed: %s; attempt=%s waiting=%.1fs",
-                job_id, cid, stage, position, reason, attempts, delay)
-            _emit(q, {"type": "retry_wait", "channel_id": cid,
-                      "stage": stage, "attempt": attempts,
-                      "wait_seconds": round(delay, 1), "reason": reason})
-            await _wait_for_scrape_retry(job_id, delay, pause=stage == "fetch")
-
-
-async def _save_scrape_page(db, msgs, cid, cname, gid, gname, job_id, next_state, **kwargs):
-    job = active_jobs[job_id]
-    async with job.setdefault("checkpoint_lock", asyncio.Lock()):
-        checkpoint = None
-
-        def committed_state(inserted):
-            nonlocal checkpoint
-            checkpoint = _scrape_state(job)
-            checkpoint["channel_state"] = {**next_state,
-                "messages": job["channel_state"]["messages"] + inserted}
-            checkpoint["total_messages"] = job.get("total_messages", 0) + inserted
-            event = {"type": "progress", "channel": cname,
-                     "messages": checkpoint["channel_state"]["messages"],
-                     "total_messages": checkpoint["total_messages"]}
-            checkpoint["rows"] = [dict(row) for row in job["rows"]]
-            checkpoint["rows"][job["index"] - 1] = event
-            checkpoint["last_event"] = event
-            return checkpoint
-
-        task = asyncio.create_task(_save_messages(db, msgs, cid, cname, gid, gname,
-            job_checkpoint=(job_id, committed_state), **kwargs))
-        cancellation = None
-        try:
-            inserted = await asyncio.shield(task)
-        except asyncio.CancelledError as exc:
-            inserted = await task
-            cancellation = exc
-        job.update(channel_state=checkpoint["channel_state"],
-                   total_messages=checkpoint["total_messages"])
-        if cancellation:
-            raise cancellation
-    await archive_message_media(DB_PATH, msgs, cancelled=lambda: job.get("cancelled", False))
-    return inserted
-
-
-async def run_scrape(job_id: str, channels: list, limit: int = 0,
-                     harvest_profiles: bool = False):
-    job = active_jobs[job_id]
-    job["task"] = asyncio.current_task()
-    q = job["queue"]
-    try:
-        try:
-            token = await _job_token(job)
-        except HTTPException:
-            job.update(paused=True, pause_requested=True, suspending=True, inactive=True)
-            _emit(q, {"type": "paused", "message": "Select this job's saved account before resuming."})
-            return
-        db = await _write_db()
-        try:
-            for idx in range(job.get("next_index", 0), len(channels)):
-                await _scrape_checkpoint(job_id)
-                channel = channels[idx]
-                cid, cname = channel["id"], channel["name"]
-                gid, gname = channel.get("guild_id"), channel.get("guild_name")
-                _emit(q, {"type": "channel_start", "channel": cname, "guild": gname,
-                          "index": idx + 1, "total": len(channels)})
-                state = job.get("channel_state")
-                if not state:
-                    async with db.execute("""SELECT newest_message_id,oldest_message_id,
-                        history_complete,pending_after_message_id,pending_before_message_id
-                        FROM scrape_cursors WHERE channel_id=?""", (cid,)) as cur:
-                        cursor = await cur.fetchone()
-                    state = {"stage": "newer" if cursor else "history", "messages": 0,
-                             "profiles": 0, "pending_profiles": [],
-                             "anchor": str(cursor[3] or cursor[0]) if cursor else None,
-                             "before": cursor[4] if cursor and cursor[3] else (None if cursor else None),
-                             "newest": cursor[0] if cursor else None,
-                             "oldest": cursor[1] if cursor else None,
-                             "history_complete": bool(cursor and cursor[2]),
-                             "resuming_pending": bool(cursor and cursor[3])}
-                    job["channel_state"] = state
-                    await _persist_scrape(job_id)
-                try:
-                    while True:
-                        state = job["channel_state"]
-                        if state.get("pending_profiles") and harvest_profiles and not job.get("profile_auth_failed"):
-                            pending = [{"author": {"id": uid}} for uid in state["pending_profiles"]]
-                            await _harvest_profiles(db, pending, cid, token,
-                                                    job_id, q, state["profiles"])
-                            state["pending_profiles"] = []
-                            await _persist_scrape(job_id)
-                        await _scrape_checkpoint(job_id)
-                        fetch = min(100, limit - state["messages"]) if limit else 100
-                        if fetch <= 0 or state["stage"] == "done":
-                            break
-                        params = {"limit": fetch}
-                        if state["before"]:
-                            params["before"] = state["before"]
-                        elif state["stage"] == "newer":
-                            params["after"] = state["newest"]
-                        msgs = await _retry_scrape_operation(job_id, cid, q, params, "fetch",
-                            lambda: _fetch_messages(cid, token, params, job_id))
-                        history = state["stage"] == "history"
-                        fresh = msgs if history else [m for m in msgs if int(m["id"]) > int(state["anchor"])]
-                        more = bool(fresh) and len(msgs) == fetch and len(fresh) == len(msgs)
-                        next_state = dict(state)
-                        next_state["pending_profiles"] = list(dict.fromkeys(
-                            m["author"]["id"] for m in fresh if not m.get("webhook_id"))) if harvest_profiles else []
-                        next_before = str(min(int(m["id"]) for m in fresh)) if fresh else None
-                        if history:
-                            next_state.update(before=next_before or state["before"],
-                                              stage="history" if more else "done")
-                        elif more:
-                            next_state["before"] = next_before
-                        elif state["resuming_pending"]:
-                            next_state.update(anchor=state["newest"], before=None, resuming_pending=False)
-                        else:
-                            next_state.update(stage="done" if state["history_complete"] else "history",
-                                              before=state["oldest"])
-                        if fresh:
-                            await _retry_scrape_operation(job_id, cid, q, params, "save",
-                                lambda: _save_scrape_page(db, fresh, cid, cname, gid, gname,
-                                    job_id, next_state, history_page=history,
-                                    pending=(state["anchor"], next_before) if not history and more else None,
-                                    clear_pending=not history and not more))
-                            if history and not more:
-                                await _retry_scrape_operation(job_id, cid, q, params, "cursor",
-                                    lambda: _mark_history_complete(db, cid))
-                        else:
-                            await _commit_scrape_transition(db, job_id, cid, next_state,
-                                                            history=history, before=state["before"])
-                        _emit(q, {"type": "progress", "channel": cname,
-                            "messages": job["channel_state"]["messages"],
-                            "total_messages": job["total_messages"]})
-                except (_ScrapeStopped, ProfileStopped):
-                    break
-                except asyncio.CancelledError:
-                    raise
-                except Exception as exc:
-                    job["failed_channels"] = job.get("failed_channels", 0) + 1
-                    scrape_log.exception("job=%s channel=%s failed; committed checkpoint retained", job_id, cid)
-                    message = (str(exc) if isinstance(exc, PermissionError) or
-                        (isinstance(exc, RuntimeError) and str(exc).startswith("HTTP ")) else f"{type(exc).__name__}; see terminal")
-                    _emit(q, {"type": "channel_error", "channel": cname, "message": message})
-                _emit(q, {"type": "channel_complete", "channel": cname,
-                          "messages": job["channel_state"]["messages"]})
-                job.update(next_index=idx + 1, channel_state=None)
-                await _persist_scrape(job_id)
-        finally:
-            await db.close()
-        _emit(q, {"type": "cancelled" if job.get("cancelled") else "complete",
-                  "total_messages": job.get("total_messages", 0), "channels": len(channels),
-                  "failed_channels": job.get("failed_channels", 0)})
-    except _ScrapeStopped:
-        _emit(q, {"type": "cancelled", "total_messages": job.get("total_messages", 0)})
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        scrape_log.exception("job=%s stopped; committed checkpoints retained", job_id)
-        _emit(q, {"type": "error", "message": "Scrape stopped; see terminal for details. Saved cursors remain available."})
-    finally:
-        if job.get("suspending"):
-            await _persist_scrape(job_id)
-        else:
-            job["running"] = False
-            await _persist_scrape(job_id)
-            try:
-                await asyncio.sleep(JOB_RETENTION_SECONDS)
-            finally:
-                active_jobs.pop(job_id, None)
+scrapes = create_scrapes()
 
 
 # ─── DM Clearer ──────────────────────────────────────────────
@@ -2054,7 +1636,7 @@ async def update_settings(s: SettingsIn):
 async def clear_tokens(confirm: bool = False):
     if not confirm:
         raise HTTPException(400, "Confirm removal of all saved tokens")
-    if (any(job.get("running") for job in active_jobs.values())
+    if (scrapes.has_work
             or delete_jobs or live_monitors):
         raise HTTPException(409, "Stop scrapes, DM cleanup and live monitors before removing tokens")
     global credentials_clearing
@@ -2081,7 +1663,7 @@ async def clear_messages(confirm: bool = False):
     if not confirm:
         raise HTTPException(400, "Confirm removal of all archived messages, profiles, revisions and cached media")
     _require_archive_available()
-    if (any(job.get("running") for job in active_jobs.values()) or live_monitors or
+    if (scrapes.has_work or live_monitors or
             any(job.get("running", True) for job in delete_jobs.values())):
         raise HTTPException(409, "Stop active and paused scrapes, live monitors and DM cleanup before clearing the archive")
     archive_clearing = True

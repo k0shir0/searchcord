@@ -98,11 +98,18 @@ async def fetch_profile(db, uid, token, discord, *, cancelled=None, on_wait=None
     if not isinstance(user, dict) or str(user.get('id')) != uid:
         raise HTTPException(502, 'Discord returned a mismatched profile. Saved data was kept.')
     now = datetime.now(timezone.utc).isoformat()
+    async def commit():
+        try:
+            await save_profile(db, uid, user, payload, now)
+            await db.commit()
+        except BaseException:
+            await db.rollback()
+            raise
+    operation = asyncio.create_task(commit())
     try:
-        await save_profile(db, uid, user, payload, now)
-        await db.commit()
-    except BaseException:
-        await db.rollback()
+        await asyncio.shield(operation)
+    except asyncio.CancelledError:
+        await operation
         raise
     async with db.execute('PRAGMA database_list') as cur:
         path = (await cur.fetchone())[2]
