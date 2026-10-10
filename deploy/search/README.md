@@ -25,8 +25,16 @@ are mutually exclusive. `SEARCHCORD_DB` also accepts an explicit file path;
 
 The reader accepts SearchCord schema v9/v10 or packed schema v101, not arbitrary
 SQLite databases. A missing or incompatible archive produces an error without
-creating or upgrading it. Normal read-only mode can follow a live v9 archive;
+creating or upgrading it. Normal read-only mode can follow a live v9/v10 archive;
 its directory may need writable SQLite WAL sidecars.
+
+The standalone file list and both Docker build-context allowlists include
+`archive_reader.py` and `snapshot_codec.py`. `search_app.py` provides web setup;
+`Archive` owns read-only format selection and search/profile reads. Both the
+reader and snapshot exporter share the codec, and reading does not import the
+exporter. When assembling a package manually, include both new runtime modules.
+Prefer `python deploy/search/package.py NEWDIR` from the full checkout to keep
+the runtime files and browser assets together without collector code or data.
 
 ## Make a smaller deployment file
 

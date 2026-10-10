@@ -27,6 +27,8 @@
 !/media_store.py
 !/chat_export.py
 !/search_app.py
+!/archive_reader.py
+!/snapshot_codec.py
 !/search_snapshot.py
 !/requirements.txt
 !/start.bat

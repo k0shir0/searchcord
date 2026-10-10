@@ -123,6 +123,10 @@ Open <http://127.0.0.1:8001>. You can also use
 Windows users can pass the same arguments to `start-search.bat`.
 Without either option, the reader opens `data/searchcord.db`.
 
+Cursor reads in both frontends use `archive_reader.Archive`, independently of
+web setup or collector startup. Standard archives and packed snapshots share
+the same search/profile read interface and public message-ID cursors.
+
 For a smaller file to deploy, export to a **new** destination:
 
 ```bash
