@@ -1,6 +1,6 @@
 """Profile collection stays explicitly initiated in the collection app."""
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import math
@@ -11,7 +11,8 @@ import aiosqlite
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 
-from profile_store import from_file, read_profile, profile_servers, user_id
+from profile_store import from_file, read_profile, profile_servers, user_id, STALE_AFTER_SECONDS
+from media_store import archive_message_media
 
 RETRY_BASE_SECONDS = 2
 RETRY_MAX_SECONDS = 60
@@ -103,6 +104,13 @@ async def fetch_profile(db, uid, token, discord, *, cancelled=None, on_wait=None
     except BaseException:
         await db.rollback()
         raise
+    async with db.execute('PRAGMA database_list') as cur:
+        path = (await cur.fetchone())[2]
+    if path:
+        # Cache after the profile commit; a failed binary must not discard identity.
+        details = payload.get('user_profile') or {}
+        media_user = dict(user, banner=details.get('banner') or user.get('banner'))
+        await archive_message_media(path, [{'author': media_user}], cancelled=cancelled)
 
 
 async def save_profile(db, uid, user, payload, now):
@@ -134,6 +142,7 @@ def profile_router(path, token_provider, discord, lock):
         return from_file(path, profile_servers, uid, q, offset, limit)
 
     @router.post('/api/profiles/{uid}/fetch')
+    @router.post('/api/profiles/{uid}/refresh')
     async def fetch(uid: str):
         uid = user_id(uid)
         # Only archived authors can be collected through this surface.
@@ -143,23 +152,26 @@ def profile_router(path, token_provider, discord, lock):
             await fetch_profile(db, uid, token, discord)
         return await asyncio.to_thread(from_file, path, read_profile, uid)
 
-    async def backfill(token):
+    async def backfill(token, refresh_stale=False):
         try:
             # Keyset batches bound memory even on archives with millions of authors.
             after = ''
+            cutoff = (datetime.now(timezone.utc) - timedelta(seconds=STALE_AFTER_SECONDS)).isoformat()
             while not state['cancelled']:
                 async with aiosqlite.connect(path) as db:
                     async with db.execute('''SELECT a.id FROM authors a LEFT JOIN profile_details p ON p.user_id=a.id
-                        WHERE p.user_id IS NULL AND a.id>? ORDER BY a.id LIMIT 100''',(after,)) as cur:
+                        WHERE (p.user_id IS NULL OR (? AND p.fetched_at<=?)) AND a.id>?
+                        ORDER BY a.id LIMIT 100''',(refresh_stale, cutoff, after)) as cur:
                         ids = [row[0] for row in await cur.fetchall()]
                 if not ids: break
                 for uid in ids:
                     if state['cancelled']: break
                     after = uid
-                    state.update(current_user=uid,wait_seconds=0,status='Collecting missing extended profiles…')
+                    state.update(current_user=uid,wait_seconds=0,status='Refreshing archived profiles…' if refresh_stale else 'Collecting missing extended profiles…')
                     async with lock, aiosqlite.connect(path) as db:
                         # A simultaneous manual fetch may already have filled this author.
-                        async with db.execute('SELECT 1 FROM profile_details WHERE user_id=?',(uid,)) as cur:
+                        async with db.execute('SELECT 1 FROM profile_details WHERE user_id=? AND (NOT ? OR fetched_at>?)',
+                                              (uid,refresh_stale,cutoff)) as cur:
                             if await cur.fetchone(): continue
                         try:
                             def retry(info):
@@ -190,7 +202,7 @@ def profile_router(path, token_provider, discord, lock):
         return dict(state)
 
     @router.post('/api/profile-backfill')
-    async def start():
+    async def start(refresh_stale: bool = Query(False)):
         nonlocal task
         if state['running']:
             raise HTTPException(409, 'Profile collection is already running.')
@@ -199,8 +211,8 @@ def profile_router(path, token_provider, discord, lock):
         if state['running']:
             raise HTTPException(409, 'Profile collection is already running.')
         state.update(running=True,saved=0,failed=0,cancelled=False,current_user=None,retries=0,
-                     wait_seconds=0,last_error=None,status='Collecting missing extended profiles…')
-        task = asyncio.create_task(backfill(token))
+                     wait_seconds=0,last_error=None,status='Refreshing archived profiles…' if refresh_stale else 'Collecting missing extended profiles…')
+        task = asyncio.create_task(backfill(token, refresh_stale))
         return dict(state)
 
     @router.post('/api/profile-backfill/stop')

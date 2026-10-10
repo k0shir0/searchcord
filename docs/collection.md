@@ -20,7 +20,9 @@ verification and server screening are reported for action in Discord.
 **Stop joining** cancels pending work. Completed joins remain, and a request
 already sent may have completed before cancellation. Check Discord before
 retrying an interrupted request. Progress survives navigation and reloads while
-the server runs. Restarting the server ends the in-memory invite queue.
+the server runs. Restarting the server restores saved invite queues paused;
+select the original account and explicitly resume joining. An interrupted request
+may have joined before its checkpoint was saved; check Discord before retrying.
 Removing all saved tokens stops an active invite queue before deleting credentials.
 
 ## Browse readable channels or scan a server
@@ -57,8 +59,8 @@ Reloading the page reconnects to an active or paused job, including its saved
 progress and options, while the server remains running. **Stop scraping** works
 while paused, during retry waits and during mandatory breaks. Stopping preserves
 committed messages and durable channel cursors. After restarting the server,
-queue channels again to resume from those cursors; the active job itself is not
-persisted across server restarts.
+saved scrape jobs recover paused with their queue, cursor and remaining limits.
+Select the original account and resume. Live monitors also recover paused.
 
 Expanded profiles are collected after their message page is committed and before
 the next page. An in-flight profile request finishes its save before a pause
@@ -70,9 +72,9 @@ Scrape requests, their retries and expanded-profile requests made by a scrape
 wait a random **0.5–1 second** after the previous scrape request finishes.
 After every **100 successful Discord responses**, further scrape requests wait
 at least **60 seconds** from the last response. Empty successful pages count;
-HTTP errors do not. The counter and deadlines are shared across scrape jobs for
-the lifetime of the server, so changing channels, pause/resume and stop/start do
-not reset them. Discord cooldowns and retry backoff can extend the wait.
+HTTP errors do not. The counter and deadlines are shared across scrape jobs and
+persisted for restart recovery, so changing channels, pause/resume and stop/start
+do not reset them. Discord cooldowns and retry backoff can extend the wait.
 
 The progress panel shows mandatory breaks. A paused scrape does not hold the
 shared Discord request gate, so unrelated account/source operations can continue.

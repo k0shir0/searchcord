@@ -10,6 +10,17 @@ function initCollectionAutomation() {
   $('inviteForm').addEventListener('submit', startInvites);
   $('inviteInput').addEventListener('input', () => $('inviteInput').removeAttribute('aria-invalid'));
   $('stopInvites').addEventListener('click', stopInvites);
+  const resume = ce('button', 'btn-ghost'); resume.type = 'button'; resume.id = 'resumeInvites';
+  resume.textContent = 'resume pending invites'; resume.hidden = true;
+  $('stopInvites').after(resume);
+  resume.addEventListener('click', async () => {
+    resume.disabled = true;
+    try {
+      const {job} = await api(`/api/invites/${encodeURIComponent(inviteJob.id)}/resume`, {method: 'POST'});
+      renderInvites(job); scheduleInvitePoll();
+    } catch (error) { $('inviteStatus').textContent = `Could not resume: ${error.message}`; }
+    finally { resume.disabled = false; }
+  });
   $('scanServer').addEventListener('click', () => { if (S.guild) scanGuild(S.guild); });
   refreshInvites();
 }
@@ -99,6 +110,7 @@ function renderInvites(job) {
   $('inviteInput').disabled = !!job?.running;
   $('stopInvites').hidden = !job?.running;
   $('stopInvites').disabled = false;
+  $('resumeInvites').hidden = !job?.paused;
   $('inviteResults').hidden = !job;
   if (!job) return;
   const joined = job.items.filter(item => item.status === 'joined').length;

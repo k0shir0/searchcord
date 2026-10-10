@@ -82,8 +82,8 @@ the app keeps running and prints its URL for manual opening.
    Date filters use UTC and include the selected end date.
 
 Click a message author to open their saved profile. **Fetch expanded profiles**
-saves missing profile details during collection; **backfill saved profiles**
-collects details for authors already in the archive. Both can be stopped.
+saves missing profile details during collection; **collect missing profiles**
+and **refresh stale profiles** update authors already in the archive. Both can be stopped.
 
 Scrape also accepts invite links or codes in a stoppable server-owned queue,
 with join attempts at least 30 seconds apart. Double-click a server, press
@@ -93,14 +93,16 @@ those readable channels remain available for manual collection.
 
 **Pause scraping** saves the current in-flight page before pausing. **Resume
 scraping** continues the same job, channel, cursor and remaining message limit.
-Reloading the page recovers the job while the server stays running. After a
-server restart, re-queue its channels to continue from saved database cursors.
+Reloading the page recovers the job. After a server restart, saved scrape and
+invite queues and live monitors recover paused. Select their original saved
+account and resume them when ready; no upstream action restarts automatically.
 Request pacing and mandatory breaks are shared across scrape jobs and cannot
 be bypassed by pause/resume or starting another job.
 See [collection controls and limits](docs/collection.md) for the full behavior.
 
 Search results load one page at a time. Collection retries temporary failures
-and keeps saved messages when stopped. Message IDs prevent duplicate records.
+and keeps saved messages when stopped. Re-fetched IDs update searchable content
+and preserve observed revisions; confirmed deletions retain an archive tombstone.
 
 Browse uses message-ID cursors to avoid counting every matching message. It shows
 the current page and whether more results are available, rather than an exact
@@ -148,32 +150,38 @@ The viewer needs a Python server; a static host cannot run it on its own.
 ## Your data
 
 - The collector stores messages, profiles and saved tokens in `data/searchcord.db`.
-  Tokens are stored in plaintext. Keep the database and its backups private.
+  Saved credentials live in a separate encrypted vault outside the archive
+  directory. Windows protects it with the current user's DPAPI identity; other
+  systems use a separate private encryption key. Keep archives and backups private.
 - To change the collector's location, set `SEARCHCORD_DATA_DIR` before launching.
   The search service also accepts `SEARCHCORD_DB` for a specific file.
   Relative paths resolve against the application folder.
 - Both apps start on loopback and have no built-in login. Put access control and
   HTTPS in front of a hosted viewer. Share only data you are entitled to share.
-- Images remain on Discord. The database stores links, not image files.
-  The collector can refresh expired links when your token still has access;
-  the search-only viewer cannot.
+- New collection retains full received message JSON and attachment metadata.
+  The collector also saves bounded local copies of attachments, avatars and
+  banners beside the database in `media/`. Missing or oversized downloads are
+  recorded explicitly. Export with `--with-media` to preserve available binaries
+  in the viewer; refresh inaccessible remote links through the collector.
 - An older archive upgrade keeps a recovery backup. Allow extra disk space and
   check the upgraded archive before removing a backup.
 - **Clear All Data** removes archived messages and derived metadata after
-  confirmation. Saved tokens remain.
-- **remove all saved tokens** deletes only `token`, `saved_tokens` and
-  `active_token_id` from the configured database's `settings` table, after a
-  second-click confirmation. Stop scrapes, DM cleanup and live monitors first;
-  invite joining and profile backfill stop during removal. Messages and unrelated settings stay.
+  confirmation. Stop active and paused scrapes, live monitors and DM cleanup
+  first. Profile jobs stop during clearing; saved credentials remain.
+- **remove all saved tokens** removes the sealed credential vault and saved
+  credential settings after a second-click confirmation. Stop scrapes, DM
+  cleanup and live monitors first; invite joining and profile backfill stop
+  during removal. Messages and unrelated settings stay.
   Save a new token to connect again. Closing Settings cancels confirmation.
 
-Token removal is logical deletion from the active database. Older recovery
-backups and SQLite free/WAL pages may still contain credentials; this action
-does not erase or delete those copies.
+Old databases, recovery backups and SQLite free/WAL pages may still contain
+credentials saved before this upgrade. They are not securely erased by migration
+or token removal. Keep those copies private and rotate retired credentials.
 
 Recovery backups are named `searchcord.db.pre-compact-*.bak.gz` (or `.bak` if
-compression fails) and contain the same private tokens and messages as the
-source archive. Migration checks SQLite and full-text integrity. Fields already
+compression fails). Newly generated recovery copies remove credential settings
+and retain private messages; older copies may contain plaintext tokens.
+Migration checks SQLite and full-text integrity. Fields already
 discarded by an older migration can only be recovered from an original archive
 or backup. Test upgrades on a separate copy first.
 
@@ -183,6 +191,7 @@ or backup. Test upgrades on a separate copy first.
 - [Saved profiles and backfill](docs/profiles.md)
 - [Read-only search behavior](docs/search-display.md)
 - [Standalone deployment](deploy/search/README.md)
+- [Archive reliability, credentials and remaining limits](docs/archive-reliability.md)
 
 The production branch contains the application, required assets, deployment
 files, licenses and operating documentation. `.gitignore` explicitly lists the
@@ -199,6 +208,7 @@ have been published.
 
 | Date | Update |
 | --- | --- |
+| 2026-10-09 | Durable paused job recovery, observed message revisions, local attachments and protected saved credentials. |
 | 2026-10-09 | Invite queues, readable server/thread scans and reload-recoverable scrape pause/resume, with enforced request pacing and breaks. |
 | 2026-10-07 | Portable Windows startup, terminal banner and saved-token removal. |
 | 2026-10-02 | Faster cursor-based search and standalone viewer packaging with Docker support. |

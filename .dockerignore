@@ -1,0 +1,26 @@
+# Keep local archives and credentials out of legacy and BuildKit contexts.
+**
+!search_app.py
+!search_snapshot.py
+!profile_store.py
+!media_store.py
+!cli.py
+!static/
+static/**
+!static/search/
+static/search/**
+!static/search/index.html
+!static/search/search.css
+!static/search/search.js
+!static/search/privacy.html
+!static/search/privacy.css
+!static/bauhaus.css
+!static/profile-view.css
+!static/profile-view.js
+!deploy/
+deploy/**
+!deploy/search/
+deploy/search/**
+!deploy/search/Dockerfile
+!deploy/search/Dockerfile.dockerignore
+!deploy/search/requirements.txt

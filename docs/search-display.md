@@ -32,7 +32,7 @@ placeholder, not new policy text.
 
 ## Read path
 
-The display app accepts schema v9 or a verified search snapshot and opens the
+The display app accepts schema v9/v10 or a verified search snapshot and opens the
 archive with `mode=ro` and `query_only`. It never imports `app.py`, runs a storage migration, reads settings,
 or writes new indexes to the archive. Missing or unsupported archives produce a
 useful error without creating a database. Explicit snapshot mode also enables
@@ -44,7 +44,9 @@ Text search first inspects up to 16,384 newest eligible messages, then uses the 
 matches if the page is not full. Both paths apply the same literal substring
 predicate and cursor boundary. Only the selected page is joined against
 `message_records`, preserving historical names and exact stored timestamps.
-The next cursor is the last returned Discord ID, not SQLite's internal rowid.
+On a full results page, the next cursor is the last returned Discord ID. Partial
+scan pages use the examined window's oldest ID, including when no match was found.
+Both use public Discord IDs rather than SQLite's internal rowid.
 
 Packed snapshots use compressed blocks, dense references, a contentless trigram
 index and a short-text block index. Matches are checked against full decoded text;
@@ -65,8 +67,18 @@ by the same SQL deadline. LIKE retains SQLite's default ASCII case-insensitive b
 non-ASCII case variants are not promised to match.
 
 SQL has a four-second progress-handler deadline. A sparse filter or uncommon
-phrase can still require more index work, so the interface asks for narrower
-filters if the deadline is reached. This is a bounded interactive search, not
-a promise that every possible query finishes in a few milliseconds. Aborting a
+phrase can still require more index work. If the indexed query reaches its
+deadline, search retries against one bounded window of message IDs and returns
+an honest continuation. Empty partial pages are labelled **Search older**;
+they do not claim the remaining archive has no matches. Subsequent pages retain
+`scan=true` and advance over examined IDs without losing matches.
+This is bounded interactive search; latency still varies. Aborting a
 browser fetch prevents stale display; an already executing SQL query may continue
 until it finishes or reaches its deadline.
+
+Saved media is served from the archive's sibling `media/` directory with digest
+validation. Without that directory, original remote links remain a fallback.
+New packed snapshots also retain current attachment metadata. Search-only export
+still excludes full original message JSON and revision history; retain the
+collector database for those records. Use `--with-media` when exporting to a
+fresh deployment directory, and give the service read access to approved files.

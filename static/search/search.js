@@ -117,10 +117,12 @@ function render(messages, query) {
     const text = element('p', 'result-copy');
     putText(text, message.content || '(no text content)', query);
     body.append(heading, text);
-    if (message.attachments?.length) {
+    if (message.attachment_files?.length || message.attachments?.length) {
       const attachments = element('div','rc-attachments');
-      message.attachments.forEach((url, index) => {
-        const link = element('a','rc-att',`image ${index+1}`);
+      const files = message.attachment_files?.length ? message.attachment_files :
+        message.attachments.map((url,index)=>({url,filename:`image ${index+1}`}));
+      files.forEach(({url,filename}) => {
+        const link = element('a','rc-att',filename);
         link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
         attachments.append(link);
       });
@@ -147,11 +149,15 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
   try {
     const data = await json(`/api/search?${url}`, request.signal);
     if (version !== generation) return;
+    if (data.scan) { params.set('scan','true'); url.set('scan','true'); }
     current = new URLSearchParams(params);
     nextCursor = data.next_cursor;
     page = targetPage;
     render(data.messages, params.get('q') || '');
-    $('#resultStatus').textContent = data.messages.length ? 'Results loaded.' : 'No messages match these filters.';
+    $('#resultStatus').textContent = data.partial ? 'More history remains. Continue searching older messages.' :
+      (data.messages.length ? 'Results loaded.' : 'No messages match these filters.');
+    $('#emptyState').hidden = data.partial || data.messages.length > 0;
+    $('#nextPage').textContent = data.partial ? 'Search older' : 'Next';
     $('#pageNumber').textContent = `Page ${page}`;
     $('#previousPage').disabled = page === 1;
     $('#nextPage').disabled = !data.has_more;

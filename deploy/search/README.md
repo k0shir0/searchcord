@@ -23,7 +23,7 @@ Relative paths resolve against the package root. `--db` and `--data-dir`
 are mutually exclusive. `SEARCHCORD_DB` also accepts an explicit file path;
 `--db` takes precedence over that environment variable.
 
-The reader accepts SearchCord schema v9 or packed schema v101, not arbitrary
+The reader accepts SearchCord schema v9/v10 or packed schema v101, not arbitrary
 SQLite databases. A missing or incompatible archive produces an error without
 creating or upgrading it. Normal read-only mode can follow a live v9 archive;
 its directory may need writable SQLite WAL sidecars.
@@ -33,13 +33,15 @@ its directory may need writable SQLite WAL sidecars.
 Run this in the full repository, choosing a new destination:
 
 ```bash
-python search_snapshot.py data/searchcord.db packed/searchcord.db --report packed/build-report.json
+python search_snapshot.py data/searchcord.db packed/searchcord.db --with-media --report packed/build-report.json
 ```
 
 The exporter preserves the displayed message fields and verifies their hashes.
 It excludes settings and tokens, but includes messages and saved profiles.
-Review the included data before sharing it. Image files remain on Discord;
-expired attachment links are not refreshed by the search service.
+Review the included data before sharing it. `--with-media` requires a fresh
+destination media directory and copies only saved media referenced by the
+snapshot. Copy both `searchcord.db` and sibling `media/` to the host. Unavailable
+downloads remain remote links; the search service does not refresh them.
 
 Copy the verified file to the host and run:
 
@@ -49,7 +51,8 @@ python search_app.py --db /path/to/packed/searchcord.db --snapshot
 
 Snapshot mode requires a closed, unchanging file with no pending WAL. To update,
 stop the display service, point it to a newly verified file, and restart it.
-Keep data outside `static/`. Only the search file is needed on the display host.
+Keep data outside `static/`. The database and optional media directory are the
+archive assets needed on the display host.
 The original collector can stay on your own machine.
 
 ## Host behind a reverse proxy
@@ -83,5 +86,16 @@ docker run --rm -p 127.0.0.1:8001:8001 \
 The container runs as an unprivileged user. The mounted directory must contain
 `searchcord.db` and be readable by that user. Use a closed snapshot. The
 build context explicitly allows only the search runtime files; local archives,
-worktrees, credentials and collector assets are excluded. The Dockerfile is
-supplied for deployment convenience; check its build on your host.
+worktrees, credentials and collector assets are excluded. The root `.dockerignore`
+also protects legacy Docker builders; Dockerfile-specific rules protect BuildKit.
+
+An exported Linux media directory is private to its owner. Grant the service
+read/traverse access only to the approved deployment copy, or run the container
+as that owner's numeric identity with `--user "$(id -u):$(id -g)"`. Test a saved
+`/api/media/{key}` response as well as search before deploying; readable database
+permissions alone do not establish readable media permissions.
+
+The 2026-10-09 local check built and ran this image on WSL Docker with Python
+3.12 against a synthetic 100,000-message snapshot and verified SQLite integrity.
+That establishes a tested deployment path. It does not establish production
+capacity for a private archive or a different host; measure your approved dataset.
