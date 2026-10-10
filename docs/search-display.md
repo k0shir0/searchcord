@@ -32,6 +32,20 @@ placeholder, not new policy text.
 
 ## Read path
 
+`archive_reader.Archive` is the shared read interface for the collector and this
+viewer. Importing it creates no web application and opens no database or vault.
+It owns read transactions, format selection, bounded cursor search, result
+hydration, saved profiles and observed-server reads. Its two internal adapters
+handle standard and packed storage; callers use public Discord IDs and the same
+response shapes without interpreting storage references or attachment payloads.
+`connect()` remains available for common-format summary and suggestion queries.
+
+`snapshot_codec.py` defines the packed schema, encoding and bounded decoding
+shared by the reader and exporter. `search_snapshot.py` owns export and
+verification; it is not imported by the reader or viewer. Profile formatting and
+local-media validation remain shared in `profile_store.py` and `media_store.py`.
+The collector's counted-search compatibility path remains separate.
+
 The display app accepts schema v9/v10 or a verified search snapshot and opens the
 archive with `mode=ro` and `query_only`. It never imports `app.py`, runs a storage migration, reads settings,
 or writes new indexes to the archive. Missing or unsupported archives produce a

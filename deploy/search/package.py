@@ -6,7 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 FILES = (
     '.dockerignore',
-    'search_app.py', 'search_snapshot.py', 'profile_store.py', 'media_store.py', 'cli.py', 'LICENSE',
+    'search_app.py', 'archive_reader.py', 'snapshot_codec.py', 'search_snapshot.py',
+    'profile_store.py', 'media_store.py', 'cli.py', 'LICENSE',
     'deploy/search/requirements.txt', 'deploy/search/Dockerfile',
     'deploy/search/Dockerfile.dockerignore', 'deploy/search/README.md',
     'static/search/index.html', 'static/search/search.css', 'static/search/search.js',

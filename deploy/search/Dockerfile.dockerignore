@@ -1,6 +1,8 @@
 # Only the search runtime is sent to the builder, including from a full checkout.
 **
 !search_app.py
+!archive_reader.py
+!snapshot_codec.py
 !search_snapshot.py
 !profile_store.py
 !media_store.py
