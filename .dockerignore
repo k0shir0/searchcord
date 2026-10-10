@@ -1,6 +1,8 @@
 # Keep local archives and credentials out of legacy and BuildKit contexts.
 **
 !search_app.py
+!archive_reader.py
+!snapshot_codec.py
 !search_snapshot.py
 !profile_store.py
 !media_store.py

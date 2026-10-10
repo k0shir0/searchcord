@@ -77,6 +77,14 @@ remain failures; reported confirmed totals never include them.
 
 ## Search and deployment limits
 
+`archive_reader.py` owns read-only connections and standard/packed format
+selection for cursor searches and viewer profiles. Each connection starts a
+read transaction before selecting the adapter, so candidates, decoded records
+and metadata agree even while a collector writes through WAL. Normal `mode=ro`
+reads follow WAL; explicit immutable mode requires a closed, unchanging archive
+and rejects a nonempty WAL. Readers perform no migrations or index creation.
+The exporter and reader share packed-format definitions in `snapshot_codec.py`.
+
 Cursor search first uses indexed/adaptive queries. If SQL reaches its deadline,
 the reader retries over a bounded message-ID window. A partial page may contain
 no matches while older history remains; its continuation cursor advances over
