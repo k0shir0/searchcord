@@ -8,6 +8,7 @@
 !/.dockerignore
 !/LICENSE
 !/README.md
+!/GLOSSARY.md
 !/docs/
 !/docs/profiles.md
 !/docs/search-display.md
@@ -37,6 +38,7 @@
 !/static/
 !/static/app.js
 !/static/collection.js
+!/static/collection-queue.js
 !/static/bauhaus.css
 !/static/home.css
 !/static/index.html

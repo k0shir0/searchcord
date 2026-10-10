@@ -42,11 +42,55 @@ each channel once. Automatic additions skip channel names containing `bot`,
 without regard to case. Readable bot channels remain manually selectable.
 Collection uses the existing per-channel limit and expanded-profile choice.
 
-Scanning during an active collection adds pending sources and starts them after
-the current job succeeds. Stopping, clearing the queue or an error suspends that
-automatic continuation and preserves remaining work. Keep the page open until
-pending scans start; the active scrape itself runs on the server. Changing
-accounts discards scans still in flight.
+Scanning during an active scrape adds pending sources. The active batch keeps
+its original source list, progress rows, cursor and remaining limit. When it
+succeeds, only its sources leave the visible collection queue; accepted pending
+sources then start automatically. Multiple server scans can add sources.
+Repeated activation of a server already being scanned does not start a duplicate
+scan.
+
+Stopping or a scrape error preserves queued work and suspends automatic
+continuation, including scans already in flight. Clearing an idle queue removes
+its current sources. A scan that finishes after a stop or clear can still add
+sources, but cannot restart collection automatically. Choose **start scraping**
+to run the retained queue, or explicitly scan again to request collection.
+
+Changing the saved account immediately discards browser-owned pending sources
+and invalidates old scan results, even while token verification is still running.
+An already-requested scrape start finishes binding to its original saved account
+before the account setting changes. Rapid account changes run in request order;
+starts stay blocked until the latest change finishes. An active scrape keeps its
+original account and its batch visible for pause/resume/stop. Scans under the
+newly selected account can add new pending sources. Removing every saved token
+also clears the visible sources after collection jobs have stopped. If removal
+fails, credentials and selected sources are kept. DM cleanup blocks scrape starts;
+scans accepted during cleanup can start when it finishes, including when cleanup
+reports an error, unless collection was stopped or cleared in the meantime.
+
+Keep the page open until pending scans start. Pending sources and scans live in
+the browser; the active scrape runs and recovers on the server. Reload restores
+the server-owned batch and progress, but does not retain browser pending work.
+New starts remain blocked until the server's active-job snapshot is recovered.
+If reconnection fails, reload to retry before starting another scrape.
+
+### Browser queue ownership
+
+`static/collection-queue.js` owns source acceptance, the immutable active batch,
+scan generations and continuation policy. Its interface accepts queue actions,
+scan loaders, account changes and server snapshot recovery. `view()` supplies
+read-only sources, pending sources, active batch and allowed controls. The module
+reserves a batch synchronously before its start adapter makes an HTTP request.
+The adapter reports each terminal scrape outcome through `finish(success)`;
+successful outcomes remove that batch, while unsuccessful outcomes preserve work
+and invalidate automatic starts from older scans.
+
+DOM rendering, HTTP requests and EventSource progress remain adapters in
+`static/app.js` and `static/collection.js`. This seam gives callers leverage
+without requiring them to coordinate shared policy flags. The module's depth
+comes from keeping acceptance and event ordering in one implementation, providing
+locality for delayed-scan and completion rules. It is not a persistent browser
+job system; saved execution, account requirements and exact cursor recovery stay
+server-owned.
 
 ## Pause, resume and stop
 
