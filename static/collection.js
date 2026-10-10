@@ -4,7 +4,6 @@
 let inviteJob = null;
 let invitePoll = null;
 let inviteJoined = 0;
-const scanningGuilds = new Set();
 
 function initCollectionAutomation() {
   $('inviteForm').addEventListener('submit', startInvites);
@@ -26,44 +25,26 @@ function initCollectionAutomation() {
 }
 
 async function scanGuild(guild) {
-  if (scanningGuilds.has(guild.id)) return;
-  scanningGuilds.add(guild.id);
-  const revision = S.accountRevision;
-  const stopRevision = S.queueStopRevision;
+  if (collectionQueue.view().scanning.includes(String(guild.id))) return;
   $('scanStatus').textContent = `Checking readable channels in ${guild.name}…`;
-  $('scanServer').disabled = true;
-  try {
-    const channels = await selectGuild(guild, true);
-    if (S.accountRevision !== revision) {
+  const result = await collectionQueue.scan(guild, () => selectGuild(guild, true));
+  switch (result.state) {
+    case 'ignored': return;
+    case 'stale':
       $('scanStatus').textContent = 'Selected account changed. Scan the server again with the new account.';
       return;
-    }
-    if (!channels) {
+    case 'failed':
       $('scanStatus').textContent = `Could not scan ${guild.name}. Check the channel error and try again. Your queue is kept.`;
       return;
-    }
-    const available = channels.filter(channel => !channel.name.toLowerCase().includes('bot'));
-    const queued = new Set(S.queue.map(channel => channel.id));
-    const added = available.filter(channel => !queued.has(channel.id));
-    S.queue.push(...added.map(channel => ({id: channel.id, name: channel.name, guild_id: guild.id, guild_name: guild.name})));
-    renderQueue();
-    const skipped = channels.length - available.length;
-    const summary = `${available.length} readable ${available.length === 1 ? 'channel' : 'channels'}; ${skipped} with “bot” skipped.`;
-    if (!available.length) {
-      $('scanStatus').textContent = `${guild.name}: ${summary} Nothing to queue.`;
-    } else if (S.queueStopRevision !== stopRevision) {
-      $('scanStatus').textContent = `${guild.name}: ${summary} Queued; automatic start paused because you stopped or cleared collection.`;
-    } else if (S.activeJobKind) {
-      S.autoStartPending ||= added.length > 0;
-      $('scanStatus').textContent = `${guild.name}: ${summary} ${added.length ? 'Added to the queue; starts after the current job.' : 'Already queued in the current job.'}`;
-    } else {
-      $('scanStatus').textContent = `${guild.name}: ${summary} Starting the collection queue.`;
-      await startScraping();
-    }
-  } finally {
-    scanningGuilds.delete(guild.id);
-    $('scanServer').disabled = !S.guild || scanningGuilds.has(S.guild.id);
   }
+  const summary = `${result.available} readable ${result.available === 1 ? 'channel' : 'channels'}; ${result.skipped} with “bot” skipped.`;
+  const messages = {
+    empty: 'Nothing to queue.',
+    suspended: 'Queued; automatic start paused because collection was stopped, cleared or failed.',
+    waiting: result.added ? 'Added to the queue; starts after the current job.' : 'Already queued in the current job.',
+    starting: 'Starting the collection queue.',
+  };
+  $('scanStatus').textContent = `${guild.name}: ${summary} ${messages[result.state]}`;
 }
 
 async function startInvites(event) {
