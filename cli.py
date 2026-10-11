@@ -8,12 +8,23 @@ import sys
 import webbrowser
 
 
+LARGE = [
+    ' #####   #######   #####   ######    #####   ##   ##   #####    #####   ######   ###### ',
+    '##   ##  ##       ##   ##  ##   ##  ##   ##  ##   ##  ##   ##  ##   ##  ##   ##  ##   ##',
+    '##       ##       ##   ##  ##   ##  ##       ##   ##  ##       ##   ##  ##   ##  ##   ##',
+    ' #####   ######   #######  ######   ##       #######  ##       ##   ##  ######   ##   ##',
+    '     ##  ##       ##   ##  ## ##    ##       ##   ##  ##       ##   ##  ## ##    ##   ##',
+    '##   ##  ##       ##   ##  ##  ##   ##   ##  ##   ##  ##   ##  ##   ##  ##  ##   ##   ##',
+    ' #####   #######  ##   ##  ##   ##   #####   ##   ##   #####    #####   ##   ##  ###### ',
+]
 WIDE = [
-    ' #### #####  ###  ####   #### ## ##  ####  ###  ####  ####',
-    '##    ##    ## ## ## ## ##    ## ## ##    ## ## ## ## ## ##',
-    ' ###  ####  ##### ####  ##    ##### ##    ## ## ####  ## ##',
-    '   ## ##    ## ## ## #  ##    ## ## ##    ## ## ## #  ## ##',
-    '####  ##### ## ## ##  #  #### ## ##  ####  ###  ##  # ####',
+    ' #### #####  ###  ####   #### #   #  ####  ###  ####  #### ',
+    '#     #     #   # #   # #     #   # #     #   # #   # #   #',
+    '#     #     #   # #   # #     #   # #     #   # #   # #   #',
+    ' ###  ####  ##### ####  #     ##### #     #   # ####  #   #',
+    '    # #     #   # # #   #     #   # #     #   # # #   #   #',
+    '    # #     #   # #  #  #     #   # #     #   # #  #  #   #',
+    '####  ##### #   # #   #  #### #   #  ####  ###  #   # #### ',
 ]
 STACKED = [
     ' #### #####  ###  ####   #### ## ##',
@@ -59,7 +70,9 @@ def print_banner(*, width=None, stream=None, max_height=None):
     color = ansi_supported(stream)
     padding = 2 if color else 0
     available = max_height - padding if max_height is not None else None
-    if width >= max(map(len, WIDE)) and (available is None or available >= len(WIDE)):
+    if color and width >= max(map(len, LARGE)) and (available is None or available >= len(LARGE)):
+        lines = LARGE
+    elif width >= max(map(len, WIDE)) and (available is None or available >= len(WIDE)):
         lines = WIDE
     elif width >= max(map(len, STACKED)) and (available is None or available >= len(STACKED)):
         lines = STACKED
