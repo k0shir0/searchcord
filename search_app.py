@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from archive_reader import Archive, MAX_ID, like_literal
 from profile_store import search_label
-from cli import local_url, print_banner
+from cli import local_url, start_terminal, terminal_lifespan
 from media_store import media_router
 
 ROOT = Path(__file__).resolve().parent
@@ -24,7 +24,8 @@ def create_app(path=None, immutable=None):
     if not database.is_absolute():
         database = ROOT / database
     archive = Archive(database, immutable if immutable is not None else os.environ.get("SEARCHCORD_IMMUTABLE") == "1")
-    app = FastAPI(title="Searchcord display", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="Searchcord display", docs_url=None, redoc_url=None,
+                  openapi_url=None, lifespan=terminal_lifespan)
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
     app.include_router(media_router(database))
 
@@ -98,6 +99,7 @@ def create_app(path=None, immutable=None):
 app = create_app()
 
 if __name__ == "__main__":
+    start_terminal()
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--data-dir", type=Path, help="Directory containing searchcord.db")
@@ -107,6 +109,5 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="Listen address (default: loopback only)")
     args = parser.parse_args()
     import uvicorn
-    print_banner()
     print(f"Searchcord: {local_url(args.host, args.port)}", flush=True)
     uvicorn.run(create_app(args.db or (args.data_dir / "searchcord.db" if args.data_dir else None), True if args.snapshot else None), host=args.host, port=args.port, access_log=False)
