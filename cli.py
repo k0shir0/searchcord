@@ -1,6 +1,7 @@
 """Small terminal header and operating-system browser launch helpers."""
 import atexit
 from contextlib import asynccontextmanager
+from multiprocessing import parent_process
 import os
 import shutil
 import sys
@@ -91,6 +92,9 @@ def start_terminal():
     if _terminal_started:
         return
     _terminal_started = True
+    # Uvicorn workers share their parent's console; none can own its viewport.
+    if parent_process() is not None:
+        return
     stream = sys.stdout
     if not ansi_supported(stream):
         print_banner(stream=stream)
