@@ -7,15 +7,10 @@ const S = {
   guildLoad:     null,
   channelViewRevision: 0,
   accountRevision: 0,
-  autoStartPending: false,
-  queueStopRevision: 0,
-  queue:         [],
-  scraping:      false,
   activeJobId:   null,
   activeJobKind: null,
   scrapeRun:     null,
   scrapePaused:  false,
-  restoringScrape: true,
   searchPage:    1,
   filterChans:   [],
   liveChannels:  new Set(),
@@ -25,6 +20,8 @@ const S = {
   channelMap:    new Map(),
   userMap:       new Map(),
 };
+
+const collectionQueue = createCollectionQueue({startBatch: executeScrape, changed: renderQueue});
 
 // Chart.js instances — destroyed before re-render
 const _charts = {};
@@ -178,14 +175,17 @@ async function refreshLiveStatus() {
 }
 
 async function connectDiscord() {
+  if (!collectionQueue.view().canLoadSources) return;
+  const revision = S.accountRevision;
   $('connectDiscord').disabled = true;
   try {
     const v = await api('/api/token/validate');
+    if (S.accountRevision !== revision) return;
     if (!v.valid) { openSettings(); setTokenStatus('Paste your Discord token to connect.', 'fail'); return; }
     $('connectionStatus').textContent = `Connected as ${v.username}`;
-    await loadGuilds();
+    await loadGuilds(revision);
   } catch (error) {
-    $('connectionStatus').textContent = error.message;
+    if (S.accountRevision === revision) $('connectionStatus').textContent = error.message;
   } finally { $('connectDiscord').disabled = false; }
 }
 
@@ -222,35 +222,48 @@ function initSettings() {
 
   $('savedTokenSelect').addEventListener('change', async e => {
     const select = e.currentTarget;
-    const previous = select.dataset.activeId;
+    const selectedId = select.value;
+    const revision = S.accountRevision + 1;
     select.disabled = true;
     setTokenStatus('switching token…', '');
     try {
-      const saved = await api('/api/settings', { method: 'POST', body: { active_token_id: select.value } });
-      renderSavedTokens(saved);
-      await verifyActiveToken();
+      await changeSavedAccount(async revision => {
+        const saved = await api('/api/settings', { method: 'POST', body: { active_token_id: selectedId } });
+        if (S.accountRevision !== revision) return;
+        renderSavedTokens(saved);
+        await verifyActiveToken(revision);
+      });
     } catch (error) {
-      select.value = previous;
+      if (S.accountRevision !== revision) return;
       setTokenStatus(`Could not switch token: ${error.message}`, 'fail');
-    } finally { select.disabled = false; }
+      await loadSavedTokens(revision);
+    }
   });
 
   $('saveToken').addEventListener('click', async () => {
     const token = inp.value.trim();
     if (!token) { setTokenStatus('Enter a token to save.', 'fail'); return; }
+    const tokenLabel = $('tokenName').value.trim();
+    const revision = S.accountRevision + 1;
     setTokenStatus('saving token…', '');
     $('saveToken').disabled = true;
     try {
-      const saved = await api('/api/settings', { method: 'POST', body: { token, token_label: $('tokenName').value.trim() } });
-      renderSavedTokens(saved);
-      inp.value = '';
-      $('tokenName').value = '';
-      inp.type = 'password';
-      tog.textContent = 'show';
-      tog.setAttribute('aria-label', 'Show new token');
-      await verifyActiveToken();
-    } catch (error) { setTokenStatus(`Could not save token: ${error.message}`, 'fail'); }
-    finally { $('saveToken').disabled = false; }
+      await changeSavedAccount(async revision => {
+        const saved = await api('/api/settings', { method: 'POST', body: { token, token_label: tokenLabel } });
+        if (S.accountRevision !== revision) return;
+        renderSavedTokens(saved);
+        inp.value = '';
+        $('tokenName').value = '';
+        inp.type = 'password';
+        tog.textContent = 'show';
+        tog.setAttribute('aria-label', 'Show new token');
+        await verifyActiveToken(revision);
+      });
+    } catch (error) {
+      if (S.accountRevision !== revision) return;
+      setTokenStatus(`Could not save token: ${error.message}`, 'fail');
+      await loadSavedTokens(revision);
+    }
   });
 
   $('clearTokens').addEventListener('click', async () => {
@@ -261,43 +274,29 @@ function initSettings() {
       return;
     }
     clear.classList.remove('pending-confirm');
+    const revision = S.accountRevision + 1;
     clear.disabled = true;
     $('saveToken').disabled = true;
     $('savedTokenSelect').disabled = true;
     try {
-      const saved = await api('/api/settings/tokens?confirm=true', {method: 'DELETE'});
-      renderSavedTokens(saved);
-      inp.value = '';
-      $('tokenName').value = '';
-      inp.type = 'password';
-      tog.textContent = 'show';
-      tog.setAttribute('aria-label', 'Show new token');
-      S.accountRevision++;
-      S.guild = null;
-      S.guilds = [];
-      S.guildLoad = null;
-      S.channelViewRevision++;
-      S.autoStartPending = false;
-      S.queueStopRevision++;
-      S.queue = [];
-      renderQueue();
-      $('scanServer').disabled = true;
-      $('scanStatus').textContent = '';
-      refreshInvites();
-      $('serverList').replaceChildren();
-      $('cpBody').replaceChildren();
-      $('channelsPane').classList.remove('visible');
-      $('emptyState').style.display = '';
-      $('dmBody').innerHTML = '<p class="placeholder-msg">Save a new token to load conversations.</p>';
-      $('connectionStatus').textContent = 'No token saved. Add a new token to connect.';
-      setTokenStatus('Saved tokens removed. Add a new token to connect. Older backups are unchanged.', 'ok');
+      await changeSavedAccount(async revision => {
+        const saved = await api('/api/settings/tokens?confirm=true', {method: 'DELETE'});
+        if (S.accountRevision !== revision) return;
+        renderSavedTokens(saved);
+        inp.value = '';
+        $('tokenName').value = '';
+        inp.type = 'password';
+        tog.textContent = 'show';
+        tog.setAttribute('aria-label', 'Show new token');
+        refreshInvites();
+        $('dmBody').innerHTML = '<p class="placeholder-msg">Save a new token to load conversations.</p>';
+        $('connectionStatus').textContent = 'No token saved. Add a new token to connect.';
+        setTokenStatus('Saved tokens removed. Add a new token to connect. Older backups are unchanged.', 'ok');
+      }, {removed: true});
     } catch (error) {
+      if (S.accountRevision !== revision) return;
       setTokenStatus(`Could not remove saved tokens: ${error.message}`, 'fail');
-      await loadSavedTokens();
-    } finally {
-      clear.disabled = false;
-      clear.textContent = 'remove all saved tokens';
-      $('saveToken').disabled = false;
+      await loadSavedTokens(revision);
     }
   });
 
@@ -331,21 +330,51 @@ function renderSavedTokens(saved) {
     select.disabled = true;
   } else {
     saved.tokens.forEach(token => select.add(new Option(token.label, token.id)));
-    select.disabled = false;
+    select.disabled = !collectionQueue.view().canLoadSources;
     select.value = saved.active_token_id;
   }
   select.dataset.activeId = saved.active_token_id || '';
 }
 
-async function loadSavedTokens() {
-  try { renderSavedTokens(await api('/api/settings')); }
-  catch (error) { setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail'); }
+async function loadSavedTokens(revision = S.accountRevision) {
+  if (!collectionQueue.view().canLoadSources || S.accountRevision !== revision) return;
+  try {
+    const saved = await api('/api/settings');
+    if (S.accountRevision === revision) renderSavedTokens(saved);
+  } catch (error) {
+    if (S.accountRevision === revision) setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail');
+  }
 }
 
-async function verifyActiveToken() {
-  S.accountRevision++;
+async function changeSavedAccount(change, options) {
+  const revision = ++S.accountRevision;
+  S.guild = null;
+  S.guilds = [];
+  S.guildLoad = null;
+  S.channelViewRevision++;
+  $('scanStatus').textContent = '';
+  $('serverList').replaceChildren();
+  $('cpBody').replaceChildren();
+  $('channelsPane').classList.remove('visible');
+  $('emptyState').style.display = '';
+  $('dmBody').innerHTML = '<p class="placeholder-msg">Open direct messages to load conversations.</p>';
+  try {
+    return await collectionQueue.changeAccount(() => change(revision), options);
+  } finally {
+    if (S.accountRevision === revision) {
+      $('saveToken').disabled = false;
+      $('savedTokenSelect').disabled = !$('savedTokenSelect').value;
+      $('clearTokens').disabled = false;
+      $('clearTokens').textContent = 'remove all saved tokens';
+    }
+  }
+}
+
+async function verifyActiveToken(revision = S.accountRevision) {
+  if (S.accountRevision !== revision) return;
   try {
     const verified = await api('/api/token/validate');
+    if (S.accountRevision !== revision) return;
     if (!verified.valid) {
       setTokenStatus('Selected token could not be verified by Discord.', 'fail');
       $('connectionStatus').textContent = 'Selected token could not connect to Discord.';
@@ -353,16 +382,10 @@ async function verifyActiveToken() {
     }
     setTokenStatus(`connected as ${verified.username}`, 'ok');
     $('connectionStatus').textContent = `Connected as ${verified.username}`;
-    if (!S.scraping) { S.queue = []; renderQueue(); }
-    S.guild = null;
-    S.guildLoad = null;
-    $('scanServer').disabled = true;
-    $('channelsPane').classList.remove('visible');
-    $('emptyState').style.display = '';
-    $('cpBody').replaceChildren();
-    $('dmBody').innerHTML = '<p class="placeholder-msg">Open direct messages to load conversations.</p>';
-    loadGuilds();
-  } catch (error) { setTokenStatus(`Could not verify selected token: ${error.message}`, 'fail'); }
+    loadGuilds(revision);
+  } catch (error) {
+    if (S.accountRevision === revision) setTokenStatus(`Could not verify selected token: ${error.message}`, 'fail');
+  }
 }
 
 function openSettings() {
@@ -401,8 +424,12 @@ async function loadDbStats() {
 }
 
 // ── Guilds ───────────────────────────────────────────────────
-async function loadGuilds() {
-  const revision = S.accountRevision;
+async function loadGuilds(revision) {
+  if (revision === undefined) {
+    if (!collectionQueue.view().canLoadSources) return;
+    revision = S.accountRevision;
+  }
+  if (S.accountRevision !== revision) return;
   const list = $('serverList');
   list.innerHTML = spinnerHTML();
   try {
@@ -452,10 +479,11 @@ function renderGuilds() {
 }
 
 async function selectGuild(guild, includeThreads = false) {
+  if (!collectionQueue.view().canLoadSources) return;
   const revision = S.accountRevision;
   const viewRevision = ++S.channelViewRevision;
   S.guild = guild;
-  $('scanServer').disabled = scanningGuilds.has(guild.id);
+  $('scanServer').disabled = collectionQueue.view().scanning.includes(String(guild.id));
   document.querySelectorAll('.server-item').forEach(el =>
     el.classList.toggle('active', el.dataset.id === guild.id)
   );
@@ -490,6 +518,7 @@ async function selectGuild(guild, includeThreads = false) {
 
 // ── Direct Messages / Group DMs ───────────────────────────────
 async function loadDms() {
+  if (!collectionQueue.view().canLoadSources) return;
   const revision = S.accountRevision;
   const body = $('dmBody');
   body.innerHTML = spinnerHTML();
@@ -504,6 +533,7 @@ async function loadDms() {
 }
 
 function renderDmList(dms, body) {
+  const queuedIds = new Set(collectionQueue.view().sources.map(source => source.id));
   body.innerHTML = '';
 
   if (!dms.length) {
@@ -514,7 +544,7 @@ function renderDmList(dms, body) {
   dms.forEach(dm => {
     const el = ce('div', 'ch-item');
     el.dataset.id = dm.id;
-    if (S.queue.some(q => q.id === dm.id)) el.classList.add('queued');
+    if (queuedIds.has(dm.id)) el.classList.add('queued');
 
     const hash = ce('div', 'ch-hash');
     hash.textContent = dm.type === 3 ? 'group' : '@';
@@ -543,7 +573,7 @@ function renderDmList(dms, body) {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const guild = { id: null, name: dm.type === 3 ? 'Group DM' : 'Direct Message' };
-      toggleQueue(dm, guild, el, btn);
+      toggleQueue(dm, guild);
     });
     exportBtn.addEventListener('click', e => {
       e.stopPropagation();
@@ -564,7 +594,7 @@ function renderDmList(dms, body) {
 let dmClearPending = null; // { dm, el, clearBtn, confirmed: boolean }
 
 function handleDmClearClick(dm, el, clearBtn) {
-  if (S.activeJobKind) {
+  if (!collectionQueue.view().canRunOtherJob) {
     if (S.activeJobKind === 'dm-clear') $('modalBg').classList.add('visible');
     else $('queueProgress').scrollIntoView({block: 'nearest'});
     return;
@@ -611,6 +641,7 @@ function handleDmClearClick(dm, el, clearBtn) {
 }
 
 async function startDmClear(dm) {
+  if (!collectionQueue.beginOtherJob()) return;
   S.activeJobKind = 'dm-clear';
   renderQueue();
   const modal = $('modalBg');
@@ -706,11 +737,12 @@ function finishDmClear(errMsg) {
   }
 
   if (errMsg) logLine($('moLog'), `Error: ${errMsg}`, 'err');
-  if (S.autoStartPending && S.queue.length) { S.autoStartPending = false; startScraping(); }
+  collectionQueue.finishOtherJob();
 }
 
 // ── Channels ─────────────────────────────────────────────────
 function renderChannels(channels, guild) {
+  const queuedIds = new Set(collectionQueue.view().sources.map(source => source.id));
   const body = $('cpBody');
   body.innerHTML = '';
   if (!channels.length) body.innerHTML = '<p class="placeholder-msg">No readable message channels found. Complete any server screening in Discord, then try again.</p>';
@@ -730,7 +762,7 @@ function renderChannels(channels, guild) {
   const makeRow = ch => {
     const el = ce('div', 'ch-item');
     el.dataset.id = ch.id;
-    if (S.queue.some(q => q.id === ch.id)) el.classList.add('queued');
+    if (queuedIds.has(ch.id)) el.classList.add('queued');
     if (S.liveChannels.has(ch.id)) el.classList.add('live');
 
     const hash = ce('div', 'ch-hash');
@@ -757,7 +789,7 @@ function renderChannels(channels, guild) {
 
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      toggleQueue(ch, guild, el, btn);
+      toggleQueue(ch, guild);
     });
     liveBtn.addEventListener('click', e => {
       e.stopPropagation();
@@ -780,32 +812,13 @@ function renderChannels(channels, guild) {
 }
 
 // ── Scrape queue ─────────────────────────────────────────────
-function toggleQueue(ch, guild, rowEl, btnEl) {
-  if (S.scraping) return;
-  const idx = S.queue.findIndex(q => q.id === ch.id);
-  if (idx > -1) {
-    S.queue.splice(idx, 1);
-    rowEl.classList.remove('queued');
-    btnEl.textContent = 'queue';
-  } else {
-    S.queue.push({ id: ch.id, name: ch.name, guild_id: guild.id, guild_name: guild.name });
-    rowEl.classList.add('queued');
-    btnEl.textContent = 'queued';
-  }
-  renderQueue();
+function toggleQueue(ch, guild) {
+  collectionQueue.toggle({id: ch.id, name: ch.name, guild_id: guild.id, guild_name: guild.name});
 }
 
 function initQueue() {
   $('clearQueue').addEventListener('click', () => {
-    S.queueStopRevision++;
-    S.autoStartPending = false;
-    S.queue = [];
-    renderQueue();
-    document.querySelectorAll('.ch-item.queued').forEach(el => {
-      el.classList.remove('queued');
-      const b = el.querySelector('.ch-btn');
-      if (b) b.textContent = 'queue';
-    });
+    collectionQueue.clear();
   });
   $('startScrape').addEventListener('click', startScraping);
   $('stopQueueScrape').addEventListener('click', stopQueueScrape);
@@ -818,24 +831,26 @@ function initQueue() {
 }
 
 function renderQueue() {
+  const {sources, active, canEdit, canStart, scanning} = collectionQueue.view();
+  $('scanServer').disabled = !S.guild || scanning.includes(String(S.guild.id));
   const bar   = $('queueBar');
   const chips = $('queueChips');
-  $('queueCount').textContent = S.queue.length;
-  const showSetup = !S.scraping && S.queue.length > 0;
+  $('queueCount').textContent = sources.length;
+  const showSetup = !active && sources.length > 0;
   bar.querySelector('.queue-controls').hidden = !showSetup;
   bar.querySelector('.queue-hint').hidden = !showSetup;
-  chips.hidden = S.queue.length === 0 && !$('queueProgress').hidden;
+  chips.hidden = sources.length === 0 && !$('queueProgress').hidden;
   document.querySelectorAll('.ch-item').forEach(row => {
-    const queued = S.queue.some(ch => ch.id === row.dataset.id);
+    const queued = sources.some(ch => ch.id === row.dataset.id);
     row.classList.toggle('queued', queued);
     const button = row.querySelector('[aria-label="Toggle scrape queue"]');
-    if (button) { button.textContent = queued ? 'queued' : 'queue'; button.setAttribute('aria-pressed', String(queued)); button.disabled = S.scraping; }
+    if (button) { button.textContent = queued ? 'queued' : 'queue'; button.setAttribute('aria-pressed', String(queued)); button.disabled = !canEdit; }
   });
-  $('clearQueue').disabled = S.scraping;
-  $('scrapeLimit').disabled = S.scraping;
-  $('harvestProfiles').disabled = S.scraping;
-  $('startScrape').disabled = S.restoringScrape || !!S.activeJobKind || S.queue.length === 0;
-  if (S.queue.length === 0) {
+  $('clearQueue').disabled = !canEdit;
+  $('scrapeLimit').disabled = !!active;
+  $('harvestProfiles').disabled = !!active;
+  $('startScrape').disabled = !canStart;
+  if (sources.length === 0) {
     bar.classList.toggle('visible', !$('queueProgress').hidden);
     chips.innerHTML = '<p class="queue-empty">Select channels or conversations to build a queue.</p>';
     return;
@@ -843,17 +858,14 @@ function renderQueue() {
   bar.classList.add('visible');
 
   chips.innerHTML = '';
-  S.queue.forEach(ch => {
+  sources.forEach(ch => {
     const chip = ce('div', 'qb-chip');
     chip.innerHTML =
       `<span>#</span><span>${esc(ch.name)}</span>` +
       `<span class="qb-chip-server">${esc(ch.guild_name)}</span>` +
-      `<button class="qb-chip-x" data-id="${ch.id}" ${S.scraping ? 'disabled' : ''}>remove</button>`;
+      `<button class="qb-chip-x" data-id="${ch.id}" ${canEdit ? '' : 'disabled'}>remove</button>`;
     chip.querySelector('.qb-chip-x').addEventListener('click', () => {
-      S.queue = S.queue.filter(q => q.id !== ch.id);
-      renderQueue();
-      const row = document.querySelector(`.ch-item[data-id="${ch.id}"]`);
-      if (row) { row.classList.remove('queued'); const b = row.querySelector('.ch-btn'); if (b) b.textContent = 'queue'; }
+      collectionQueue.remove(ch.id);
     });
     chips.appendChild(chip);
   });
@@ -861,14 +873,15 @@ function renderQueue() {
 
 // ── Scraping ─────────────────────────────────────────────────
 async function startScraping() {
-  if (S.restoringScrape || !S.queue.length || S.activeJobKind) return;
-  S.scraping = true;
+  await collectionQueue.start();
+}
+
+async function executeScrape(channels) {
   S.activeJobKind = 'scrape';
   renderQueue();
 
   const limitVal = parseInt($('scrapeLimit').value, 10);
   const limit = (!isNaN(limitVal) && limitVal > 0) ? limitVal : 0;
-  const channels = S.queue.map(channel => ({...channel}));
   prepareScrapeProgress(channels, limit);
 
   let resp;
@@ -909,16 +922,15 @@ function prepareScrapeProgress(channels, limit) {
 
 async function restoreScrape() {
   try {
-    const jobs = await api('/api/scrape/active');
-    S.restoringScrape = false;
-    const job = jobs.find(item => item.job_id === sessionStorage.getItem('searchcord.scrapeJob')) || jobs[0];
+    const job = await collectionQueue.recover(async () => {
+      const jobs = await api('/api/scrape/active');
+      return jobs.find(item => item.job_id === sessionStorage.getItem('searchcord.scrapeJob')) || jobs[0];
+    });
     if (!job) return;
-    S.scraping = true;
     S.activeJobKind = 'scrape';
-    S.queue = job.channels.map(channel => ({...channel}));
     $('scrapeLimit').value = job.limit || '';
     $('harvestProfiles').checked = job.harvest_profiles;
-    prepareScrapeProgress(job.channels, job.limit);
+    prepareScrapeProgress(collectionQueue.view().active, job.limit);
     connectScrapeProgress(job.job_id);
   } catch (error) {
     $('queueProgress').hidden = false;
@@ -1092,8 +1104,7 @@ function connectScrapeProgress(job_id) {
   };
 }
 
-function finishScrape(message, title = 'Scrape finished', clearQueue = true, refreshData = clearQueue) {
-  S.scraping = false;
+function finishScrape(message, title = 'Scrape finished', success = true, refreshData = success) {
   S.activeJobId = null;
   S.activeJobKind = null;
   S.scrapePaused = false;
@@ -1103,18 +1114,11 @@ function finishScrape(message, title = 'Scrape finished', clearQueue = true, ref
   $('stopQueueScrape').hidden = true;
   $('pauseQueueScrape').hidden = true;
   $('dismissQueueProgress').hidden = false;
-  if (clearQueue) {
-    const finished = new Set(S.scrapeRun.channels.map(channel => channel.id));
-    S.queue = S.queue.filter(channel => !finished.has(channel.id));
-  }
-  renderQueue();
   if (refreshData) {
     loadSearchFilters();
     if (activeView === 'stats') loadStats(true);
   }
-  const continueQueue = clearQueue && S.autoStartPending && S.queue.length;
-  S.autoStartPending = false;
-  if (continueQueue) startScraping();
+  collectionQueue.finish(success);
 }
 
 async function toggleScrapePause() {
@@ -1136,8 +1140,7 @@ async function toggleScrapePause() {
 
 async function stopQueueScrape() {
   if (!S.activeJobId || S.activeJobKind !== 'scrape') return;
-  S.queueStopRevision++;
-  S.autoStartPending = false;
+  collectionQueue.stop();
   $('stopQueueScrape').disabled = true;
   $('pauseQueueScrape').disabled = true;
   $('queueProgressTitle').textContent = 'Stopping scrape…';
