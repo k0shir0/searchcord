@@ -21,6 +21,7 @@ longer Discord cooldowns. Progress identifies the current user and wait. Stop
 interrupts an active request or cooldown. HTTP 403/404 skip that unavailable
 user; HTTP 401 stops bulk work so account authorization can be corrected.
 Successful profiles commit before the next request's cooldown begins.
+Stop and shutdown join an in-flight profile commit before closing its connection.
 Existing profile data is kept on failed requests. Unknown/unavailable fields are
 not invented and presence is not inferred.
 
@@ -52,8 +53,12 @@ Use `refresh_stale=true` on profile backfill to revisit stale saved profiles.
 Presence remains a conditional snapshot and server lists remain archive observations.
 See [archive reliability](archive-reliability.md) for media limits and recovery.
 
-`profile_store.py` provides read functions shared with the display frontend;
-`profile_api.py` owns collection operations and job lifetime. No new package or
+`archive_reader.Archive.profile()` and `.profile_servers()` give the display
+frontend one read interface for standard archives and packed snapshots. Internal
+adapters handle observed-server aggregation and translate packed references to
+public IDs. `profile_store.py` retains reusable profile formatting and the
+collector's standard-archive aggregation; `profile_api.py` owns collection
+operations and job lifetime. No new package or
 external rendering dependency is required. Channel suggestions now present a
 name without leading emoji/separators while retaining the stable channel ID.
 Stored names and visible message source names are unchanged.

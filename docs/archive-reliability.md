@@ -57,12 +57,21 @@ the dataset before sharing it.
 
 ## Collection and cleanup
 
-Scrape pages, channel cursors and job checkpoints commit together. Saved queues,
-remaining limits and shared pacing deadlines survive restart. Scrapes, invite
-queues and live monitors recover paused, requiring their original saved account
-to resume. An invite request interrupted after sending may have joined before
+Scrape pages, channel cursors (including history-complete and pending-gap flags)
+and job checkpoints commit together. Counts and progress rows are published only
+after that transaction commits; failed writes leave all of them unchanged.
+Saved queues, remaining limits, pending profiles and shared pacing deadlines
+survive restart. Existing checkpoint records remain readable without a migration.
+Scrapes, invite queues and live monitors recover paused, requiring their original
+saved account to resume. An invite request interrupted after sending may have joined before
 the restart; check Discord before explicitly resuming. DM deletion jobs never
 restart automatically. Profile backfill can be rerun and skips completed work.
+
+Stop joins scrape workers before reporting completion. Shutdown joins in-flight
+page and profile commits, closes their connections and checkpoints unfinished
+scrapes paused. Cleanup stays blocked until those writers finish, so a delayed
+commit cannot recreate data after archive clearing. A stopped request may not
+have saved its response; committed pages and channel cursors remain available.
 
 Archive clearing requires confirmation and rejects active or paused scrapes,
 live monitors and DM cleanup. It blocks new writers while stopping profile jobs
@@ -76,6 +85,14 @@ Failed responses and exhausted transient retries
 remain failures; reported confirmed totals never include them.
 
 ## Search and deployment limits
+
+`archive_reader.py` owns read-only connections and standard/packed format
+selection for cursor searches and viewer profiles. Each connection starts a
+read transaction before selecting the adapter, so candidates, decoded records
+and metadata agree even while a collector writes through WAL. Normal `mode=ro`
+reads follow WAL; explicit immutable mode requires a closed, unchanging archive
+and rejects a nonempty WAL. Readers perform no migrations or index creation.
+The exporter and reader share packed-format definitions in `snapshot_codec.py`.
 
 Cursor search first uses indexed/adaptive queries. If SQL reaches its deadline,
 the reader retries over a bounded message-ID window. A partial page may contain
