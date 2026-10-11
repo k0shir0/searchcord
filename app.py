@@ -24,7 +24,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database, save_message_payloads, mark_messages_deleted
 from profile_api import profile_router, collect_profile, ProfileStopped
-from search_app import Archive, MAX_ID
+from archive_reader import Archive, MAX_ID
 from cli import local_url, open_url, print_banner
 from channel_access import readable_channels
 from invite_api import invite_router
