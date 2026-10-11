@@ -24,6 +24,7 @@
 !/storage.py
 !/credential_store.py
 !/collection_state.py
+!/durable_scrape.py
 !/media_store.py
 !/chat_export.py
 !/search_app.py

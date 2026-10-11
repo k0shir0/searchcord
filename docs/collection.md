@@ -62,6 +62,11 @@ committed messages and durable channel cursors. After restarting the server,
 saved scrape jobs recover paused with their queue, cursor and remaining limits.
 Select the original account and resume. Live monitors also recover paused.
 
+Recovery also retains authors whose expanded profiles are still pending. They
+are handled before fetching the next message page. Resume checks the saved
+account both when the control is accepted and when the worker starts; an account
+change in between leaves the scrape paused without sending a request.
+
 Expanded profiles are collected after their message page is committed and before
 the next page. An in-flight profile request finishes its save before a pause
 takes effect. Pause/stop also remain usable during profile retries and cooldowns.
@@ -88,3 +93,22 @@ records when pages overlap or a collection is replayed.
 
 Live monitoring remains a separate polling workflow. These scrape pause and
 mandatory-break controls do not change its three-second polling interval.
+
+## Scrape ownership
+
+`durable_scrape.py` owns scrape lifetime, source reservations, channel stages,
+pending profiles, checkpoints and progress. HTTP controls, progress subscriptions
+and the shared Discord request gate use its interface. Callers receive copied
+snapshots or events instead of mutable job dictionaries. Subscribers get a
+snapshot first; their bounded queues drop older events without blocking storage.
+
+One projection supplies both saved progress and progress events. Message pages,
+cursor flags (including completed history) and that projection commit in one
+transaction. A rollback leaves the visible counts and saved pagination position
+unchanged. Transient request and retry notices do not advance committed progress.
+
+The module depends on the collector's shared Discord pacing, reusable message
+storage, profile collection and media cache. Monitoring, invite joining and DM
+cleanup retain their separate lifetimes. `collection_state.py` continues to store
+their generic checkpoint records. Existing scrape checkpoint JSON remains
+readable without a database migration.
