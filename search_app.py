@@ -1,218 +1,19 @@
 """Read-only archive search. Run separately from the collection application."""
 import argparse
-import json
-from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import os
-import re
-import sqlite3
-import time
 from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from profile_store import read_profile, profile_servers, search_label
-from profile_store import user_id, image_url
-import search_snapshot
+from archive_reader import Archive, MAX_ID, like_literal
+from profile_store import search_label
 from cli import local_url, print_banner
-from media_store import local_url as archived_media_url, media_router, media_status
+from media_store import media_router
 
 ROOT = Path(__file__).resolve().parent
-EPOCH_MS = 1420070400000
-MAX_ID = 9223372036854775807
-WINDOW = 16384
-QUERY_SECONDS = 4
-
-
-def snowflake_day(value: str, end=False) -> int:
-    try:
-        moment = datetime.combine(date.fromisoformat(value), datetime.min.time(), timezone.utc)
-        if end:
-            moment += timedelta(days=1)
-        return max(0, min(MAX_ID, (int(moment.timestamp() * 1000) - EPOCH_MS) << 22))
-    except (ValueError, OverflowError) as exc:
-        raise HTTPException(400, "Enter a valid UTC date.") from exc
-
-
-def like_literal(value):
-    return value.replace("!", "!!").replace("%", "!%").replace("_", "!_")
-
-
-class Archive:
-    def __init__(self, path, immutable=False):
-        self.path = Path(path).resolve()
-        self.immutable = immutable
-
-    @contextmanager
-    def connect(self):
-        if not self.path.is_file():
-            raise HTTPException(503, "Archive not found. Set SEARCHCORD_DATA_DIR to an existing archive.")
-        wal = Path(str(self.path) + "-wal")
-        if self.immutable and wal.exists() and wal.stat().st_size:
-            raise HTTPException(503, "Snapshot mode needs a closed archive with no pending WAL. Use normal read-only mode for a live archive.")
-        db = None
-        try:
-            uri = self.path.as_uri() + "?mode=ro" + ("&immutable=1" if self.immutable else "")
-            db = sqlite3.connect(uri, uri=True, timeout=1)
-            db.row_factory = sqlite3.Row
-            db.execute("PRAGMA query_only=ON")
-            deadline = time.monotonic() + QUERY_SECONDS
-            db.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
-            version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (9, 10, search_snapshot.VERSION):
-                raise HTTPException(503, "This display app needs a schema v9/v10 archive or a verified search snapshot.")
-            db.execute("BEGIN")
-            if version == search_snapshot.VERSION:
-                search_snapshot.install_reader(db)
-            yield db
-        except sqlite3.OperationalError as exc:
-            if "interrupt" in str(exc):
-                raise HTTPException(408, "This search is too broad. Add a server, channel, author, or date filter and try again.") from exc
-            raise HTTPException(503, "The archive could not be read. Check its location and access permissions.") from exc
-        finally:
-            if db is not None:
-                db.close()
-
-    def search(self, q="", guild_id=None, channel_id=None, author_id=None,
-               date_from=None, date_to=None, before=None, limit=40, refresh_images=False, scan=False):
-        started = time.perf_counter()
-        args = (q, guild_id, channel_id, author_id, date_from, date_to, before, limit, refresh_images)
-        try:
-            result = self._search(*args, scan=scan)
-        except HTTPException as exc:
-            if exc.status_code != 408 or scan:
-                raise
-            # Retry in a fresh transaction over one bounded public-ID window.
-            # The continuation records examined rows, including an empty page.
-            result = self._search(*args, scan=True)
-        result['elapsed_ms'] = round((time.perf_counter()-started)*1000,1)
-        return result
-
-    def _search(self, q="", guild_id=None, channel_id=None, author_id=None,
-                date_from=None, date_to=None, before=None, limit=40, refresh_images=False, scan=False):
-        started = time.perf_counter()
-        q = q.strip()
-        # A literal run preserves trigram acceleration, including queries with % or _.
-        runs = re.findall(r"[^%_]+", q)
-        anchor = max(runs, key=len, default="")
-        conditions, params, selected = [], [], []
-        for column, value in (("guild_id", guild_id), ("channel_id", channel_id), ("author_id", author_id)):
-            if value:
-                if not value.isascii() or not value.isdigit() or not 0 < int(value) <= MAX_ID:
-                    raise HTTPException(400, "Choose a filter suggestion or enter a valid Discord ID.")
-                conditions.append(column + "=?")
-                params.append(int(value))
-                selected.append((column, int(value)))
-        lower = snowflake_day(date_from) if date_from else None
-        upper = snowflake_day(date_to, True) if date_to else None
-        if lower is not None and upper is not None and lower >= upper:
-            raise HTTPException(400, "From date must be on or before the to date.")
-        for clause, value in (("id>=?", lower), ("id<?", upper), ("id<?", before)):
-            if value is not None:
-                conditions.append(clause)
-                params.append(value)
-        where = " AND ".join(conditions) or "1"
-        take = limit + 1
-        scan_cursor = None
-        with self.connect() as db:
-            packed = db.execute('PRAGMA user_version').fetchone()[0] == search_snapshot.VERSION
-            if scan:
-                bounds, bound_params = [], []
-                for clause, value in (("id>=?", lower), ("id<?", upper), ("id<?", before)):
-                    if value is not None:
-                        bounds.append(clause)
-                        bound_params.append(value)
-                if packed:
-                    raw_bounds, raw_params = [], []
-                    for value, low in ((lower, True), (upper, False), (before, False)):
-                        if value is not None:
-                            boundary = db.execute('SELECT row_before_id(?)', (value,)).fetchone()[0]
-                            raw_bounds.append('rowid' + ('>=?' if low else '<=?'))
-                            raw_params.append(boundary+1 if low else boundary)
-                    window = [r[0] for r in db.execute('SELECT rowid FROM message_index WHERE ' +
-                        (' AND '.join(raw_bounds) or '1') + ' ORDER BY rowid DESC LIMIT ?', raw_params+[WINDOW+1])]
-                    floor = db.execute('SELECT record_id(?)', (window[min(WINDOW,len(window))-1],)).fetchone()[0] if window else None
-                    ids = search_snapshot.search_ids(db, q, selected, floor, upper, before, take,
-                                                    '%' + like_literal(q) + '%') if window else []
-                else:
-                    window = [r[0] for r in db.execute('SELECT id FROM messages WHERE ' +
-                        (' AND '.join(bounds) or '1') + ' ORDER BY id DESC LIMIT ?', bound_params+[WINDOW+1])]
-                    floor = window[min(WINDOW,len(window))-1] if window else None
-                    text_clause = "AND content LIKE ? ESCAPE '!' " if q else ''
-                    ids = [r[0] for r in db.execute(f"SELECT id FROM messages WHERE {where} AND id>=? " +
-                        text_clause + "ORDER BY id DESC LIMIT ?", params+[floor]+(['%'+like_literal(q)+'%'] if q else [])+[take])] if window else []
-                if len(window) > WINDOW and len(ids) <= limit:
-                    scan_cursor = str(floor)
-            elif packed:
-                ids = search_snapshot.search_ids(db, q, selected, lower, upper, before, take,
-                                                '%' + like_literal(q) + '%')
-            elif q:
-                boundary = db.execute(f"SELECT id FROM messages WHERE {where} ORDER BY id DESC LIMIT 1 OFFSET ?", params + [WINDOW-1]).fetchone()
-                floor = boundary[0] if boundary else 0
-                literal = "%" + like_literal(q) + "%"
-                ids = [r[0] for r in db.execute(
-                    f"SELECT id FROM messages WHERE {where} AND id>=? AND content LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?",
-                    params + [floor, literal, take])]
-                if len(ids) < take and boundary:
-                    indexed = len(anchor) >= 3
-                    candidate = "AND rowid IN (SELECT rowid FROM messages_fts WHERE content LIKE ?) " if indexed else ""
-                    ids += [r[0] for r in db.execute(
-                        f"SELECT id FROM messages WHERE {where} AND id<? " + candidate +
-                        "AND content LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?",
-                        params + [floor] + (["%" + anchor + "%"] if indexed else []) + [literal, take-len(ids)])]
-            else:
-                ids = [r[0] for r in db.execute(f"SELECT id FROM messages WHERE {where} ORDER BY id DESC LIMIT ?", params + [take])]
-            has_more = len(ids) > limit or scan_cursor is not None
-            ids = ids[:limit]
-            messages = []
-            if ids:
-                key = 'storage_rowid' if packed else 'id'
-                rows = db.execute(f"SELECT * FROM message_records WHERE {key} IN (" + ",".join("?" for _ in ids) + f") ORDER BY {key} DESC", ids).fetchall()
-                author_ids = list({row['author_id'] for row in rows})
-                avatars = {str(r[0]): r[1] for r in db.execute(
-                    "SELECT user_id, avatar_hash FROM profiles WHERE user_id IN (" + ",".join("?" for _ in author_ids) + ")", author_ids)}
-                payload_table = 'message_attachments' if packed else 'message_payloads'
-                payloads = {}
-                if db.execute("SELECT 1 FROM sqlite_master WHERE name=? AND type='table'", (payload_table,)).fetchone():
-                    public_ids = [row['id'] for row in rows]
-                    payloads = {str(r[0]):json.loads(r[1]) for r in db.execute(
-                        f'SELECT message_id,payload FROM {payload_table} WHERE message_id IN (' +
-                        ','.join('?' for _ in public_ids)+')',public_ids)}
-                for row in rows:
-                    message = dict(row)
-                    message.pop('storage_rowid', None)
-                    message["id"] = str(message["id"])
-                    avatar = avatars.get(message["author_id"])
-                    message["avatar_url"] = (
-                        image_url(message['author_id'],avatar,size=64)
-                        if isinstance(avatar, str) and re.fullmatch(r"(?:a_)?[A-Za-z0-9]+", avatar)
-                        and str(message['author_id']).isdigit() else None)
-                    if message['avatar_url']:
-                        message['avatar_url'] = archived_media_url(self.path,message['avatar_url'])
-                    # Display mode never fetches credentials or refreshes expiring links.
-                    urls = (message.pop("image_urls") or "").splitlines()
-                    message["attachments"] = [
-                        archived_media_url(self.path,url) if media_status(self.path,url)['status'] == 'saved' else
-                        (f"/api/images/{message['id']}/{i}" if refresh_images else url)
-                        for i, url in enumerate(urls)
-                        if re.match(r"^https://(?:cdn|media)\.discordapp\.(?:com|net)/", url)]
-                    payload = payloads.get(message['id'], [] if packed else {})
-                    attachment_data = payload if packed else payload.get('attachments', [])
-                    message['attachment_files'] = [{
-                        'filename':attachment.get('filename') or 'attachment',
-                        'url':archived_media_url(self.path,attachment['url']),
-                        'media':media_status(self.path,attachment['url']),
-                    } for attachment in attachment_data if isinstance(attachment,dict) and
-                        isinstance(attachment.get('url'),str) and
-                        re.match(r'^https://(?:cdn|media)\.discordapp\.(?:com|net)/',attachment['url'])]
-                    messages.append(message)
-        return {"messages": messages, "has_more": has_more,
-                "next_cursor": scan_cursor or (messages[-1]['id'] if has_more else None),
-                "scan": scan, "partial": scan_cursor is not None,
-                "elapsed_ms": round((time.perf_counter()-started)*1000, 1)}
 
 
 def create_app(path=None, immutable=None):
@@ -275,15 +76,11 @@ def create_app(path=None, immutable=None):
 
     @app.get('/api/profiles/{uid}')
     def profile(uid: str):
-        with archive.connect() as db:
-            return read_profile(db, uid)
+        return archive.profile(uid)
 
     @app.get('/api/profiles/{uid}/servers')
     def servers(uid: str, q: str = Query('',max_length=100), offset: int = Query(0,ge=0), limit: int = Query(30,ge=1,le=100)):
-        with archive.connect() as db:
-            if db.execute('PRAGMA user_version').fetchone()[0] == search_snapshot.VERSION:
-                return search_snapshot.profile_servers(db, user_id(uid), q, offset, limit, search_label)
-            return profile_servers(db, uid, q, offset, limit)
+        return archive.profile_servers(uid, q, offset, limit)
 
     @app.get('/{asset}', include_in_schema=False)
     def shared_asset(asset: str):
