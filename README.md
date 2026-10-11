@@ -61,9 +61,15 @@ Windows launchers discover `.venv`, then `venv`, then a working `py -3`, then
 with spaces. Install dependencies into the selected interpreter with
 `run-python.bat -m pip install -r requirements.txt`.
 
-Both startup commands print a terminal-width-aware ASCII header. Supported
-interactive terminals use green; redirected output, `TERM=dumb` and `NO_COLOR`
-use plain text. The collector logs its save policy, request/retry intervals,
+Both startup commands show a white terminal banner with large mint Searchcord
+lettering. Wider windows use a larger seven-row block font with clearer letter
+shapes. In supported interactive terminals it stays at the top, while startup
+and runtime logs scroll below it. The banner fits the terminal's starting width
+and height; narrow or short windows use a smaller layout. Scrolling returns to
+normal on exit. Redirected output, `TERM=dumb` and `NO_COLOR` use a plain ASCII
+header without terminal controls. Server worker processes keep ordinary log
+output so they do not redraw or reset their shared console. The collector logs
+its save policy, request/retry intervals,
 mandatory breaks and live polling interval once at startup. Saving happens after
 each fetched page. Scrape requests wait a random 0.5–1 second after the previous
 scrape response, with a 60-second break after every 100 successful responses.

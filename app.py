@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database, save_message_payloads, mark_messages_deleted
 from profile_api import profile_router, collect_profile, ProfileStopped
 from archive_reader import Archive, MAX_ID
-from cli import local_url, open_url, print_banner
+from cli import local_url, open_url, start_terminal, terminal_lifespan
 from channel_access import readable_channels
 from invite_api import invite_router
 from collection_state import save_job, persist_job, load_jobs, remove_job
@@ -201,35 +201,35 @@ async def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global http_client, collection_persistence_ready
-    print_banner()
-    scrape_log.info("timing save_interval=each fetched page (up to 100 messages); "
-                    "scrape_interval=%g-%gs after each response; "
-                    "scrape_break=%gs after %s successful responses; "
-                    "request_interval_min=%gs; retry_interval=%g-%gs; live_poll_interval=%gs",
-                    SCRAPE_INTERVAL_MIN_SECONDS, SCRAPE_INTERVAL_MAX_SECONDS,
-                    SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_REQUESTS,
-                    DISCORD_INTERVAL_SECONDS, SCRAPE_RETRY_BASE_SECONDS,
-                    SCRAPE_RETRY_MAX_SECONDS, LIVE_POLL_SECONDS)
-    await init_db()
-    await _recover_collection_jobs()
-    await recover_invite_jobs()
-    http_client = httpx.AsyncClient(
-        timeout=30,
-        limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-    )
-    try:
-        yield
-    finally:
-        # Stop live pollers before tearing down the client they depend on,
-        # otherwise they raise into the shutdown path.
-        await _suspend_collection_jobs()
-        await shutdown_invite_jobs(preserve=True)
-        await shutdown_profile_jobs()
-        await http_client.aclose()
-        http_client = None
-        collection_persistence_ready = False
-        scrapes.reset()
-        live_monitors.clear()
+    async with terminal_lifespan(app):
+        scrape_log.info("timing save_interval=each fetched page (up to 100 messages); "
+                        "scrape_interval=%g-%gs after each response; "
+                        "scrape_break=%gs after %s successful responses; "
+                        "request_interval_min=%gs; retry_interval=%g-%gs; live_poll_interval=%gs",
+                        SCRAPE_INTERVAL_MIN_SECONDS, SCRAPE_INTERVAL_MAX_SECONDS,
+                        SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_REQUESTS,
+                        DISCORD_INTERVAL_SECONDS, SCRAPE_RETRY_BASE_SECONDS,
+                        SCRAPE_RETRY_MAX_SECONDS, LIVE_POLL_SECONDS)
+        await init_db()
+        await _recover_collection_jobs()
+        await recover_invite_jobs()
+        http_client = httpx.AsyncClient(
+            timeout=30,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+        try:
+            yield
+        finally:
+            # Stop live pollers before tearing down the client they depend on,
+            # otherwise they raise into the shutdown path.
+            await _suspend_collection_jobs()
+            await shutdown_invite_jobs(preserve=True)
+            await shutdown_profile_jobs()
+            await http_client.aclose()
+            http_client = None
+            collection_persistence_ready = False
+            scrapes.reset()
+            live_monitors.clear()
 
 app = FastAPI(lifespan=lifespan)
 APP_INSTANCE_ID = uuid.uuid4().hex
@@ -1739,11 +1739,16 @@ if __name__ == "__main__":
     import threading
     import uvicorn
 
+    start_terminal()
+
     # Loopback by default. This app has no authentication and holds a Discord
     # token plus everything you have scraped, so binding 0.0.0.0 would hand
     # the whole archive to anyone on the same network. Override deliberately.
     host = os.environ.get("SEARCHCORD_HOST", "127.0.0.1")
     port = int(os.environ.get("SEARCHCORD_PORT", "8000"))
+
+    print(f"Preparing Searchcord on {local_url(host, port)}", flush=True)
+    print("On a first database upgrade, this may take several minutes. The browser opens when ready.", flush=True)
 
     threading.Thread(target=open_browser_when_ready, args=(host, port), daemon=True).start()
     uvicorn.run(app, host=host, port=port)
