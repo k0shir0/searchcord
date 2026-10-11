@@ -62,7 +62,8 @@ with spaces. Install dependencies into the selected interpreter with
 `run-python.bat -m pip install -r requirements.txt`.
 
 Both startup commands show a white terminal banner with large mint Searchcord
-lettering. In supported interactive terminals it stays at the top, while startup
+lettering. Wider windows use a larger seven-row block font with clearer letter
+shapes. In supported interactive terminals it stays at the top, while startup
 and runtime logs scroll below it. The banner fits the terminal's starting width
 and height; narrow or short windows use a smaller layout. Scrolling returns to
 normal on exit. Redirected output, `TERM=dumb` and `NO_COLOR` use a plain ASCII
