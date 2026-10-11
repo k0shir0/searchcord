@@ -19,6 +19,7 @@ function createCollectionQueue({startBatch, changed}) {
       canEdit: !active && !changingAccount,
       canStart: idle && sources.length > 0,
       canRunOtherJob: idle,
+      canLoadSources: !changingAccount,
       scanning: Object.freeze([...scans.keys()]),
     });
   }
@@ -39,6 +40,7 @@ function createCollectionQueue({startBatch, changed}) {
   }
 
   function continueQueue() {
+    if (!sources.length) automatic = false;
     if (automatic) return start();
   }
 
@@ -59,11 +61,13 @@ function createCollectionQueue({startBatch, changed}) {
       const id = String(source.id);
       if (sources.some(item => item.id === id)) sources = sources.filter(item => item.id !== id);
       else add([source]);
+      if (!sources.length) automatic = false;
       changed();
     },
     remove(id) {
       if (!view().canEdit) return;
       sources = sources.filter(source => source.id !== String(id));
+      if (!sources.length) automatic = false;
       changed();
     },
     clear() {
@@ -86,6 +90,8 @@ function createCollectionQueue({startBatch, changed}) {
         // Let an already-issued start bind its server job to the original
         // saved account before changing the server's selected credential.
         if (starting) await starting;
+        // A failed start releases its reservation without creating a server job.
+        if (!removed) { sources = active ? [...active] : []; changed(); }
         const result = await change();
         if (removed) { sources = []; changed(); }
         return result;

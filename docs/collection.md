@@ -67,6 +67,12 @@ fails, credentials and selected sources are kept. DM cleanup blocks scrape start
 scans accepted during cleanup can start when it finishes, including when cleanup
 reports an error, unless collection was stopped or cleared in the meantime.
 
+Account responses update the page only for the change that requested them.
+Server, channel and conversation reads are blocked until the account change finishes;
+late verification, server-list and settings errors cannot overwrite a newer
+selection. If an in-flight scrape start fails during a switch, its old-account
+sources are discarded. Automatic continuation ends when the queue empties.
+
 Keep the page open until pending scans start. Pending sources and scans live in
 the browser; the active scrape runs and recovers on the server. Reload restores
 the server-owned batch and progress, but does not retain browser pending work.
