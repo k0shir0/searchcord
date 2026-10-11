@@ -175,14 +175,17 @@ async function refreshLiveStatus() {
 }
 
 async function connectDiscord() {
+  if (!collectionQueue.view().canLoadSources) return;
+  const revision = S.accountRevision;
   $('connectDiscord').disabled = true;
   try {
     const v = await api('/api/token/validate');
+    if (S.accountRevision !== revision) return;
     if (!v.valid) { openSettings(); setTokenStatus('Paste your Discord token to connect.', 'fail'); return; }
     $('connectionStatus').textContent = `Connected as ${v.username}`;
-    await loadGuilds();
+    await loadGuilds(revision);
   } catch (error) {
-    $('connectionStatus').textContent = error.message;
+    if (S.accountRevision === revision) $('connectionStatus').textContent = error.message;
   } finally { $('connectDiscord').disabled = false; }
 }
 
@@ -219,40 +222,48 @@ function initSettings() {
 
   $('savedTokenSelect').addEventListener('change', async e => {
     const select = e.currentTarget;
-    const previous = select.dataset.activeId;
     const selectedId = select.value;
+    const revision = S.accountRevision + 1;
     select.disabled = true;
     setTokenStatus('switching token…', '');
     try {
-      await changeSavedAccount(async () => {
+      await changeSavedAccount(async revision => {
         const saved = await api('/api/settings', { method: 'POST', body: { active_token_id: selectedId } });
+        if (S.accountRevision !== revision) return;
         renderSavedTokens(saved);
-        await verifyActiveToken();
+        await verifyActiveToken(revision);
       });
     } catch (error) {
-      select.value = previous;
+      if (S.accountRevision !== revision) return;
       setTokenStatus(`Could not switch token: ${error.message}`, 'fail');
-    } finally { select.disabled = false; }
+      await loadSavedTokens(revision);
+    }
   });
 
   $('saveToken').addEventListener('click', async () => {
     const token = inp.value.trim();
     if (!token) { setTokenStatus('Enter a token to save.', 'fail'); return; }
+    const tokenLabel = $('tokenName').value.trim();
+    const revision = S.accountRevision + 1;
     setTokenStatus('saving token…', '');
     $('saveToken').disabled = true;
     try {
-      await changeSavedAccount(async () => {
-        const saved = await api('/api/settings', { method: 'POST', body: { token, token_label: $('tokenName').value.trim() } });
+      await changeSavedAccount(async revision => {
+        const saved = await api('/api/settings', { method: 'POST', body: { token, token_label: tokenLabel } });
+        if (S.accountRevision !== revision) return;
         renderSavedTokens(saved);
         inp.value = '';
         $('tokenName').value = '';
         inp.type = 'password';
         tog.textContent = 'show';
         tog.setAttribute('aria-label', 'Show new token');
-        await verifyActiveToken();
+        await verifyActiveToken(revision);
       });
-    } catch (error) { setTokenStatus(`Could not save token: ${error.message}`, 'fail'); }
-    finally { $('saveToken').disabled = false; }
+    } catch (error) {
+      if (S.accountRevision !== revision) return;
+      setTokenStatus(`Could not save token: ${error.message}`, 'fail');
+      await loadSavedTokens(revision);
+    }
   });
 
   $('clearTokens').addEventListener('click', async () => {
@@ -263,12 +274,14 @@ function initSettings() {
       return;
     }
     clear.classList.remove('pending-confirm');
+    const revision = S.accountRevision + 1;
     clear.disabled = true;
     $('saveToken').disabled = true;
     $('savedTokenSelect').disabled = true;
     try {
-      await changeSavedAccount(async () => {
+      await changeSavedAccount(async revision => {
         const saved = await api('/api/settings/tokens?confirm=true', {method: 'DELETE'});
+        if (S.accountRevision !== revision) return;
         renderSavedTokens(saved);
         inp.value = '';
         $('tokenName').value = '';
@@ -281,12 +294,9 @@ function initSettings() {
         setTokenStatus('Saved tokens removed. Add a new token to connect. Older backups are unchanged.', 'ok');
       }, {removed: true});
     } catch (error) {
+      if (S.accountRevision !== revision) return;
       setTokenStatus(`Could not remove saved tokens: ${error.message}`, 'fail');
-      await loadSavedTokens();
-    } finally {
-      clear.disabled = false;
-      clear.textContent = 'remove all saved tokens';
-      $('saveToken').disabled = false;
+      await loadSavedTokens(revision);
     }
   });
 
@@ -320,19 +330,24 @@ function renderSavedTokens(saved) {
     select.disabled = true;
   } else {
     saved.tokens.forEach(token => select.add(new Option(token.label, token.id)));
-    select.disabled = false;
+    select.disabled = !collectionQueue.view().canLoadSources;
     select.value = saved.active_token_id;
   }
   select.dataset.activeId = saved.active_token_id || '';
 }
 
-async function loadSavedTokens() {
-  try { renderSavedTokens(await api('/api/settings')); }
-  catch (error) { setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail'); }
+async function loadSavedTokens(revision = S.accountRevision) {
+  if (!collectionQueue.view().canLoadSources || S.accountRevision !== revision) return;
+  try {
+    const saved = await api('/api/settings');
+    if (S.accountRevision === revision) renderSavedTokens(saved);
+  } catch (error) {
+    if (S.accountRevision === revision) setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail');
+  }
 }
 
 async function changeSavedAccount(change, options) {
-  S.accountRevision++;
+  const revision = ++S.accountRevision;
   S.guild = null;
   S.guilds = [];
   S.guildLoad = null;
@@ -343,11 +358,20 @@ async function changeSavedAccount(change, options) {
   $('channelsPane').classList.remove('visible');
   $('emptyState').style.display = '';
   $('dmBody').innerHTML = '<p class="placeholder-msg">Open direct messages to load conversations.</p>';
-  return collectionQueue.changeAccount(change, options);
+  try {
+    return await collectionQueue.changeAccount(() => change(revision), options);
+  } finally {
+    if (S.accountRevision === revision) {
+      $('saveToken').disabled = false;
+      $('savedTokenSelect').disabled = !$('savedTokenSelect').value;
+      $('clearTokens').disabled = false;
+      $('clearTokens').textContent = 'remove all saved tokens';
+    }
+  }
 }
 
-async function verifyActiveToken() {
-  const revision = S.accountRevision;
+async function verifyActiveToken(revision = S.accountRevision) {
+  if (S.accountRevision !== revision) return;
   try {
     const verified = await api('/api/token/validate');
     if (S.accountRevision !== revision) return;
@@ -358,8 +382,10 @@ async function verifyActiveToken() {
     }
     setTokenStatus(`connected as ${verified.username}`, 'ok');
     $('connectionStatus').textContent = `Connected as ${verified.username}`;
-    loadGuilds();
-  } catch (error) { setTokenStatus(`Could not verify selected token: ${error.message}`, 'fail'); }
+    loadGuilds(revision);
+  } catch (error) {
+    if (S.accountRevision === revision) setTokenStatus(`Could not verify selected token: ${error.message}`, 'fail');
+  }
 }
 
 function openSettings() {
@@ -398,8 +424,12 @@ async function loadDbStats() {
 }
 
 // ── Guilds ───────────────────────────────────────────────────
-async function loadGuilds() {
-  const revision = S.accountRevision;
+async function loadGuilds(revision) {
+  if (revision === undefined) {
+    if (!collectionQueue.view().canLoadSources) return;
+    revision = S.accountRevision;
+  }
+  if (S.accountRevision !== revision) return;
   const list = $('serverList');
   list.innerHTML = spinnerHTML();
   try {
@@ -449,6 +479,7 @@ function renderGuilds() {
 }
 
 async function selectGuild(guild, includeThreads = false) {
+  if (!collectionQueue.view().canLoadSources) return;
   const revision = S.accountRevision;
   const viewRevision = ++S.channelViewRevision;
   S.guild = guild;
@@ -487,6 +518,7 @@ async function selectGuild(guild, includeThreads = false) {
 
 // ── Direct Messages / Group DMs ───────────────────────────────
 async function loadDms() {
+  if (!collectionQueue.view().canLoadSources) return;
   const revision = S.accountRevision;
   const body = $('dmBody');
   body.innerHTML = spinnerHTML();
