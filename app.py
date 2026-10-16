@@ -56,9 +56,10 @@ SCRAPE_RETRY_MAX_SECONDS = 60
 DISCORD_INTERVAL_SECONDS = 0.025
 LIVE_POLL_SECONDS = 3
 SCRAPE_INTERVAL_MIN_SECONDS = 0.5
-SCRAPE_INTERVAL_MAX_SECONDS = 1.0
+SCRAPE_INTERVAL_MAX_SECONDS = 1.5
 SCRAPE_BREAK_REQUESTS = 100
 SCRAPE_BREAK_SECONDS = 60
+SCRAPE_BREAK_MAX_SECONDS = 90
 # Cap on buffered scrape-progress events, so a job whose SSE client never
 # connects (or goes away mid-scrape) can't grow its queue without bound.
 PROGRESS_QUEUE_MAX = 1000
@@ -204,10 +205,10 @@ async def lifespan(app: FastAPI):
     async with terminal_lifespan(app):
         scrape_log.info("timing save_interval=each fetched page (up to 100 messages); "
                         "scrape_interval=%g-%gs after each response; "
-                        "scrape_break=%gs after %s successful responses; "
+                        "scrape_break=%g-%gs after %s successful responses; "
                         "request_interval_min=%gs; retry_interval=%g-%gs; live_poll_interval=%gs",
                         SCRAPE_INTERVAL_MIN_SECONDS, SCRAPE_INTERVAL_MAX_SECONDS,
-                        SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_REQUESTS,
+                        SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_MAX_SECONDS, SCRAPE_BREAK_REQUESTS,
                         DISCORD_INTERVAL_SECONDS, SCRAPE_RETRY_BASE_SECONDS,
                         SCRAPE_RETRY_MAX_SECONDS, LIVE_POLL_SECONDS)
         await init_db()
@@ -437,7 +438,8 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                         scrape_confirmed_requests += 1
                         if scrape_confirmed_requests == SCRAPE_BREAK_REQUESTS:
                             scrape_confirmed_requests = 0
-                            scrape_break_until = time.monotonic() + SCRAPE_BREAK_SECONDS
+                            scrape_break_until = time.monotonic() + random.uniform(
+                                SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_MAX_SECONDS)
                     # Publish cooldowns before releasing the shared gate.
                     if r.status_code == 429:
                         discord_ready_at = max(discord_ready_at, time.monotonic() + _retry_after(r))

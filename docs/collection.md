@@ -124,12 +124,14 @@ takes effect. Pause/stop also remain usable during profile retries and cooldowns
 ## Request pacing and recovery
 
 Scrape requests, their retries and expanded-profile requests made by a scrape
-wait a random **0.5–1 second** after the previous scrape request finishes.
-After every **100 successful Discord responses**, further scrape requests wait
-at least **60 seconds** from the last response. Empty successful pages count;
+wait a random **0.5–1.5 seconds** after the previous scrape request finishes.
+Each attempt, including a retry, draws a fresh delay. After every **100 successful
+Discord responses**, further scrape requests wait a randomly chosen **60–90 seconds**
+from the last response. Empty successful pages count;
 HTTP errors do not. The counter and deadlines are shared across scrape jobs and
 persisted for restart recovery, so changing channels, pause/resume and stop/start
-do not reset them. Discord cooldowns and retry backoff can extend the wait.
+do not reset them or redraw a shorter break. Discord cooldowns and retry backoff
+can extend the wait.
 
 The progress panel shows mandatory breaks. A paused scrape does not hold the
 shared Discord request gate, so unrelated account/source operations can continue.

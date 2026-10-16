@@ -204,10 +204,24 @@ or backup. Test upgrades on a separate copy first.
 - [Archive reliability, credentials and remaining limits](docs/archive-reliability.md)
 
 The production branch contains the application, required assets, deployment
-files, licenses and operating documentation. `.gitignore` explicitly lists the
-allowed files. Keep local checks, benchmarks, review reports, experiments and
-generated output ignored; add new production files to the allowlist before
-committing them.
+files, licenses, operating documentation and maintained PR tests. `.gitignore`
+explicitly lists the allowed files. Keep scratch checks, benchmarks, review
+reports, experiments and generated output ignored.
+
+## Tests
+
+Every pull request runs the maintained Python regressions, browser queue tests
+and JavaScript syntax checks on Windows. Run the same checks locally after
+installing `requirements.txt` and Node.js 22:
+
+```powershell
+python -m unittest discover -s tests -t . -v
+node --test tests/test_collection_queue.mjs
+Get-ChildItem static -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
+```
+
+The tests use disposable archives and mocked Discord requests. They need no
+saved accounts, live Discord connection or personal archive.
 
 ## Release timeline
 
