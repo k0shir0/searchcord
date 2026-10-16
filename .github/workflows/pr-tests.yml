@@ -18,9 +18,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     env:
-      SEARCHCORD_DATA_DIR: ${{ runner.temp }}/searchcord-tests
-      SEARCHCORD_CREDENTIAL_FILE: ${{ runner.temp }}/searchcord-tests/credentials.vault
-      SEARCHCORD_CREDENTIAL_KEY_FILE: ${{ runner.temp }}/searchcord-tests/credentials.key
+      SEARCHCORD_DATA_DIR: ${{ github.workspace }}/.ci-data
+      SEARCHCORD_CREDENTIAL_FILE: ${{ github.workspace }}/.ci-data/credentials.vault
+      SEARCHCORD_CREDENTIAL_KEY_FILE: ${{ github.workspace }}/.ci-data/credentials.key
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
