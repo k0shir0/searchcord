@@ -71,8 +71,8 @@ header without terminal controls. Server worker processes keep ordinary log
 output so they do not redraw or reset their shared console. The collector logs
 its save policy, request/retry intervals,
 mandatory breaks and live polling interval once at startup. Saving happens after
-each fetched page. Scrape requests wait a random 0.5–1 second after the previous
-scrape response, with a 60-second break after every 100 successful responses.
+each fetched page. Scrape requests wait a random 0.5–1.5 seconds after the previous
+scrape response, with a random 60–90-second break after every 100 successful responses.
 
 The collector opens the operating system's default browser after its health
 check succeeds. No browser executable paths are required. If launching fails,
