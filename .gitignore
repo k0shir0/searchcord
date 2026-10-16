@@ -1,5 +1,6 @@
 # Production allowlist: everything else stays local and ignored.
 # Add new runtime, deployment, or operating-documentation files explicitly.
+# Maintained PR checks are also tracked; scratch checks remain ignored.
 *
 
 # Repository metadata and operating documentation
@@ -9,6 +10,18 @@
 !/LICENSE
 !/README.md
 !/GLOSSARY.md
+!/.github/
+!/.github/workflows/
+!/.github/workflows/pr-tests.yml
+!/tests/
+!/tests/__init__.py
+!/tests/durable_fixture.py
+!/tests/test_archive_storage.py
+!/tests/test_collection_access.py
+!/tests/test_collection_queue.mjs
+!/tests/test_durable_scrape.py
+!/tests/test_scrape_pacing.py
+!/tests/test_search_display.py
 !/docs/
 !/docs/profiles.md
 !/docs/search-display.md
