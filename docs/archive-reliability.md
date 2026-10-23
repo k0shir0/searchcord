@@ -47,6 +47,13 @@ it expires. Saved files are verified by SHA-256; failures and
 limits are recorded rather than presented as successful copies. A complete
 message payload does not imply all of its binaries were downloaded.
 
+Original binaries remain the default. Optional `SEARCHCORD_MEDIA_MODE=compact`
+stores smaller, resized lossy WebP representations for supported still images;
+`none` disables new binary downloads. `SEARCHCORD_PROFILE_IMAGES=shapes` hides
+profile imagery and skips its downloads. Compact manifests identify an immutable
+binary by digest; legacy manifests remain readable. See
+[media storage](media-storage.md) for migration and preservation limits.
+
 `python search_snapshot.py SOURCE.db NEWDIR/searchcord.db --with-media` copies
 only available referenced media into a fresh `NEWDIR/media/`. The snapshot
 preserves displayed messages, profiles and attachment metadata, without settings,

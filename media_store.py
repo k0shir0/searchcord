@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import hashlib
 import json
+import logging
+import os
 from pathlib import Path
 import re
 import shutil
@@ -21,6 +23,33 @@ BATCH_SECONDS = 30
 PARALLEL_DOWNLOADS = 4
 HOSTS = frozenset({'cdn.discordapp.com', 'media.discordapp.net'})
 INLINE_TYPES = frozenset({'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'})
+
+
+def media_mode():
+    """Original is the compatibility default; compact is explicitly lossy."""
+    value = os.environ.get('SEARCHCORD_MEDIA_MODE', 'original').lower()
+    if value not in ('original', 'compact', 'none'):
+        raise ValueError('SEARCHCORD_MEDIA_MODE must be original, compact or none')
+    return value
+
+
+def profile_images_enabled():
+    value = os.environ.get('SEARCHCORD_PROFILE_IMAGES', 'original').lower()
+    if value not in ('original', 'shapes'):
+        raise ValueError('SEARCHCORD_PROFILE_IMAGES must be original or shapes')
+    return value == 'original'
+
+
+def media_kind(url):
+    try:
+        path = urlsplit(url if isinstance(url, str) else '').path
+    except ValueError:
+        return 'attachment'
+    if '/avatars/' in path:
+        return 'avatar'
+    if '/banners/' in path:
+        return 'banner'
+    return 'attachment'
 
 
 def canonical_url(url):
@@ -51,6 +80,19 @@ def media_directory(path):
     return Path(path).resolve().parent / 'media'
 
 
+def media_binary(directory, key, data):
+    """Compact objects are immutable; manifests never accept arbitrary paths."""
+    name = data.get('storage_file')
+    if name is None:
+        return directory / (key + '.bin')
+    digest = data.get('sha256', '')
+    if not isinstance(digest, str) or not re.fullmatch('[a-f0-9]{64}', digest):
+        raise ValueError('Invalid media digest')
+    if name != key + '.' + digest + '.webp':
+        raise ValueError('Invalid media filename')
+    return directory / name
+
+
 @lru_cache(maxsize=1024)
 def _file_digest(binary, fingerprint):
     """The stat fingerprint invalidates prior verification after file changes."""
@@ -59,7 +101,7 @@ def _file_digest(binary, fingerprint):
 
 
 def _saved_file(directory, key, data, *, verify=False, fresh=False):
-    binary = directory / (key + '.bin')
+    binary = media_binary(directory, key, data)
     if directory.is_symlink() or binary.is_symlink():
         return False
     stat = binary.stat()
@@ -89,6 +131,8 @@ def media_status(path, url, *, verify=False, fresh=False):
 
 
 def local_url(path, url):
+    if media_kind(url) != 'attachment' and not profile_images_enabled():
+        return None
     return '/api/media/' + media_key(url) if media_status(path, url)['status'] == 'saved' else url
 
 
@@ -111,6 +155,9 @@ async def cache_media(path, url, *, client=None, cancelled=None, seconds=FILE_SE
     key = media_key(url)
     if not key:
         return {'status': 'unavailable', 'reason': 'unsupported_host'}
+    mode = media_mode()
+    if mode == 'none' or (media_kind(url) != 'attachment' and not profile_images_enabled()):
+        return {'status': 'unavailable', 'reason': 'disabled_by_policy'}
     existing = await asyncio.to_thread(media_status, path, url, verify=True)
     if existing['status'] == 'saved':
         return existing
@@ -186,6 +233,20 @@ async def cache_media(path, url, *, client=None, cancelled=None, seconds=FILE_SE
         _record(directory, key, data)
     except OSError:
         data.update(status='unavailable', reason='storage_error')
+    if data['status'] == 'saved' and mode == 'compact':
+        # Already-saved media views only read files. Finish encoding off-loop
+        # before the writer exits, so clear/stop cannot race a detached thread.
+        from media_optimize import optimize_one
+        conversion = asyncio.create_task(asyncio.to_thread(
+            optimize_one, directory, key, data, apply=True, remove_originals=True))
+        try:
+            await asyncio.shield(conversion)
+        except asyncio.CancelledError:
+            await conversion
+            raise
+        except (OSError, ValueError, ImportError):
+            logging.getLogger(__name__).exception('Media compression failed; keeping original')
+        data = await asyncio.to_thread(media_status, path, url, verify=True)
     return data
 
 
@@ -211,7 +272,10 @@ def message_media_urls(messages):
 
 async def archive_message_media(path, messages, *, cancelled=None, client=None):
     """Four workers share a download deadline; active digests finish off-loop."""
-    candidates = message_media_urls(messages)
+    if media_mode() == 'none':
+        return []
+    candidates = [url for url in message_media_urls(messages)
+                  if media_kind(url) == 'attachment' or profile_images_enabled()]
     if not candidates:
         return []
     urls = iter(candidates)
@@ -255,12 +319,12 @@ def media_router(path):
         if not re.fullmatch('[a-f0-9]{64}', key):
             raise HTTPException(404, 'Archived media not found.')
         directory = media_directory(path() if callable(path) else path)
-        binary = directory / (key + '.bin')
         try:
             manifest = directory / (key + '.json')
             if directory.is_symlink() or manifest.is_symlink():
                 raise ValueError
             data = json.loads(manifest.read_text(encoding='utf-8'))
+            binary = media_binary(directory, key, data)
             if not _saved_file(directory, key, data, verify=True):
                 raise ValueError
         except (OSError, ValueError, AttributeError):
@@ -283,7 +347,7 @@ def clear_media(path):
         raise OSError('Media directory resolves outside the archive directory')
     removed = 0
     for file in directory.iterdir():
-        if file.is_file() and (re.fullmatch('[a-f0-9]{64}\\.(?:bin|json)', file.name) or
+        if file.is_file() and (re.fullmatch('[a-f0-9]{64}(?:\\.[a-f0-9]{64})?\\.(?:bin|json|webp)', file.name) or
                                re.fullmatch(r'\.searchcord-media-[A-Za-z0-9_-]+\.tmp', file.name)):
             file.unlink()
             removed += 1
@@ -310,9 +374,9 @@ def copy_referenced_media(source_db, destination_db, urls):
             if data['status'] != 'saved':
                 result['unavailable'] += 1
                 continue
-            binary = destination / (key + '.bin')
+            binary = media_binary(destination, key, data)
             created.append(binary)
-            with (source / (key + '.bin')).open('rb') as original, binary.open('xb') as copy:
+            with media_binary(source, key, data).open('rb') as original, binary.open('xb') as copy:
                 shutil.copyfileobj(original, copy, 1024 * 1024)
             # A source writer changing an object during copying cannot publish
             # a mismatched snapshot binary or alter the source to repair it.
