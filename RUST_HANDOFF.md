@@ -208,3 +208,39 @@ Linux: all 62 Rust contracts, 36 original Python, 25 Node, JS syntax, formatting
 and Clippy pass. Production Python/frontend remain unchanged. Cross-platform
 matrix results remain to be checked; 07's formatting correction is included in 08.
 Next: 10 browser/performance baselines and missing 05 before production migration.
+
+## Current scope correction from the user
+
+The user explicitly selected **06–22, leaving 05 pending**. While awaiting that
+asynchronous answer, 05 was implemented on its isolated task branch and briefly
+integrated as `a135ecd`. Its integration was reverted without rewriting history
+by `9fab4c4`; `rewrite/rust-05-permissions` retains the work separately. Do not
+count 05 complete or integrate it again under this request. The requested range
+is 17 chunks, 06 through 22. This is an explicit exception to the original plan's
+05 dependency: production work may proceed in the selected range, while the
+test-first milestone's six permission/discovery cases remain an open gate.
+
+## Chunk 10 — browser/performance baseline
+
+Task branch `rewrite/rust-10-browser-performance`, rebased onto the scope
+correction. Two Rust-driven W3C WebDriver cases exercise both unchanged
+frontends against mocked Python services, with pinned Chrome/ChromeDriver
+154.0.8037.57 and blocked external DNS. Coverage includes search, filters,
+pagination, profiles, HTML-looking content, empty results, privacy, statistics,
+settings and queue state. Browser gates fail explicitly when prerequisites are
+missing. CI installs both binaries for each platform.
+
+The deterministic performance fixture has its own reproducibility contract.
+The Rust release runner records three Python exports, fresh/warm standard and
+packed HTTP search with one/sixteen concurrent workers, and three local-save
+runs. Rust independently checks canonical hashes, expected IDs and counts.
+Full compression and integrity verification stay enabled. The 100,000-row
+Linux baseline and procedure are committed in `docs/benchmarks` and
+`docs/rust-benchmarks.md`; this is not final paired qualification.
+
+All 30 original cases within scope have Rust equivalents; the six original 05
+cases remain explicitly pending. Two old storage path-spelling assertions are
+fixed independently of 05 so macOS/Windows compare canonical path identities.
+Linux validation: 65 Rust contracts (including WebDriver), original 36 Python,
+25 Node, syntax, formatting and Clippy. Platform CI must be checked again.
+Next: 11 packed decoding; keep 05 pending as instructed.

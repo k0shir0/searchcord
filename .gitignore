@@ -26,6 +26,8 @@
 !/crates/searchcord-parity/Cargo.toml
 !/crates/searchcord-parity/src/
 !/crates/searchcord-parity/src/*.rs
+!/crates/searchcord-parity/src/bin/
+!/crates/searchcord-parity/src/bin/*.rs
 !/crates/searchcord-parity/tests/
 !/crates/searchcord-parity/tests/*.rs
 !/crates/searchcord-parity/driver/
@@ -44,6 +46,9 @@
 !/docs/search-display.md
 !/docs/collection.md
 !/docs/archive-reliability.md
+!/docs/rust-benchmarks.md
+!/docs/benchmarks/
+!/docs/benchmarks/*.json
 
 # Application, archive tools, dependencies, and launchers
 !/app.py

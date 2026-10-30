@@ -1,4 +1,5 @@
 //! Test-only parity driver. Scenarios and expectations belong in Rust tests.
+pub mod performance;
 use reqwest::{Method, blocking::Client};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
