@@ -200,10 +200,23 @@ pub fn metadata(tokens: &[Value]) -> Value {
 }
 pub struct Vault {
     pub paths: Paths,
+    #[cfg(windows)]
+    portable: bool,
 }
 impl Vault {
     pub fn portable(paths: Paths) -> Self {
-        Self { paths }
+        Self {
+            paths,
+            #[cfg(windows)]
+            portable: true,
+        }
+    }
+    pub fn platform(paths: Paths) -> Self {
+        Self {
+            paths,
+            #[cfg(windows)]
+            portable: false,
+        }
     }
     fn fernet(&self, create: bool) -> Result<Fernet> {
         if !self.paths.key.exists() {
@@ -243,18 +256,24 @@ impl Vault {
             .ok_or_else(|| {
                 failure("Could not unlock the credential vault; saved credentials were kept")
             })?;
-        if header != b"SEARCHCORD-FERNET-1" {
-            return Err(failure(
-                "This credential vault needs its original OS user or encryption key",
-            ));
-        }
-        let fernet = self.fernet(false)?;
-        let cipher = std::str::from_utf8(ciphertext).map_err(|_| {
-            failure("Could not unlock the credential vault; saved credentials were kept")
-        })?;
-        let plaintext = fernet.decrypt(cipher).map_err(|_| {
-            failure("Could not unlock the credential vault; saved credentials were kept")
-        })?;
+        let plaintext = match header {
+            b"SEARCHCORD-FERNET-1" => {
+                let fernet = self.fernet(false)?;
+                let cipher = std::str::from_utf8(ciphertext).map_err(|_| {
+                    failure("Could not unlock the credential vault; saved credentials were kept")
+                })?;
+                fernet.decrypt(cipher).map_err(|_| {
+                    failure("Could not unlock the credential vault; saved credentials were kept")
+                })?
+            }
+            #[cfg(windows)]
+            b"SEARCHCORD-DPAPI-1" if !self.portable => crate::dpapi::transform(ciphertext, true)?,
+            _ => {
+                return Err(failure(
+                    "This credential vault needs its original OS user or encryption key",
+                ));
+            }
+        };
         let value: Value = serde_json::from_slice(&plaintext).map_err(|_| {
             failure("Could not unlock the credential vault; saved credentials were kept")
         })?;
@@ -283,16 +302,15 @@ impl Vault {
         if exists {
             self.load()?;
         }
-        let fernet = self.fernet(!exists)?;
         let plaintext =
             serde_json::to_vec(&state).map_err(|_| failure("The credential vault is invalid"))?;
-        let data = format!("SEARCHCORD-FERNET-1\n{}", fernet.encrypt(&plaintext));
+        let data = self.seal(&plaintext, !exists)?;
         directory(&self.paths.vault)?;
         let parent = self.paths.vault.parent().unwrap();
         let mut temporary = tempfile::Builder::new()
             .prefix(".credential-")
             .tempfile_in(parent)?;
-        temporary.write_all(data.as_bytes())?;
+        temporary.write_all(&data)?;
         temporary.flush()?;
         temporary.as_file().sync_all()?;
         before_verify(temporary.path())?;
@@ -309,6 +327,16 @@ impl Vault {
             fs::File::open(parent)?.sync_all()?;
         }
         Ok(())
+    }
+    fn seal(&self, plaintext: &[u8], create: bool) -> Result<Vec<u8>> {
+        #[cfg(windows)]
+        if !self.portable {
+            let mut data = b"SEARCHCORD-DPAPI-1\n".to_vec();
+            data.extend_from_slice(&crate::dpapi::transform(plaintext, false)?);
+            return Ok(data);
+        }
+        let fernet = self.fernet(create)?;
+        Ok(format!("SEARCHCORD-FERNET-1\n{}", fernet.encrypt(plaintext)).into_bytes())
     }
     pub fn clear(&self) -> Result<()> {
         match fs::remove_file(&self.paths.vault) {

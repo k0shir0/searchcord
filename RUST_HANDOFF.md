@@ -469,3 +469,19 @@ Windows CI for 19 reached native HTTP tests and exposed the reference's
 platform-specific JavaScript MIME: application/javascript on Windows versus
 text/javascript with UTF-8 on Unix. Native responses now match that platform
 behavior; unchanged asset bytes and MIME assertions remain strict.
+
+## Chunk 21 — Windows DPAPI vaults
+
+Task branch `rewrite/rust-21-windows-vault`, based on chunk 20 integration.
+Adds SEARCHCORD-DPAPI-1 using pinned windows-sys 0.61.2 crypt32 bindings, the
+current user's scope and CRYPTPROTECT_UI_FORBIDDEN. Every LocalAlloc output and
+description has a single LocalFree owner, including failure paths. Windows
+platform vaults also read existing Fernet vaults and keep their external key when
+saving a DPAPI replacement. Portable mode remains explicitly selectable.
+
+Linux: 90 Rust cases, formatting and Clippy pass; the DPAPI source additionally
+type-checks against its actual Windows bindings. A Windows-only contract performs
+bidirectional Python/native protection, corrupted-ciphertext refusal and portable
+vault reading/replacement without creating an archive or new key. Its runtime
+qualification is pending the Windows CI run on the integrated commit; verify that
+job before declaring the batch complete. Next: 22 startup migration/recovery.

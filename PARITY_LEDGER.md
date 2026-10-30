@@ -27,7 +27,8 @@ selection still fails explicitly until the relevant services are implemented.
 | 18 | Native standalone folders, licenses, static non-root Linux image and initial fixed-fixture measurements | `searchcord-package-search`, viewer `tests/package.rs`, `parity-benchmark` | Linux: 84 Rust tests; standalone runs without Python from a path with spaces. Static scratch image HTTP/media and exclusion checks pass. Raw native and fresh Python reports recorded; performance qualification remains 36. |
 | 19 | Writable v10 schema, exact JSON, distinct revisions, tombstones/restoration, metadata/cursors, FTS/counts and rollback | `searchcord-collector::storage`; two `native_storage` contracts | Linux: 86 Rust tests; native-created archives read/written by Python, immutable IDs and injected checkpoint failures verified. Canonical float formatting prevents false cross-language revisions. |
 | 20 | External portable Fernet vaults, path derivation, private permissions, validation and verified atomic replacement | `searchcord-collector::credentials`; three `native_credentials` contracts | Linux: 89 Rust tests; bidirectional Python/Rust synthetic vaults, missing-key refusal, corrupted temporary replacement, metadata and path isolation pass. |
-| 21–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
+| 21 | Current-user Windows DPAPI headers, no-UI protection, Windows allocation ownership and portable-vault reads | `searchcord-collector::dpapi`; Windows `windows_dpapi_vault_interchanges_current_user_without_ui_and_reads_portable`, platform vault test | Linux: 90 Rust cases and binding type-check pass. Windows runtime interchange gate runs in CI; do not claim qualification until that job succeeds. |
+| 22–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 
