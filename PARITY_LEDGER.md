@@ -2,7 +2,8 @@
 
 Python reference: `481f62c6d1e111ca6f5771554a0e89ecd42b088e`.
 Rust owns scenarios, fixtures and assertions; Python is a temporary call adapter.
-No production Rust backend exists yet. Selecting it must fail explicitly.
+The native packed codec is implemented in `searchcord-archive`; full backend
+selection still fails explicitly until the relevant services are implemented.
 
 | Chunk | Source coverage | Rust owner/contracts | Status/evidence |
 |---|---|---|---|
@@ -16,7 +17,8 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 08 | `snapshot_codec.py`, `search_snapshot.py`, packed reader and media publication | `searchcord-parity/tests/packed_snapshot.rs` | Linux: seven contracts pass; 42 total Rust tests, original Python/Node checks green. |
 | 09 | `app.py`, `profile_api.py`, `invite_api.py`, `chat_export.py`, settings, collection lifecycle and route inventory | `searchcord-parity/tests/backend_contracts.rs` | Linux: 20 contracts pass; 62 total Rust tests, original Python/Node and syntax checks pass. |
 | 10 | Both unchanged frontends; reproducible performance inputs and Python measurements | `tests/browser.rs`, `tests/performance.rs`, `src/bin/parity-benchmark.rs` | Linux: two WebDriver workflows and reproducible-fixture contract pass; 65 total Rust tests. See `docs/rust-benchmarks.md` and raw baseline report. The six original 05 cases remain pending by explicit user scope. |
-| 11–38 | Production Rust implementations and qualification | Future packages | Unimplemented |
+| 11 | Existing v101 compressed blocks, exact fields and public-ID boundaries | `searchcord-archive::codec`; `tests/native_codec.rs` | Linux: two native contracts pass, canonical hashes equal Python, bounded caches and malformed-data errors. Full suite: 67 tests. |
+| 12–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 
