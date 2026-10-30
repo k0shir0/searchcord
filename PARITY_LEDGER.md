@@ -18,7 +18,8 @@ selection still fails explicitly until the relevant services are implemented.
 | 09 | `app.py`, `profile_api.py`, `invite_api.py`, `chat_export.py`, settings, collection lifecycle and route inventory | `searchcord-parity/tests/backend_contracts.rs` | Linux: 20 contracts pass; 62 total Rust tests, original Python/Node and syntax checks pass. |
 | 10 | Both unchanged frontends; reproducible performance inputs and Python measurements | `tests/browser.rs`, `tests/performance.rs`, `src/bin/parity-benchmark.rs` | Linux: two WebDriver workflows and reproducible-fixture contract pass; 65 total Rust tests. See `docs/rust-benchmarks.md` and raw baseline report. The six original 05 cases remain pending by explicit user scope. |
 | 11 | Existing v101 compressed blocks, exact fields and public-ID boundaries | `searchcord-archive::codec`; `tests/native_codec.rs` | Linux: two native contracts pass, canonical hashes equal Python, bounded caches and malformed-data errors. Full suite: 67 tests. |
-| 12–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
+| 12 | Packed search indexes, literal LIKE, filters, public-ID bounds and scan continuation | `searchcord-archive::search`; `tests/native_packed_search.rs` | Linux: two native contracts pass, exhaustive traversal of 4,200 records for 13 queries in normal/forced-scan modes. Full suite: 69 tests. |
+| 13–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 
