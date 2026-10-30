@@ -15,7 +15,7 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 07 | All five `tests/test_scrape_pacing.py` cases | `searchcord-parity/tests/scrape_pacing.rs` | Linux: all five pass with supplied clocks, draws and responses; 35 Rust contracts, 36 Python, 25 Node pass. |
 | 08 | `snapshot_codec.py`, `search_snapshot.py`, packed reader and media publication | `searchcord-parity/tests/packed_snapshot.rs` | Linux: seven contracts pass; 42 total Rust tests, original Python/Node checks green. |
 | 09 | `app.py`, `profile_api.py`, `invite_api.py`, `chat_export.py`, settings, collection lifecycle and route inventory | `searchcord-parity/tests/backend_contracts.rs` | Linux: 20 contracts pass; 62 total Rust tests, original Python/Node and syntax checks pass. |
-| 10 | Browser/performance | Future test-first chunk | Pending; milestone not yet reached |
+| 10 | Both unchanged frontends; reproducible performance inputs and Python measurements | `tests/browser.rs`, `tests/performance.rs`, `src/bin/parity-benchmark.rs` | Linux: two WebDriver workflows and reproducible-fixture contract pass; 65 total Rust tests. See `docs/rust-benchmarks.md` and raw baseline report. The six original 05 cases remain pending by explicit user scope. |
 | 11–38 | Production Rust implementations and qualification | Future packages | Unimplemented |
 
 ## Storage mapping (03)
