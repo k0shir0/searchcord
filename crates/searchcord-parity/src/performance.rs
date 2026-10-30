@@ -17,7 +17,9 @@ pub fn content(i: usize) -> String {
     )
 }
 pub fn fixture(rows: usize) -> Harness {
-    let mut h = Harness::new().expect("Python reference fixture");
+    // Fixture creation stays on the pinned reference even when a test selects
+    // a native capability; the native operation/assertions live in its caller.
+    let mut h = Harness::with_backend(crate::Backend::Python).expect("Python reference fixture");
     h.init();
     let mut db = h.database();
     let tx = db.transaction().unwrap();

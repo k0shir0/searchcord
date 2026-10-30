@@ -12,3 +12,5 @@ serde_json.workspace = true
 flate2.workspace = true
 chrono.workspace = true
 url.workspace = true
+sha2.workspace = true
+unicode-normalization.workspace = true

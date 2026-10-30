@@ -27,6 +27,7 @@
 !/crates/searchcord-archive/src/
 !/crates/searchcord-archive/src/*.rs
 !/crates/searchcord-archive/src/*.sql
+!/crates/searchcord-archive/src/*.json
 !/crates/searchcord-parity/
 !/crates/searchcord-parity/Cargo.toml
 !/crates/searchcord-parity/src/

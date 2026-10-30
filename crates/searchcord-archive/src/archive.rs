@@ -203,6 +203,13 @@ impl ReadSession {
     pub fn database(&self) -> &Connection {
         &self.db
     }
+    fn search_query(&self, query: &Query) -> Result<Page, ArchiveError> {
+        Ok(if let Some(decoder) = &self.decoder {
+            search::packed_search(&self.db, decoder, query)?
+        } else {
+            search::standard_search(&self.db, query)?
+        })
+    }
 }
 impl Archive {
     pub fn new(path: impl AsRef<Path>, immutable: bool) -> Self {
@@ -273,12 +280,7 @@ impl Archive {
         Ok(ReadSession { db, decoder })
     }
     fn execute_search(&self, query: &Query) -> Result<Page, ArchiveError> {
-        let session = self.connect()?;
-        Ok(if let Some(decoder) = &session.decoder {
-            search::packed_search(&session.db, decoder, query)?
-        } else {
-            search::standard_search(&session.db, query)?
-        })
+        self.connect()?.search_query(query)
     }
     pub fn raw_search(&self, query: &Query) -> Result<Page, ArchiveError> {
         let query = checked_query(query)?;
@@ -292,6 +294,18 @@ impl Archive {
         }
     }
     pub fn search_records(&self, options: &SearchOptions) -> Result<Page, ArchiveError> {
+        self.raw_search(&self.query_options(options)?)
+    }
+    pub(crate) fn search_session(
+        &self,
+        options: &SearchOptions,
+    ) -> Result<(ReadSession, Page), ArchiveError> {
+        let query = self.query_options(options)?;
+        let session = self.connect()?;
+        let page = session.search_query(&query)?;
+        Ok((session, page))
+    }
+    fn query_options(&self, options: &SearchOptions) -> Result<Query, ArchiveError> {
         let lower = options
             .date_from
             .as_deref()
@@ -304,7 +318,7 @@ impl Archive {
             .filter(|s| !s.is_empty())
             .map(|s| snowflake_day(s, true))
             .transpose()?;
-        self.raw_search(&Query {
+        checked_query(&Query {
             q: options.q.clone(),
             guild_id: options.guild_id.clone(),
             channel_id: options.channel_id.clone(),

@@ -311,7 +311,7 @@ class Jobs:
             return events
         if action == 'invite_clock':
             import invite_api
-            self.invite_now, self.invite_waits = time.monotonic(), []
+            self.invite_now, self.invite_waits = 1000.0, []
             async def sleep(seconds):
                 self.invite_waits.append(seconds)
                 self.invite_now += seconds
