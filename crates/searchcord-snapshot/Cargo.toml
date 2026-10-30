@@ -1,0 +1,15 @@
+[package]
+name = "searchcord-snapshot"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+searchcord-archive = { path = "../searchcord-archive" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+flate2.workspace = true
+sha2.workspace = true
+url.workspace = true

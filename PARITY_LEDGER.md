@@ -21,7 +21,8 @@ selection still fails explicitly until the relevant services are implemented.
 | 12 | Packed search indexes, literal LIKE, filters, public-ID bounds and scan continuation | `searchcord-archive::search`; `tests/native_packed_search.rs` | Linux: two native contracts pass, exhaustive traversal of 4,200 records for 13 queries in normal/forced-scan modes. Full suite: 69 tests. |
 | 13 | v9/v10 read-only sessions, standard search, UTC dates, live WAL and deadlines | `searchcord-archive::Archive`; `tests/native_standard.rs` | Linux: three native contracts pass; full suite 72 tests. No schema/index writes or implicit creation; WAL reads pin a transaction. |
 | 14 | Profiles, unknown JSON, observed servers, suggestions/Unicode labels, attachment hydration and verified media | `searchcord-archive::{presentation,media}`; `tests/native_presentation.rs` | Linux: three native contracts pass; full suite 75 tests. Standard/packed full presentation matches Python. Unicode tables are pinned to reference Unicode 15.0. |
-| 15–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
+| 15 | v101 database generation, metadata/attachments, canonical hashes, FTS/integrity and WAL source reads | `searchcord-snapshot`; `tests/native_snapshot.rs` | Linux: two interchange contracts pass; 77 total Rust tests. Python reads native exports and native reads Python exports; publication/media/CLI follow in 16. |
+| 16–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 
