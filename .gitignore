@@ -133,3 +133,11 @@
 !/deploy/search/Dockerfile.native.dockerignore
 !/deploy/search/README.native.md
 !/deploy/search/THIRD_PARTY_NOTICES.md
+
+!/crates/searchcord-collector/
+!/crates/searchcord-collector/Cargo.toml
+!/crates/searchcord-collector/src/
+!/crates/searchcord-collector/src/*.rs
+!/crates/searchcord-collector/src/*.sql
+!/crates/searchcord-collector/tests/
+!/crates/searchcord-collector/tests/*.rs

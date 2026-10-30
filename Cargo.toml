@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/searchcord-parity", "crates/searchcord-archive", "crates/searchcord-snapshot", "crates/searchcord-viewer"]
+members = ["crates/searchcord-parity", "crates/searchcord-archive", "crates/searchcord-snapshot", "crates/searchcord-viewer", "crates/searchcord-collector"]
 resolver = "2"
 
 [workspace.package]

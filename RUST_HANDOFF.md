@@ -429,3 +429,21 @@ The workspace runtime briefly disconnected; retries recovered the existing files
 The user explicitly approved pushing rewrite/rust. Integrated 14–17 were pushed
 successfully; future completed chunks may be pushed under that authorization.
 Main remains unchanged, and 05 remains pending.
+
+## Chunk 19 — native writable message storage
+
+Task branch `rewrite/rust-19-message-storage`, based on `5e3ee26`. Adds the native
+v10 schema and Store/page transactions, exact payloads and unknown JSON, stable
+rowids/identifiers, deduplicated observations, complete revisions, selective legacy
+revisions, confirmed-deletion tombstones and restoration. Metadata, author names
+from newest public IDs, webhook exclusions, cursors, FTS and counters share the
+page transaction and injected checkpoint barrier. JSON float spelling matches
+Python canonical serialization, preventing false revisions after interchange.
+
+Two native contracts independently assert expected histories, counts, rowids,
+metadata, cursor order, attachment retention, pagination, invalid identifiers,
+rollback and Python reading/writing a Rust-created archive. Linux: 86 Rust cases,
+36 Python, 25 Node, syntax, formatting and Clippy pass. CI for 17 passed Linux and
+macOS; Windows stopped on cfg-specific unnecessary mutability in media directory
+creation. This chunk fixes that warning without changing runtime behavior.
+Legacy startup migrations remain explicit until 22. Next: 20 portable credentials.

@@ -121,12 +121,14 @@ pub fn export_media_with_hook(
             "Destination media directory already exists; choose a new snapshot directory".into(),
         ));
     }
-    let mut builder = fs::DirBuilder::new();
+    let builder = fs::DirBuilder::new();
     #[cfg(unix)]
-    {
+    let builder = {
         use std::os::unix::fs::DirBuilderExt;
+        let mut builder = builder;
         builder.mode(0o700);
-    }
+        builder
+    };
     builder.create(&directory)?;
     let mut cleanup = OwnedFiles {
         directory: Some(directory.clone()),

@@ -25,7 +25,8 @@ selection still fails explicitly until the relevant services are implemented.
 | 16 | Exclusive publication, interruption, reports and referenced-media copies | `searchcord-snapshot::{publication,CLI}`; `tests/native_publication.rs`, snapshot `tests/cli.rs` | Linux: four contracts pass, including actual SIGINT, destination races, owned cleanup, copied-file corruption and fresh report refusal. Full suite: 81 Rust tests. |
 | 17 | Read-only HTTP, validation, unchanged assets/privacy, gzip, media/ranges and security headers | `searchcord-viewer` / `searchcord-search`; original nine `search_display` contracts, viewer WebDriver workflow and two `native_http` contracts | Linux: 83 full-suite Rust tests plus nine display contracts and one browser workflow selected against native. Python/Node, syntax, formatting and Clippy green. Collector selection remains explicitly unfinished. |
 | 18 | Native standalone folders, licenses, static non-root Linux image and initial fixed-fixture measurements | `searchcord-package-search`, viewer `tests/package.rs`, `parity-benchmark` | Linux: 84 Rust tests; standalone runs without Python from a path with spaces. Static scratch image HTTP/media and exclusion checks pass. Raw native and fresh Python reports recorded; performance qualification remains 36. |
-| 19–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
+| 19 | Writable v10 schema, exact JSON, distinct revisions, tombstones/restoration, metadata/cursors, FTS/counts and rollback | `searchcord-collector::storage`; two `native_storage` contracts | Linux: 86 Rust tests; native-created archives read/written by Python, immutable IDs and injected checkpoint failures verified. Canonical float formatting prevents false cross-language revisions. |
+| 20–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 

@@ -18,3 +18,4 @@ searchcord-archive = { path = "../searchcord-archive" }
 [dev-dependencies]
 flate2.workspace = true
 searchcord-snapshot = { path = "../searchcord-snapshot" }
+searchcord-collector = { path = "../searchcord-collector" }
