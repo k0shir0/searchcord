@@ -234,6 +234,57 @@ impl Harness {
         self.origin = Some(format!("http://127.0.0.1:{port}"));
     }
 
+    pub fn start_collector(&mut self) {
+        let reply = self.command(json!({"op":"job","action":"start_http"}));
+        let port = reply["port"].as_u64().expect("collector port");
+        assert!((1..=65535).contains(&port));
+        self.origin = Some(format!("http://127.0.0.1:{port}"));
+    }
+
+    pub fn origin(&self) -> &str {
+        self.origin.as_deref().expect("start HTTP first")
+    }
+
+    /// Read a bounded prefix of an infinite production SSE stream, then close it.
+    pub fn event_prefix(&mut self, path: &str, count: usize) -> Vec<Event> {
+        assert!(
+            path.starts_with('/') && !path.starts_with("//") && !path.contains(['\\', '#', '?'])
+        );
+        assert!((1..=100).contains(&count));
+        let response = self
+            .client
+            .get(format!("{}{path}", self.origin()))
+            .send()
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        assert!(
+            response.headers()["content-type"]
+                .to_str()
+                .unwrap()
+                .starts_with("text/event-stream")
+        );
+        let mut reader = BufReader::new(response);
+        let mut body = String::new();
+        loop {
+            let mut line = String::new();
+            assert!(
+                reader.read_line(&mut line).unwrap() > 0,
+                "SSE ended before requested events"
+            );
+            body.push_str(&line);
+            let events = parse_events(&body);
+            if events.len() >= count {
+                for event in &events {
+                    self.traces.push(Trace {
+                        kind: "event".into(),
+                        data: serde_json::to_value(event).unwrap(),
+                    });
+                }
+                return events;
+            }
+        }
+    }
+
     pub fn request(&mut self, method: &str, path: &str, params: &[(&str, String)]) -> HttpReply {
         assert!(
             path.starts_with('/') && !path.starts_with("//") && !path.contains(['\\', '#', '?']),

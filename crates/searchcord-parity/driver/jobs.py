@@ -26,6 +26,8 @@ class Jobs:
         self.tasks = {}
         self.barriers = {}
         self.attempts = 0
+        self.server = None
+        self.subscriptions = {}
 
     def barrier(self, name):
         return self.barriers.setdefault(name, (asyncio.Event(), asyncio.Event()))
@@ -51,10 +53,28 @@ class Jobs:
         self.patches.enter_context(patch.object(app, 'scrapes', self.owner))
         self.transport = httpx.AsyncClient(transport=httpx.MockTransport(self.reply))
         self.patches.enter_context(patch.object(app, 'http_client', self.transport))
+        # Rebind routers that capture archive paths/callbacks at construction.
+        # These are the production router factories, with this disposable DB.
+        profile_routes, self.shutdown_profiles = app.profile_router(str(self.path),
+            app.get_token, app.discord, app.profile_fetch_lock)
+        invite_routes, self.shutdown_invites, self.recover_invites = app.invite_router(
+            app.get_token, app.discord, path=lambda: str(self.path),
+            credential_id=app._credential_id, credential_context=app._selected_credentials)
+        replaced = {route.path for router in (profile_routes, invite_routes) for route in router.routes}
+        self.patches.enter_context(patch.object(app.app.router, 'routes',
+            profile_routes.routes + invite_routes.routes +
+            [route for route in app.app.router.routes if getattr(route, 'path', None) not in replaced
+             and getattr(route, 'original_router', None) not in (app.profile_routes, app.invite_routes)]))
+        self.patches.enter_context(patch.object(app, 'shutdown_profile_jobs', self.shutdown_profiles))
+        self.patches.enter_context(patch.object(app, 'shutdown_invite_jobs', self.shutdown_invites))
+        self.patches.enter_context(patch.object(app, 'recover_invite_jobs', self.recover_invites))
+        import profile_api
+        self.patches.enter_context(patch.object(profile_api, 'archive_message_media', AsyncMock()))
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app.app), base_url='http://fixture')
 
     async def reply(self, request):
-        self.requests.append({'path': request.url.path, 'params': dict(request.url.params)})
+        self.requests.append({'path': request.url.path, 'params': dict(request.url.params),
+                              'method': request.method, 'invite_time': getattr(self, 'invite_now', None)})
         if self.hold:
             self.hold = False
             entered, release = self.barrier('fetch')
@@ -106,7 +126,11 @@ class Jobs:
             return None
         if action == 'http':
             response = await self.client.request(r.get('method', 'POST'), r['path'], json=r.get('body'))
-            return {'status': response.status_code, 'body': response.json()}
+            try:
+                body = response.json()
+            except ValueError:
+                body = response.text
+            return {'status': response.status_code, 'body': body, 'headers': dict(response.headers)}
         if action == 'concurrent_http':
             return await asyncio.gather(*(self.invoke({'action': 'http', **v}) for v in r['requests']))
         if action == 'control':
@@ -215,12 +239,144 @@ class Jobs:
                     'break_seconds': app.scrape_break_until - now,
                     'cooldown_seconds': app.discord_ready_at - now,
                     'wall': time.time()}
+        if action == 'options':
+            allowed = {'DISCORD_INTERVAL_SECONDS', 'LIVE_POLL_SECONDS', 'archive_clearing',
+                       'credentials_clearing', 'JOB_RETENTION_SECONDS'}
+            for key, value in r['values'].items():
+                if key not in allowed:
+                    raise ValueError('unsupported test option')
+                self.patches.enter_context(patch.object(app, key, value))
+            return None
+        if action == 'wait_http':
+            async with asyncio.timeout(4):
+                while True:
+                    reply = await self.invoke({'action': 'http', 'method': 'GET', 'path': r['path']})
+                    value = reply['body']
+                    for key in r['keys']:
+                        value = value[key]
+                    if value == r['value']:
+                        return reply
+                    await asyncio.sleep(.001)
+        if action == 'wait_database':
+            async with asyncio.timeout(4):
+                while True:
+                    with sqlite3.connect(self.path) as db:
+                        value = db.execute(r['sql']).fetchone()[0]
+                    if value == r['value']:
+                        return value
+                    await asyncio.sleep(.001)
+        if action == 'wait_requests':
+            async with asyncio.timeout(4):
+                while len(self.requests) < r['count']:
+                    await asyncio.sleep(.001)
+            return deepcopy(self.requests)
+        if action == 'suspend_all':
+            await app._suspend_collection_jobs()
+            await self.shutdown_invites(preserve=True)
+            await self.shutdown_profiles()
+            return None
+        if action == 'recover_all':
+            self.owner.reset()
+            app.live_monitors.clear()
+            await app._recover_collection_jobs()
+            await self.recover_invites()
+            return None
+        if action == 'route_inventory':
+            def routes(router):
+                for route in router.routes:
+                    if hasattr(route, 'original_router'):
+                        yield from routes(route.original_router)
+                    elif getattr(route, 'methods', None):
+                        yield {'path': route.path, 'methods': sorted(route.methods)}
+            return sorted(routes(app.app), key=lambda r: (r['path'], r['methods']))
+        if action == 'lifespan':
+            async with app.lifespan(app.app):
+                during = {'ready': app.collection_persistence_ready, 'client': app.http_client is not None}
+            return {'during': during, 'after': {'ready': app.collection_persistence_ready,
+                    'client': app.http_client is not None, 'has_work': self.owner.has_work}}
+        if action == 'clear_media_fault':
+            self.patches.enter_context(patch.object(app, 'clear_media', side_effect=OSError('injected media cleanup failure')))
+            return None
+        if action == 'drain_dm':
+            async with asyncio.timeout(4):
+                while app.delete_jobs[r['id']]['running']:
+                    await asyncio.sleep(.001)
+            queue = app.delete_jobs[r['id']]['queue']
+            events = []
+            while not queue.empty():
+                events.append(queue.get_nowait())
+            if r.get('retain'):
+                for event in events:
+                    queue.put_nowait(event)
+            return events
+        if action == 'invite_clock':
+            import invite_api
+            self.invite_now, self.invite_waits = time.monotonic(), []
+            async def sleep(seconds):
+                self.invite_waits.append(seconds)
+                self.invite_now += seconds
+                await asyncio.sleep(0)
+            fake_asyncio = SimpleNamespace(**{k: getattr(asyncio, k) for k in dir(asyncio) if not k.startswith('__')})
+            fake_asyncio.sleep = sleep
+            self.patches.enter_context(patch.object(invite_api, 'asyncio', fake_asyncio))
+            self.patches.enter_context(patch.object(invite_api, 'time',
+                SimpleNamespace(monotonic=lambda: self.invite_now, time=time.time)))
+            self.patches.enter_context(patch.object(app, 'time',
+                SimpleNamespace(monotonic=lambda: self.invite_now, time=time.time)))
+            self.patches.enter_context(patch.object(app, 'asyncio', fake_asyncio))
+            return None
+        if action == 'invite_waits':
+            return self.invite_waits
+        if action == 'subscribe':
+            subscription = self.owner.subscribe(r['id'])
+            snapshot, queue = await subscription.__aenter__()
+            self.subscriptions[r['id']] = (subscription, queue)
+            return snapshot
+        if action == 'report':
+            for event in r['events']:
+                self.owner.report(r['id'], event)
+            return None
+        if action == 'subscription_read':
+            _, queue = self.subscriptions[r['id']]
+            events = []
+            while not queue.empty():
+                events.append(queue.get_nowait())
+            return {'capacity': queue.maxsize, 'events': events}
+        if action == 'start_http':
+            import socket
+            import uvicorn
+            listener = socket.socket()
+            listener.bind(('127.0.0.1', 0))
+            listener.listen(128)
+            self.listener = listener
+            self.server = uvicorn.Server(uvicorn.Config(app.app, host='127.0.0.1', log_config=None,
+                log_level='error', access_log=False, loop='asyncio', lifespan='off', ws='none'))
+            self.server_task = asyncio.create_task(self.server.serve(sockets=[listener]))
+            async with asyncio.timeout(4):
+                while not self.server.started:
+                    if self.server_task.done():
+                        self.server_task.result()
+                    await asyncio.sleep(.001)
+            return {'port': listener.getsockname()[1]}
+        if action == 'scrape_events':
+            return [event async for event in self.owner.events(r['id'])]
+        if action == 'patch_media_fetch':
+            self.patches.enter_context(patch.object(app, 'cache_media', AsyncMock()))
+            return None
         raise ValueError(f'unknown job control: {action}')
 
     async def close(self):
+        if self.server is not None:
+            self.server.should_exit = True
+            await asyncio.wait_for(self.server_task, 4)
+            self.listener.close()
         for _, release in self.barriers.values():
             release.set()
-        await self.owner.suspend()
+        await app._suspend_collection_jobs()
+        await self.shutdown_invites()
+        await self.shutdown_profiles()
+        for subscription, _ in self.subscriptions.values():
+            await subscription.__aexit__(None, None, None)
         self.owner.reset()
         for task in self.tasks.values():
             if not task.done():
