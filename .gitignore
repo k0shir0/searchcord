@@ -121,3 +121,10 @@
 !/deploy/search/README.md
 !/deploy/search/package.py
 !/deploy/search/requirements.txt
+
+!/crates/searchcord-viewer/
+!/crates/searchcord-viewer/Cargo.toml
+!/crates/searchcord-viewer/src/
+!/crates/searchcord-viewer/src/*.rs
+!/crates/searchcord-viewer/tests/
+!/crates/searchcord-viewer/tests/*.rs

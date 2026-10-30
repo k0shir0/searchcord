@@ -375,3 +375,29 @@ formatting and Clippy pass. Validation: `cargo test --workspace --locked`,
 baseline Python/Node/syntax commands above. Native Windows/macOS CI remains
 pending publication approval. Next: 17 native read-only HTTP service.
 05 remains pending; no push was attempted while approval is pending.
+
+## Chunk 17 — native read-only HTTP
+
+Task branch `rewrite/rust-17-viewer`, based on `0585849`. Adds the
+`searchcord-viewer` package and `searchcord-search` binary. SQLite work and media
+verification run on blocking workers; the HTTP layer exposes summary/search,
+suggestions, profiles, observed servers and verified media. Approved frontend
+assets are embedded unchanged. Matching validation, security/cache headers,
+gzip level 5/minimum 1024 (including the reference's image exclusion), method
+refusal, conditional static requests, byte ranges and media downloads are tested
+over real sockets. Native application-relative paths resolve beside the binary.
+
+`Harness::viewer_with_backend` explicitly distinguishes Python fixture creation
+from native viewer operations. `SEARCHCORD_PARITY_BACKEND=rust` runs the original
+nine display cases and unchanged viewer WebDriver case against the actual native
+child. Other unimplemented capability selections continue to fail. Read-only
+write rejection comes from the native SQLite connection. CI builds all binaries
+then runs reference contracts and these native selections on all three systems.
+
+Linux: 83 full-suite Rust cases, nine native display cases, native viewer browser,
+36 Python cases, 25 Node cases, syntax, formatting and Clippy pass. Two new
+HTTP contracts independently check expected bytes/status/headers and compare
+reference validation, methods, assets, media corruption, gzip and range semantics.
+No frontend changes. Native viewer normal dependencies exclude collector, vault
+and upstream HTTP client code. Next: 18 native packaging/image/measurements.
+Publishing and remote cross-platform CI remain pending explicit approval.
