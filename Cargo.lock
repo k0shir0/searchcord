@@ -899,6 +899,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "searchcord-collector"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "percent-encoding",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "searchcord-parity"
 version = "0.1.0"
 dependencies = [
@@ -906,6 +918,7 @@ dependencies = [
  "reqwest",
  "rusqlite",
  "searchcord-archive",
+ "searchcord-collector",
  "searchcord-snapshot",
  "serde",
  "serde_json",
