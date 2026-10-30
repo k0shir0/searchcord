@@ -282,3 +282,28 @@ Presentation/media and standard reads remain in their following chunks.
 
 Linux: 69 Rust contracts, 36 Python, 25 Node, JS syntax, formatting and Clippy
 pass. `origin/main` remains at the baseline. Next: 13 standard archive reads.
+
+## Chunk 13 — standard reads, transactions and deadlines
+
+Task branch `rewrite/rust-13-standard-reader`. Adds read-only v9/v10/v101
+sessions, four-second SQLite deadlines, immutable-mode WAL refusal, consistent
+live-WAL snapshots, typed search/date options and standard search/scan selection.
+Open failures never create databases; supported standard schemas are neither
+upgraded nor indexed. Public IDs normalize only validated numeric filter inputs;
+stored IDs, names, contents and timestamps remain exact.
+
+Three native contracts traverse standard results against Python, check inclusive
+ISO/basic/week date forms and validation, prove write refusal/schema preservation,
+observe pinned versus fresh WAL snapshots, and interrupt a bounded SQL operation.
+Library error statuses/messages are framework independent. Linux: 72 Rust tests,
+36 Python, 25 Node, syntax, formatting and Clippy pass.
+
+Cross-platform follow-up found a real reference exporter failure on Windows:
+the active source cursor retained its SQLite handle after an injected compression
+exception, preventing temporary-file cleanup. `search_snapshot.py` now explicitly
+closes that cursor before connection/failure cleanup. This narrow reference fix
+changes failed-build resource ownership; successful snapshot data/format is
+unchanged. The pre-fix Python performance report remains a historical baseline.
+The browser driver retries only transient non-interactable/intercepted/stale
+element errors until its bounded deadline, accommodating panel transitions.
+CI must validate both corrections. Next: 14 shared profile and media reads.

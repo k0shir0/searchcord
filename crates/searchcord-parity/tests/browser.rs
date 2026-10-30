@@ -127,11 +127,40 @@ impl Browser {
         }
     }
     fn click(&self, selector: &str) {
-        let element = self.command("/element", json!({"using":"css selector","value":selector}));
-        let id = element["element-6066-11e4-a52e-4f735466cecf"]
-            .as_str()
-            .unwrap();
-        self.command(&format!("/element/{id}/click"), json!({}));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let element =
+                self.command("/element", json!({"using":"css selector","value":selector}));
+            let id = element["element-6066-11e4-a52e-4f735466cecf"]
+                .as_str()
+                .unwrap();
+            let response = self
+                .client
+                .post(format!(
+                    "{}/session/{}/element/{id}/click",
+                    self.origin, self.session
+                ))
+                .json(&json!({}))
+                .send()
+                .unwrap();
+            let status = response.status();
+            let value: Value = response.json().unwrap();
+            if status.is_success() {
+                return;
+            }
+            let error = value["value"]["error"].as_str().unwrap_or("");
+            assert!(
+                Instant::now() < deadline
+                    && [
+                        "element not interactable",
+                        "element click intercepted",
+                        "stale element reference"
+                    ]
+                    .contains(&error),
+                "click {selector}: {value}"
+            );
+            thread::sleep(Duration::from_millis(30));
+        }
     }
     fn assert_no_script_errors(&self) {
         let logs = self.command("/se/log", json!({"type":"browser"}));
