@@ -23,7 +23,8 @@ selection still fails explicitly until the relevant services are implemented.
 | 14 | Profiles, unknown JSON, observed servers, suggestions/Unicode labels, attachment hydration and verified media | `searchcord-archive::{presentation,media}`; `tests/native_presentation.rs` | Linux: three native contracts pass; full suite 75 tests. Standard/packed full presentation matches Python. Unicode tables are pinned to reference Unicode 15.0. |
 | 15 | v101 database generation, metadata/attachments, canonical hashes, FTS/integrity and WAL source reads | `searchcord-snapshot`; `tests/native_snapshot.rs` | Linux: two interchange contracts pass; 77 total Rust tests. Python reads native exports and native reads Python exports; publication/media/CLI follow in 16. |
 | 16 | Exclusive publication, interruption, reports and referenced-media copies | `searchcord-snapshot::{publication,CLI}`; `tests/native_publication.rs`, snapshot `tests/cli.rs` | Linux: four contracts pass, including actual SIGINT, destination races, owned cleanup, copied-file corruption and fresh report refusal. Full suite: 81 Rust tests. |
-| 17–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
+| 17 | Read-only HTTP, validation, unchanged assets/privacy, gzip, media/ranges and security headers | `searchcord-viewer` / `searchcord-search`; original nine `search_display` contracts, viewer WebDriver workflow and two `native_http` contracts | Linux: 83 full-suite Rust tests plus nine display contracts and one browser workflow selected against native. Python/Node, syntax, formatting and Clippy green. Collector selection remains explicitly unfinished. |
+| 18–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 

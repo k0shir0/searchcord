@@ -31,7 +31,7 @@ fn saved_profile() -> Value {
 }
 
 fn fixture() -> Harness {
-    let mut h = Harness::new().unwrap();
+    let mut h = Harness::new_viewer_fixture().unwrap();
     h.init();
     {
         let mut db = h.database();
@@ -433,7 +433,7 @@ fn saved_profile_is_readable_without_collection_routes() {
 
 #[test]
 fn missing_old_and_wal_archives() {
-    let mut missing = Harness::new().unwrap();
+    let mut missing = Harness::new_viewer_fixture().unwrap();
     missing.start_viewer("synthetic.db", true, None);
     let response = missing.get("/api/summary", &[]);
     assert_eq!(response.status, 503);
@@ -445,7 +445,7 @@ fn missing_old_and_wal_archives() {
     );
     assert!(!missing.archive().exists());
 
-    let mut old = Harness::new().unwrap();
+    let mut old = Harness::new_viewer_fixture().unwrap();
     fs::create_dir_all(old.archive().parent().unwrap()).unwrap();
     Connection::open(old.archive()).unwrap().close().unwrap();
     old.start_viewer("synthetic.db", true, None);

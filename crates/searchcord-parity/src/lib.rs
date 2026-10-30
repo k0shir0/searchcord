@@ -97,6 +97,8 @@ pub fn parse_events(body: &str) -> Vec<Event> {
 
 /// Owns its child before its temporary directory so all handles close on drop.
 pub struct Harness {
+    backend: Backend,
+    viewer: Option<Child>,
     child: Child,
     input: ChildStdin,
     output: Receiver<std::io::Result<String>>,
@@ -120,6 +122,20 @@ impl Harness {
                     .into(),
             );
         }
+        Self::fixture_backend(backend)
+    }
+
+    /// Only the viewer capability is native. Python remains an explicit fixture
+    /// writer; unfinished collector contracts still reject native selection.
+    pub fn new_viewer_fixture() -> Result<Self> {
+        let backend =
+            Backend::parse(&std::env::var("SEARCHCORD_PARITY_BACKEND").unwrap_or("python".into()))?;
+        Self::fixture_backend(backend)
+    }
+    pub fn viewer_with_backend(backend: Backend) -> Result<Self> {
+        Self::fixture_backend(backend)
+    }
+    fn fixture_backend(backend: Backend) -> Result<Self> {
         let root = tempfile::Builder::new()
             .prefix("searchcord-parity-")
             .tempdir()?;
@@ -165,6 +181,8 @@ impl Harness {
             }
         });
         let harness = Self {
+            backend,
+            viewer: None,
             child,
             input,
             output,
@@ -201,6 +219,19 @@ impl Harness {
 
     /// Raw response, including the original Python exception class on failure.
     pub fn exchange(&mut self, request: Value) -> Value {
+        if self.backend == Backend::Rust && request["op"] == "readonly_execute" {
+            let archive = searchcord_archive::Archive::new(self.archive(), true);
+            let session = archive.connect().expect("native readonly session");
+            return match session
+                .database()
+                .execute_batch(request["sql"].as_str().unwrap())
+            {
+                Ok(()) => json!({"ok":true,"result":null}),
+                Err(e) => {
+                    json!({"ok":false,"error":{"type":"OperationalError","message":e.to_string()}})
+                }
+            };
+        }
         self.traces.push(Trace {
             kind: "command".into(),
             data: request.clone(),
@@ -228,6 +259,58 @@ impl Harness {
     }
 
     pub fn start_viewer(&mut self, archive: &str, immutable: bool, window: Option<u64>) {
+        if self.backend == Backend::Rust {
+            if let Some(mut child) = self.viewer.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            let binary = std::env::var_os("SEARCHCORD_PARITY_RUST_VIEWER")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::env::current_exe()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .join(format!("searchcord-search{}", std::env::consts::EXE_SUFFIX))
+                });
+            let mut cmd = Command::new(binary);
+            cmd.arg("--db")
+                .arg(self.root().join("archive").join(archive))
+                .args(["--port", "0"]);
+            if immutable {
+                cmd.arg("--snapshot");
+            }
+            if let Some(window) = window {
+                cmd.env("SEARCHCORD_VIEWER_SCAN_WINDOW", window.to_string());
+            }
+            let mut child = cmd
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .expect("build native viewer before running native HTTP contracts");
+            let stdout = child.stdout.take().unwrap();
+            let (tx, rx) = mpsc::channel();
+            let reader = thread::spawn(move || {
+                let mut line = String::new();
+                let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+                let _ = tx.send(result);
+            });
+            self.viewer = Some(child);
+            let line = rx
+                .recv_timeout(Duration::from_secs(15))
+                .expect("native viewer readiness timeout")
+                .unwrap();
+            reader.join().unwrap();
+            let origin = line
+                .trim()
+                .strip_prefix("Searchcord: ")
+                .expect("native viewer readiness URL");
+            assert!(origin.starts_with("http://127.0.0.1:"));
+            self.origin = Some(origin.to_owned());
+            return;
+        }
         let reply = self.command(
             json!({"op":"start_viewer","archive":archive,"immutable":immutable,"window":window}),
         );
@@ -350,6 +433,10 @@ impl Harness {
 
 impl Drop for Harness {
     fn drop(&mut self) {
+        if let Some(mut child) = self.viewer.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
         let _ = writeln!(self.input, "{{\"op\":\"shutdown\"}}");
         let _ = self.input.flush();
         let deadline = Instant::now() + Duration::from_secs(3);

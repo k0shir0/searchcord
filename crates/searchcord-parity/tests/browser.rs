@@ -186,8 +186,13 @@ impl Drop for Browser {
     }
 }
 
-fn fixture() -> Harness {
-    let mut h = Harness::new().unwrap();
+fn fixture(viewer: bool) -> Harness {
+    let mut h = if viewer {
+        Harness::new_viewer_fixture()
+    } else {
+        Harness::new()
+    }
+    .unwrap();
     h.init();
     let mut db = h.database();
     let tx = db.transaction().unwrap();
@@ -214,7 +219,7 @@ fn fixture() -> Harness {
 
 #[test]
 fn unchanged_viewer_search_pagination_profiles_filters_and_privacy_work_in_browser() {
-    let mut h = fixture();
+    let mut h = fixture(true);
     h.start_viewer("synthetic.db", true, None);
     let browser = Browser::new();
     browser.navigate(&format!("{}/", h.origin()));
@@ -257,7 +262,7 @@ fn unchanged_viewer_search_pagination_profiles_filters_and_privacy_work_in_brows
 
 #[test]
 fn unchanged_collector_search_statistics_settings_and_queue_render_in_browser() {
-    let mut h = fixture();
+    let mut h = fixture(false);
     h.command(json!({"op":"job","action":"configure"}));
     h.start_collector();
     let browser = Browser::new();

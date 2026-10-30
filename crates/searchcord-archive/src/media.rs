@@ -157,6 +157,7 @@ pub fn local_url(path: &Path, url: &str) -> String {
     }
 }
 pub struct MediaFile {
+    pub digest: String,
     pub path: PathBuf,
     pub content_type: String,
     pub inline: bool,
@@ -191,6 +192,7 @@ pub fn verified_file(path: &Path, key: &str) -> Result<MediaFile, ArchiveError> 
     ]
     .contains(&content_type);
     Ok(MediaFile {
+        digest: data["sha256"].as_str().ok_or_else(fail)?.to_owned(),
         path: directory.join(format!("{key}.bin")),
         content_type: if inline {
             content_type.to_owned()
