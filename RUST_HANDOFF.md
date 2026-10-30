@@ -26,5 +26,25 @@ Local setup: create a Python venv, install `requirements-parity.txt`, put its
 Python on PATH (or set `SEARCHCORD_PARITY_PYTHON` to its absolute executable).
 Tests use disposable data and credentials outside their archive directory.
 
-Next: implement 02, then 03 and 04 on separate task branches. Commit references
-and validation evidence will be recorded as each chunk is integrated locally.
+## Chunk 02 — parity harness
+
+Prerequisite commit: `809bc39`. Task branch: `rewrite/rust-02-test-harness`.
+The Cargo workspace currently contains only the test package; production packages
+will be introduced by their implementation chunks. Rust 1.90.0 and Cargo.lock
+pin the toolchain and dependency graph. Bundled SQLite FTS5 trigram works.
+
+The Python adapter only calls existing functions, wraps transaction boundaries,
+and hosts the actual viewer with Uvicorn. Rust creates fixtures, sends real HTTP
+requests and owns all assertions. The audit hook blocks external connects, DNS
+and subprocess spawning; numeric loopback is available for Windows asyncio.
+The Rust HTTP client only constructs numeric loopback URLs and never follows
+redirects. Every test owns a new directory/process and joins the process on drop.
+Traces include commands, replies, HTTP requests/responses and parsed SSE frames.
+
+Validation: `cargo test --workspace --locked` (5 passed),
+`cargo fmt --all -- --check`, and
+`cargo clippy --workspace --all-targets --locked -- -D warnings`.
+All original baseline checks remain required in CI. Windows/macOS CI is configured
+but has not run here. No production Rust capability or performance claim is made.
+
+Next: 03 archive-storage assertions, then 04 reader/display assertions.
