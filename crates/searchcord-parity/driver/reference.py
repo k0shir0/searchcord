@@ -16,6 +16,7 @@ import time
 REPO = Path(__file__).resolve().parents[3]
 ROOT = Path(sys.argv[1]).resolve()
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.dont_write_bytecode = True
 
 # No inherited archive/credential paths or user-site imports. Rust also sets these.
@@ -44,6 +45,9 @@ server = None
 worker = None
 listener = None
 event_body = ''
+job_loop = None
+job_thread = None
+jobs = None
 
 
 def archive_path(name):
@@ -108,8 +112,18 @@ def start_viewer(request):
 
 
 def dispatch(request):
-    global event_body
+    global event_body, job_loop, job_thread, jobs
     op = request['op']
+    if op == 'job':
+        if jobs is None:
+            from jobs import Jobs
+            job_loop = asyncio.new_event_loop()
+            job_thread = threading.Thread(target=job_loop.run_forever, daemon=True)
+            job_thread.start()
+            jobs = Jobs(ARCHIVE)
+            asyncio.run_coroutine_threadsafe(jobs.setup(), job_loop).result(timeout=10)
+            jobs.hold = False
+        return asyncio.run_coroutine_threadsafe(jobs.invoke(request), job_loop).result(timeout=10)
     if op == 'init':
         return storage.init_database(str(ARCHIVE))
     if op in {'save', 'delete'}:
@@ -177,6 +191,11 @@ try:
             result = {'ok': False, 'error': {'type': type(exc).__name__, 'message': str(exc)}}
         print(json.dumps(result, ensure_ascii=False), flush=True)
 finally:
+    if jobs is not None:
+        asyncio.run_coroutine_threadsafe(jobs.close(), job_loop).result(timeout=10)
+        job_loop.call_soon_threadsafe(job_loop.stop)
+        job_thread.join(timeout=2)
+        job_loop.close()
     if server is not None:
         server.should_exit = True
         worker.join(timeout=2)

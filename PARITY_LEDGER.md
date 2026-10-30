@@ -10,7 +10,9 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 02 | Disposable archives, process control, HTTP, SQLite, traces, network isolation | `searchcord-parity/tests/harness.rs`: `disposable_archives_control_reference_and_verify_fts5_trigram`, `real_http_event_and_command_traces_are_collected`, `driver_blocks_live_network_and_path_escape`, `backend_selection_rejects_unfinished_rust_instead_of_skipping`, `dropping_harness_joins_reference_and_removes_temporary_archives` | Linux: all five pass; formatting and Clippy pass. SSE fixture verifies transport capture only; production job event contracts remain in 06–09. |
 | 03 | Seven `tests/test_archive_storage.py` cases | `searchcord-parity/tests/archive_storage.rs` | Linux: all 7 pass, plus 5 harness tests; original 36 Python + 25 Node remain green. |
 | 04 | Nine `tests/test_search_display.py` cases | `searchcord-parity/tests/search_display.rs` | Linux: all 9 pass over real HTTP, including forced empty partial scan pages; formatting/Clippy pass. |
-| 05–10 | Permissions, durable jobs, pacing, packed/export, remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
+| 05 | Permissions and discovery | Future test-first chunk | Pending |
+| 06 | All nine `tests/test_durable_scrape.py` cases | `searchcord-parity/tests/durable_scrape.rs` | Linux: nine pass with controlled fetch/commit/credential barriers; all 30 Rust contracts, 36 Python and 25 Node pass. |
+| 07–10 | Pacing, packed/export, remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
 | 11–38 | Production Rust implementations and qualification | Future packages | Unimplemented |
 
 ## Storage mapping (03)
@@ -45,8 +47,25 @@ the same name without `test_`, in `tests/search_display.rs`.
 | `saved_profile_is_readable_without_collection_routes` | Exact saved fields/details/connections, message count/avatar, observed servers with public IDs, basic fallback, missing/invalid IDs, collection routes absent, shared profile assets. |
 | `missing_old_and_wal_archives` | Missing files stay absent; old schema rejected; pending WAL refused in immutable mode; v9 reads without an upgrade or changed bytes. |
 
-Coverage after 04: **16 of 36 original Python cases** have Rust-owned contracts,
-plus five infrastructure tests. The other 20 original cases belong to 05–07.
+Coverage after 06: **25 of 36 original Python cases** have Rust-owned contracts,
+plus five infrastructure tests. The other 11 original cases belong to 05 and 07.
 Packed/export, remaining backend, browser and performance coverage in 08–10 is
 still pending. All migrated scenarios currently target Python; selecting Rust
 returns an explicit unimplemented error, never a skipped case.
+
+## Durable scrape mapping (06)
+
+Each `DurableScrapeTest.test_<name>` maps to the identically named Rust contract
+(without `test_`) in `tests/durable_scrape.rs`:
+
+| Name | Independently asserted behavior |
+|---|---|
+| `checkpoint_failure_rolls_back_page_cursor_flags_and_projection` | Uncommitted rows, cursor and projection invisible; injected failure retried without another fetch; exact committed cursor, count, rows and history flag. |
+| `stop_joins_inflight_commit_before_archive_clear` | Stop remains pending behind commit barrier; archive/token clears conflict; accepted write finishes; subsequent clear removes messages and scrape checkpoints. Shared pacing records survive. |
+| `shutdown_joins_commit_and_recovers_committed_rows_budget_and_queue` | Shutdown joins page commit; restart pauses; exact 100 committed rows, one-message remaining budget, cursor and next queued channel. |
+| `restart_restores_pending_profiles_before_remaining_page_budget` | Exact pending profile IDs survive; reservations block clearing/restart; profile request precedes remaining page with exact limit/cursor. |
+| `old_checkpoint_representation_requires_original_account_and_keeps_budget` | Rust supplies literal legacy checkpoint; wrong account cannot resume or fetch; original account consumes only remaining limit. |
+| `account_race_between_resume_and_worker_remains_paused` | Account changes between resume and worker; no new request; persisted job remains running/paused with original account. |
+| `simultaneous_start_reserves_channels_before_checkpoint_write` | Two simultaneous HTTP starts yield exactly 200/409 and one checkpoint. |
+| `shutdown_before_worker_first_turn_keeps_recoverable_checkpoint` | Immediate shutdown recovers paused zero-progress job without fetching. |
+| `resume_cannot_launch_worker_after_shutdown_barrier` | Credential barrier interleaves resume and shutdown; HTTP 409, paused job, no second request. |
