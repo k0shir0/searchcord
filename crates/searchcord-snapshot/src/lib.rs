@@ -1,5 +1,10 @@
 //! Lossless v101 database generation; publication/media are separate operations.
+mod publication;
 use flate2::{Compression, write::ZlibEncoder};
+pub use publication::{
+    MediaReport, build_snapshot, export_media, export_media_with_hook, publish_with_hooks,
+    resolve_path,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use searchcord_archive::{
     codec::{self, FIELDS},
@@ -145,14 +150,14 @@ pub fn short_terms(contents: &[Vec<Value>]) -> String {
 /// Write a verified database at an exclusive, fresh temporary path. Publication
 /// callers must keep this path private until the returned report is verified.
 pub fn build_database(source: &Path, destination: &Path, block_rows: usize) -> Result<Report> {
-    build_database_with_hook(source, destination, block_rows, |_| Ok(()))
+    build_database_with_hook(source, destination, block_rows, |_, _| Ok(()))
 }
 /// The hook observes completed packed blocks and may cancel before publication.
 pub fn build_database_with_hook(
     source: &Path,
     destination: &Path,
     block_rows: usize,
-    hook: impl FnMut(u64) -> Result<()>,
+    hook: impl FnMut(u64, u64) -> Result<()>,
 ) -> Result<Report> {
     if !source.is_file() {
         return Err(invalid("Source archive does not exist"));
@@ -187,7 +192,7 @@ fn build_inner(
     source: &Path,
     destination: &Path,
     block_rows: usize,
-    mut hook: impl FnMut(u64) -> Result<()>,
+    mut hook: impl FnMut(u64, u64) -> Result<()>,
 ) -> Result<Report> {
     let started = Instant::now();
     let source = source.canonicalize()?;
@@ -313,7 +318,7 @@ fn build_inner(
                     payload
                 ],
             )?;
-            hook(count)?;
+            hook(count, expected)?;
             body.clear();
             first = None;
         }
