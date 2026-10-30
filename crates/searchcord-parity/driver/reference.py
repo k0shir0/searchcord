@@ -210,6 +210,16 @@ def dispatch(request):
     if op == 'media_key':
         from media_store import media_key
         return media_key(request['url'])
+    if op == 'presentation':
+        from profile_store import search_label
+        from media_store import canonical_url, media_status
+        if request['method'] == 'search_label':
+            return search_label(request['value'])
+        if request['method'] == 'canonical_url':
+            return canonical_url(request['value'])
+        if request['method'] == 'media_status':
+            return media_status(ARCHIVE, request['value'], verify=request.get('verify', False))
+        raise ValueError('unsupported presentation operation')
     if op == 'process_metrics':
         import resource
         return {'peak_rss_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)}

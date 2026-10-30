@@ -307,3 +307,28 @@ unchanged. The pre-fix Python performance report remains a historical baseline.
 The browser driver retries only transient non-interactable/intercepted/stale
 element errors until its bounded deadline, accommodating panel transitions.
 CI must validate both corrections. Next: 14 shared profile and media reads.
+
+## Chunk 14 — shared profiles, labels and local media
+
+Task branch `rewrite/rust-14-profiles-media`, based on `9457003`.
+Implements complete profile presentation/unknown JSON, observed servers,
+suggestions, literal search presentation, attachment files, local media URLs,
+canonical cache identities, manifest checks and SHA-256-verified serving
+descriptors. Queries and their profile/attachment hydration share one pinned
+read transaction and SQL deadline. No credentials or upstream requests occur.
+
+Unicode NFKC, full case folding, categories and digit behavior match the Python
+reference's Unicode 15.0 data. Three small normative tables are compiled into
+Rust; `driver/unicode_data.py` documents regeneration from Python 3.12. Production
+builds/runtimes do not need Python. URL canonicalization preserves original path
+spelling and Python query encoding, including signatures, size parameters,
+literal wildcard characters and unsupported-host refusal.
+
+Three native contracts compare full standard/packed results (only elapsed time
+and profile age are omitted from equality), saved fields/presence, very large
+public IDs, observed-server filters, Unicode suggestions, media hashes and
+corruption handling. Linux: 75 Rust, 36 Python, 25 Node, syntax, format and Clippy
+pass. 13 CI passed Windows/macOS; Linux exposed floating-point drift in an invite
+test's virtual clock origin. That origin is now a fixed exact value (1000.0), so
+the asserted 30/45-second waits remain deterministic on every system. Next: 15
+native snapshot database generation. 05 remains pending.
