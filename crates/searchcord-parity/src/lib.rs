@@ -115,7 +115,8 @@ impl Harness {
     pub fn with_backend(backend: Backend) -> Result<Self> {
         if backend == Backend::Rust {
             return Err(
-                "Rust backend is unimplemented for parity contracts; no contracts were skipped".into(),
+                "Rust backend is unimplemented for parity contracts; no contracts were skipped"
+                    .into(),
             );
         }
         let root = tempfile::Builder::new()
