@@ -548,3 +548,9 @@ unambiguous without a self-referential commit hash in this document.
 | 20 | `f8eb04f` | `c0f37db` |
 | 21 | `7e24652` | `056cd5a` |
 | 22 | `rewrite/rust-22-startup-migrations` HEAD | Final chunk-22 integration merge |
+
+Final 22 Windows CI found checkout CRLF in the bundled schema: section splitting
+using LF-only delimiters accidentally included the read view before converting
+legacy messages. Native schema section loading now normalizes checkout line
+endings before choosing DDL phases. Existing migration assertions stay unchanged
+and must pass again on Windows, Linux and macOS before batch completion.

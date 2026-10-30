@@ -40,7 +40,8 @@ fn timestamp(id: &str) -> String {
     )
 }
 fn object_sql(db: &Connection, include_view: bool) -> Result<()> {
-    for section in SCHEMA.split("\n\n") {
+    let schema = SCHEMA.replace("\r\n", "\n");
+    for section in schema.split("\n\n") {
         let is_view = section.trim_start().starts_with("CREATE VIEW");
         if is_view != include_view {
             continue;
