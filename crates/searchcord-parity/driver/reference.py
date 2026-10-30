@@ -124,6 +124,9 @@ def dispatch(request):
             asyncio.run_coroutine_threadsafe(jobs.setup(), job_loop).result(timeout=10)
             jobs.hold = False
         return asyncio.run_coroutine_threadsafe(jobs.invoke(request), job_loop).result(timeout=10)
+    if op == 'credential_key':
+        import hashlib
+        return hashlib.sha256(os.path.normcase(str(ARCHIVE.resolve())).encode()).hexdigest()[:24]
     if op == 'init':
         return storage.init_database(str(ARCHIVE))
     if op in {'save', 'delete'}:

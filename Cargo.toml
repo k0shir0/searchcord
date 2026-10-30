@@ -24,3 +24,4 @@ tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "
 tower-http = { version = "=0.6.11", features = ["fs", "compression-gzip"] }
 percent-encoding = "=2.3.2"
 tower = { version = "=0.5.3", features = ["util"] }
+fernet = { version = "=0.2.2", default-features = false, features = ["rustcrypto"] }
