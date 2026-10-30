@@ -264,3 +264,21 @@ children now explicitly use `-X utf8` (including under isolated mode).
 Linux validation: 67 Rust tests, all 36 Python and 25 Node tests, JS syntax,
 formatting and Clippy pass. Cross-platform CI must verify the UTF-8 correction.
 05 remains pending under the user's explicit 06–22 scope. Next: 12 packed search.
+
+## Chunk 12 — native packed search
+
+Task branch `rewrite/rust-12-packed-search`, based on native decoding integration.
+Implements typed raw record/page results, public-ID filter translation, short
+block-token and trigram candidate selection, literal SQLite LIKE verification,
+selective-filter paths, date/public-ID bounds and bounded scan continuation.
+Internal row numbers never appear as public IDs or cursors.
+
+Native tests exhaustively traverse a 4,200-record Python export for thirteen
+queries (short, Unicode, NUL, wildcard/escape and common/rare), with normal and
+forced 64-row scans. Every page/cursor/partial flag matches the reference;
+complete result IDs also match independent SQLite LIKE expectations. Additional
+tests independently calculate combined/missing filter and block-edge bounds.
+Presentation/media and standard reads remain in their following chunks.
+
+Linux: 69 Rust contracts, 36 Python, 25 Node, JS syntax, formatting and Clippy
+pass. `origin/main` remains at the baseline. Next: 13 standard archive reads.
