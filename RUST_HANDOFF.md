@@ -355,3 +355,23 @@ to publish new source/tests. The user was asked asynchronously; continue local
 implementation while waiting and do not attempt another push without approval.
 14 is locally integrated; its push and later CI remain pending that answer.
 Next: 16 publication/media/reports. 05 remains pending under the user's scope.
+
+## Chunk 16 — publication, media and CLI
+
+Task branch `rewrite/rust-16-publication-media`, based on `14b6655`.
+Adds exclusive `.building` ownership, verified non-overwriting hard-link
+publication, cancellation cleanup and the native `searchcord-snapshot` CLI.
+The CLI preserves source/output/report options, default block size, progress and
+final reports, aliases and existing-file refusals. Ctrl-C is handled cooperatively
+between blocks/media files and exits 130 after owned partial-file cleanup.
+Referenced media is deduplicated, digest-checked before and after copying, and
+copies unknown manifest fields; unrelated, corrupt and unsupported media stay out.
+
+Four contracts cover live SIGINT, injected failures, destination races, another
+builder's temporary file, report aliases/refusals, source preservation, corrupt
+copies and media reuse. Linux: 81 Rust tests, 36 Python, 25 Node, JavaScript syntax,
+formatting and Clippy pass. Validation: `cargo test --workspace --locked`,
+`cargo clippy --workspace --all-targets --locked -- -D warnings`, plus the
+baseline Python/Node/syntax commands above. Native Windows/macOS CI remains
+pending publication approval. Next: 17 native read-only HTTP service.
+05 remains pending; no push was attempted while approval is pending.

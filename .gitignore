@@ -33,6 +33,8 @@
 !/crates/searchcord-snapshot/src/
 !/crates/searchcord-snapshot/src/*.rs
 !/crates/searchcord-snapshot/src/*.sql
+!/crates/searchcord-snapshot/tests/
+!/crates/searchcord-snapshot/tests/*.rs
 !/crates/searchcord-parity/
 !/crates/searchcord-parity/Cargo.toml
 !/crates/searchcord-parity/src/

@@ -54,7 +54,7 @@ fn unicode_digits(value: &str) -> bool {
             ranges.get(i).is_some_and(|r| r[0] <= cp)
         })
 }
-fn splitlines(value: &str) -> Vec<&str> {
+pub(crate) fn splitlines(value: &str) -> Vec<&str> {
     if value.is_empty() {
         return vec![];
     }
@@ -112,7 +112,7 @@ fn truthy(value: &Value) -> bool {
         Value::Object(o) => !o.is_empty(),
     }
 }
-fn fallback(values: &[&Value]) -> Value {
+pub(crate) fn fallback(values: &[&Value]) -> Value {
     values
         .iter()
         .find(|v| truthy(v))

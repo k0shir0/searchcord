@@ -13,3 +13,11 @@ serde_json.workspace = true
 flate2.workspace = true
 sha2.workspace = true
 url.workspace = true
+ctrlc.workspace = true
+
+[[bin]]
+name = "searchcord-snapshot"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile.workspace = true

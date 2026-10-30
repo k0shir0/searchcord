@@ -1,4 +1,16 @@
 //! Credential-free local media identity, manifests and digest validation.
+pub fn split_lines(value: &str) -> Vec<&str> {
+    crate::presentation::splitlines(value)
+}
+pub fn profile_references(uid: &str, payload: &serde_json::Value) -> Vec<String> {
+    let avatar = crate::image_url(uid, payload["user"]["avatar"].as_str(), "avatars", 256);
+    let banner = crate::presentation::fallback(&[
+        &payload["user_profile"]["banner"],
+        &payload["user"]["banner"],
+    ]);
+    let banner = crate::image_url(uid, banner.as_str(), "banners", 1024);
+    [avatar, banner].into_iter().flatten().collect()
+}
 use crate::ArchiveError;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
