@@ -244,3 +244,23 @@ fixed independently of 05 so macOS/Windows compare canonical path identities.
 Linux validation: 65 Rust contracts (including WebDriver), original 36 Python,
 25 Node, syntax, formatting and Clippy. Platform CI must be checked again.
 Next: 11 packed decoding; keep 05 pending as instructed.
+
+## Chunk 11 — native packed decoding
+
+Task branch `rewrite/rust-11-packed-decoding`, based on integration `60ab89f`.
+Introduces the production `searchcord-archive` library with v101 zlib/JSON
+decoding, exact record/name restoration, and public-ID boundary lookup. SQLite
+functions borrow their invoking connection only for callback-local reads;
+handles never escape or cross threads. Caches hold at most sixteen blocks,
+256 names and 64 MiB of decoded blocks. Individual decompression is bounded at
+64 MiB; malformed sizes, fields, missing blocks/names and boundaries return
+controlled errors. No credentials, collector or web-framework types are used.
+
+Native contracts read Python exports and compare Rust-computed canonical hashes,
+exercise block/public-ID boundaries and eviction, and inject malformed data.
+The Windows CI protocol failure was traced to Python's cp1252 stdio; harness
+children now explicitly use `-X utf8` (including under isolated mode).
+
+Linux validation: 67 Rust tests, all 36 Python and 25 Node tests, JS syntax,
+formatting and Clippy pass. Cross-platform CI must verify the UTF-8 correction.
+05 remains pending under the user's explicit 06–22 scope. Next: 12 packed search.

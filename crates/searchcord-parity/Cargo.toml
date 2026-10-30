@@ -16,3 +16,4 @@ sha2.workspace = true
 
 [dev-dependencies]
 flate2.workspace = true
+searchcord-archive = { path = "../searchcord-archive" }

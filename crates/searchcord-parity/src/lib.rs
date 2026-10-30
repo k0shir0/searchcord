@@ -135,6 +135,7 @@ impl Harness {
             .build()?;
         let mut child = Command::new(python)
             .arg("-I")
+            .args(["-X", "utf8"])
             .arg("-u")
             .arg(repo.join("crates/searchcord-parity/driver/reference.py"))
             .arg(root.path())
