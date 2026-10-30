@@ -1,7 +1,7 @@
 """Test-only JSONL adapter. No scenarios, expected values or assertions live here.
 
 Rust owns the temporary root and fixtures. Only explicitly enumerated operations
-are exposed. Never import or run the old tests, or initialize the collector app.
+are exposed. Never import/run the old tests or enter the production lifespan.
 """
 import asyncio
 from contextlib import closing

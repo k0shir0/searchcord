@@ -154,3 +154,15 @@ subject to the existing CI matrix. No production/frontend files changed.
 
 Next: 07 pacing. The requested batch targets half the unfinished chunks;
 05 must also pass before production work begins at 11.
+
+## Chunk 07 — shared pacing regressions
+
+Task branch `rewrite/rust-07-pacing`, based on integration `4d8c7a2` (06 task
+`c5ccfad`). All five original pacing cases now have Rust-owned contracts. The
+adapter accepts explicit random values and virtual time; Rust checks request,
+response-completion, draw-bound and event traces as well as persisted SQLite
+checkpoints. Pacing tests make no real-time waits and no upstream connections.
+
+Linux: all 35 Rust tests, 36 Python tests, 25 Node tests, formatting and Clippy
+pass. The baseline main branch is unchanged. Cross-platform CI remains required.
+Next: 08 packed/export contracts, then 09–10 and missing prerequisite 05.

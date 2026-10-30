@@ -142,6 +142,79 @@ class Jobs:
         if action == 'inspect':
             return {'requests': deepcopy(self.requests), 'attempts': self.attempts,
                     'has_work': self.owner.has_work}
+        if action == 'block_fetch':
+            async def fetch(*args):
+                await asyncio.Event().wait()
+            self.patches.enter_context(patch.object(app, '_fetch_messages', fetch))
+            return None
+        if action == 'virtual_clock':
+            self.now = time.monotonic() + 1
+            self.sent, self.finished, self.waits, self.draws = [], [], [], []
+            self.random_values = list(r['draws'])
+            self.response_seconds = r.get('response_seconds', 0)
+            async def sleep(seconds):
+                self.waits.append(seconds)
+                self.now += seconds
+            def uniform(low, high):
+                self.draws.append([low, high])
+                return self.random_values.pop(0)
+            class Client:
+                async def request(inner, *args, **kwargs):
+                    self.sent.append(self.now)
+                    self.now += self.response_seconds
+                    self.finished.append(self.now)
+                    response = self.replies.pop(0) if self.replies else {'status': 200, 'body': []}
+                    if response.get('error'):
+                        raise httpx.ReadTimeout(response['error'])
+                    return httpx.Response(response['status'], json=response.get('body'), headers=response.get('headers'))
+            self.owner._clock = lambda: self.now
+            self.owner._sleep = sleep
+            self.patches.enter_context(patch.object(app, 'time', SimpleNamespace(monotonic=lambda: self.now, time=time.time)))
+            self.patches.enter_context(patch.object(app, 'http_client', Client()))
+            self.patches.enter_context(patch.object(app, 'SCRAPE_INTERVAL_MIN_SECONDS', r['bounds'][0]))
+            self.patches.enter_context(patch.object(app, 'SCRAPE_INTERVAL_MAX_SECONDS', r['bounds'][1]))
+            self.patches.enter_context(patch.object(app.random, 'uniform', uniform))
+            return None
+        if action == 'pacing_requests':
+            subscriptions, queues = [], []
+            for job_id in set(r['ids']):
+                subscription = self.owner.subscribe(job_id)
+                _, queue = await subscription.__aenter__()
+                subscriptions.append(subscription)
+                queues.append(queue)
+            async def request(job_id):
+                try:
+                    response = await app.discord('GET', '/channels/20/messages', 'synthetic', scrape_job_id=job_id)
+                    return {'status': response.status_code}
+                except httpx.ReadTimeout as exc:
+                    return {'error': type(exc).__name__}
+            try:
+                if r.get('concurrent'):
+                    results = await asyncio.gather(*(request(i) for i in r['ids']))
+                else:
+                    results = [await request(i) for i in r['ids']]
+                events = []
+                for queue in queues:
+                    while not queue.empty():
+                        events.append(queue.get_nowait())
+                return {'results': results, 'events': events}
+            finally:
+                for subscription in subscriptions:
+                    await subscription.__aexit__(None, None, None)
+        if action == 'set_counter':
+            app.scrape_confirmed_requests = r['value']
+            return None
+        if action == 'recover_pacing':
+            self.owner.reset()
+            await app._recover_collection_jobs()
+            return None
+        if action == 'pacing_inspect':
+            now = app.time.monotonic()
+            return {'sent': self.sent, 'finished': self.finished, 'waits': self.waits, 'draws': self.draws,
+                    'counter': app.scrape_confirmed_requests,
+                    'break_seconds': app.scrape_break_until - now,
+                    'cooldown_seconds': app.discord_ready_at - now,
+                    'wall': time.time()}
         raise ValueError(f'unknown job control: {action}')
 
     async def close(self):

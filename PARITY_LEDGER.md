@@ -12,7 +12,8 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 04 | Nine `tests/test_search_display.py` cases | `searchcord-parity/tests/search_display.rs` | Linux: all 9 pass over real HTTP, including forced empty partial scan pages; formatting/Clippy pass. |
 | 05 | Permissions and discovery | Future test-first chunk | Pending |
 | 06 | All nine `tests/test_durable_scrape.py` cases | `searchcord-parity/tests/durable_scrape.rs` | Linux: nine pass with controlled fetch/commit/credential barriers; all 30 Rust contracts, 36 Python and 25 Node pass. |
-| 07–10 | Pacing, packed/export, remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
+| 07 | All five `tests/test_scrape_pacing.py` cases | `searchcord-parity/tests/scrape_pacing.rs` | Linux: all five pass with supplied clocks, draws and responses; 35 Rust contracts, 36 Python, 25 Node pass. |
+| 08–10 | Packed/export, remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
 | 11–38 | Production Rust implementations and qualification | Future packages | Unimplemented |
 
 ## Storage mapping (03)
@@ -47,8 +48,8 @@ the same name without `test_`, in `tests/search_display.rs`.
 | `saved_profile_is_readable_without_collection_routes` | Exact saved fields/details/connections, message count/avatar, observed servers with public IDs, basic fallback, missing/invalid IDs, collection routes absent, shared profile assets. |
 | `missing_old_and_wal_archives` | Missing files stay absent; old schema rejected; pending WAL refused in immutable mode; v9 reads without an upgrade or changed bytes. |
 
-Coverage after 06: **25 of 36 original Python cases** have Rust-owned contracts,
-plus five infrastructure tests. The other 11 original cases belong to 05 and 07.
+Coverage after 07: **30 of 36 original Python cases** have Rust-owned contracts,
+plus five infrastructure tests. The other six original cases belong to 05.
 Packed/export, remaining backend, browser and performance coverage in 08–10 is
 still pending. All migrated scenarios currently target Python; selecting Rust
 returns an explicit unimplemented error, never a skipped case.
@@ -69,3 +70,16 @@ Each `DurableScrapeTest.test_<name>` maps to the identically named Rust contract
 | `simultaneous_start_reserves_channels_before_checkpoint_write` | Two simultaneous HTTP starts yield exactly 200/409 and one checkpoint. |
 | `shutdown_before_worker_first_turn_keeps_recoverable_checkpoint` | Immediate shutdown recovers paused zero-progress job without fetching. |
 | `resume_cannot_launch_worker_after_shutdown_barrier` | Credential barrier interleaves resume and shutdown; HTTP 409, paused job, no second request. |
+
+## Pacing mapping (07)
+
+Each `ScrapePacingTest.test_<name>` maps to the identically named Rust contract
+(without `test_`) in `tests/scrape_pacing.rs`:
+
+| Name | Independently asserted behavior |
+|---|---|
+| `failed_network_request_persists_the_last_attempt_deadline` | ReadTimeout propagates; last response completion attempt is persisted in wall time; success counter stays zero. |
+| `random_intervals_retries_and_100_success_break_are_shared` | Exact 104 random draws, 103 request attempts, 429 retry, 503 exclusion, both interval bounds, 60-second break after 100 successes, subscriber break event, persisted counter one. |
+| `actual_random_interval_bounds_and_slow_response_are_shared` | Four concurrent calls serialize; every 0.6-second response receives an additional 0.75-second interval; actual configured draw bounds are 0.5–1.5. |
+| `counter_cooldowns_and_break_deadline_survive_restart_and_job_changes` | 99→100 resets counter and persists 90-second break plus 30-second rate-limit cooldown; restart and new job retain deadlines. |
+| `nonzero_counter_survives_restart` | Success increments once; 503 does not; persisted counter restored across owner replacement. |
