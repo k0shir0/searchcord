@@ -166,3 +166,22 @@ checkpoints. Pacing tests make no real-time waits and no upstream connections.
 Linux: all 35 Rust tests, 36 Python tests, 25 Node tests, formatting and Clippy
 pass. The baseline main branch is unchanged. Cross-platform CI remains required.
 Next: 08 packed/export contracts, then 09–10 and missing prerequisite 05.
+
+## Chunk 08 — packed reader/exporter contracts
+
+Task branch `rewrite/rust-08-packed-export`, based on integration `7ee7736`
+(07 task `1d98064`). Seven contracts add coverage absent from the maintained
+Python suite. Rust independently reconstructs canonical row hashes, checks zlib
+blocks, traverses public IDs, checks SQLite/FTS integrity and source preservation,
+and validates publication faults/races, actual CLI reports and media exports.
+All expectations stay in Rust; Python only invokes production code or installs
+explicit test doubles. SHA-256 test dependencies are pinned in Cargo.lock.
+
+Linux validation: 42 Rust tests, original 36 Python tests, 25 Node tests, JS syntax,
+formatting and Clippy pass. The formatting-only correction to the generalized
+backend error fixes 07 CI's format-check failure. Format is checked again after
+all Rust edits. CI execution/results must still be checked on all three systems.
+
+Batch scope: include missing 05 after 06–10, then continue through 21 (17 of the
+34 unfinished chunks at the start). Production Rust work remains gated by 05–10.
+Next: 09 remaining backend contracts and complete route/job-kind ownership.

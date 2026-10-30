@@ -153,6 +153,63 @@ def dispatch(request):
                 return credentials.clear_credentials(path)
     if op == 'start_viewer':
         return start_viewer(request)
+    if op == 'archive_read':
+        if 'window' in request:
+            import archive_reader
+            archive_reader.WINDOW = request['window']
+        from archive_reader import Archive
+        archive = Archive(archive_path(request.get('archive', 'synthetic.db')), request.get('immutable', False))
+        if request['method'] not in {'search', 'profile', 'profile_servers'}:
+            raise ValueError('unsupported archive method')
+        return getattr(archive, request['method'])(**request.get('args', {}))
+    if op == 'snapshot':
+        from contextlib import ExitStack
+        from unittest.mock import patch
+        import search_snapshot
+        with ExitStack() as patches:
+            destination = archive_path(request['destination'])
+            if request.get('fail_compress_at'):
+                original_compress = search_snapshot.zlib.compress
+                calls = 0
+                def compress(*args):
+                    nonlocal calls
+                    calls += 1
+                    if calls == request['fail_compress_at']:
+                        raise OSError('injected compression failure')
+                    return original_compress(*args)
+                patches.enter_context(patch.object(search_snapshot.zlib, 'compress', compress))
+            if request.get('race'):
+                original_link = search_snapshot.os.link
+                def link(source, target):
+                    Path(target).write_bytes(b'concurrent exporter')
+                    return original_link(source, target)
+                patches.enter_context(patch.object(search_snapshot.os, 'link', link))
+            return search_snapshot.build_snapshot(archive_path(request.get('source', 'synthetic.db')),
+                destination, block_rows=request.get('block_rows', search_snapshot.BLOCK_ROWS))
+    if op == 'export_media':
+        from search_snapshot import export_media
+        return export_media(archive_path(request.get('source', 'synthetic.db')), archive_path(request['destination']))
+    if op == 'snapshot_cli':
+        from contextlib import redirect_stdout, redirect_stderr
+        from unittest.mock import patch
+        from io import StringIO
+        import search_snapshot
+        args = ['search_snapshot.py', str(archive_path(request.get('source', 'synthetic.db'))),
+                str(archive_path(request['destination']))]
+        if 'report' in request:
+            args += ['--report', str(archive_path(request['report']))]
+        if request.get('with_media'):
+            args += ['--with-media']
+        output, errors, code = StringIO(), StringIO(), 0
+        with patch.object(sys, 'argv', args), redirect_stdout(output), redirect_stderr(errors):
+            try:
+                search_snapshot.main()
+            except SystemExit as exc:
+                code = exc.code
+        return {'code': code, 'stdout': output.getvalue(), 'stderr': errors.getvalue()}
+    if op == 'media_key':
+        from media_store import media_key
+        return media_key(request['url'])
     if op == 'readonly_execute':
         from archive_reader import Archive
         failure = None
@@ -189,6 +246,8 @@ try:
                 result = {'ok': True, 'result': dispatch(request)}
         except Exception as exc:
             result = {'ok': False, 'error': {'type': type(exc).__name__, 'message': str(exc)}}
+            if exc.__cause__ is not None:
+                result['error']['cause'] = str(exc.__cause__)
         print(json.dumps(result, ensure_ascii=False), flush=True)
 finally:
     if jobs is not None:

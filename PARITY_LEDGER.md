@@ -13,7 +13,8 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 05 | Permissions and discovery | Future test-first chunk | Pending |
 | 06 | All nine `tests/test_durable_scrape.py` cases | `searchcord-parity/tests/durable_scrape.rs` | Linux: nine pass with controlled fetch/commit/credential barriers; all 30 Rust contracts, 36 Python and 25 Node pass. |
 | 07 | All five `tests/test_scrape_pacing.py` cases | `searchcord-parity/tests/scrape_pacing.rs` | Linux: all five pass with supplied clocks, draws and responses; 35 Rust contracts, 36 Python, 25 Node pass. |
-| 08–10 | Packed/export, remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
+| 08 | `snapshot_codec.py`, `search_snapshot.py`, packed reader and media publication | `searchcord-parity/tests/packed_snapshot.rs` | Linux: seven contracts pass; 42 total Rust tests, original Python/Node checks green. |
+| 09–10 | Remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
 | 11–38 | Production Rust implementations and qualification | Future packages | Unimplemented |
 
 ## Storage mapping (03)
@@ -83,3 +84,15 @@ Each `ScrapePacingTest.test_<name>` maps to the identically named Rust contract
 | `actual_random_interval_bounds_and_slow_response_are_shared` | Four concurrent calls serialize; every 0.6-second response receives an additional 0.75-second interval; actual configured draw bounds are 0.5–1.5. |
 | `counter_cooldowns_and_break_deadline_survive_restart_and_job_changes` | 99→100 resets counter and persists 90-second break plus 30-second rate-limit cooldown; restart and new job retain deadlines. |
 | `nonzero_counter_survives_restart` | Success increments once; 503 does not; persisted counter restored across owner replacement. |
+
+## Packed and exporter contracts (08)
+
+| Contract | Independent expectations |
+|---|---|
+| `snapshot_blocks_hashes_reports_and_settings_exclusion` | 12 archive sizes from empty through 257 messages, 16-row block boundaries, Rust zlib decoding and canonical length-prefixed SHA-256, public IDs, historical names/timestamps, FTS/SQLite integrity, report shape, settings exclusion and unchanged source bytes/mtime. |
+| `standard_and_packed_queries_filters_cursors_and_unicode_match` | Exhaustive cursor traversal and direct SQLite LIKE expectations for 14 queries, Unicode/NUL/wildcards, public-ID boundaries and missing/combined filters; forced eight-row scans match standard archives. |
+| `failed_builds_fresh_destinations_and_publication_races_are_safe` | Existing destination/source/partial-build refusal, invalid block sizes/source versions, failure after first compressed block, temporary/journal cleanup, non-overwriting final publication against a racer, unchanged source. |
+| `export_pins_live_wal_and_default_block_policy` | Uncheckpointed WAL update included in verified hash/results; default 128-row blocks and 129-message boundary. |
+| `referenced_media_export_verifies_hashes_and_excludes_unreferenced_files` | Good/corrupt/missing/unreferenced files, exact copied bytes/report, destination refusal, attachment payload hydration, HTTP headers, digest-checked serving and corrupted-file rejection. |
+| `profiles_observed_servers_and_unknown_saved_fields_survive_export` | Exact extended JSON and unknown fields, explicit presence, profile presentation, observed-server public IDs/order/counts, v9 optional profile-details table. Only profile age is excluded from equality. |
+| `snapshot_cli_reports_are_exclusive_and_media_requires_fresh_directory` | Actual CLI parser, aggregate report file/output equality, media report, report/source/destination collisions, existing-report refusal and existing-media refusal. |
