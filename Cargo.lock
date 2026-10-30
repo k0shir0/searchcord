@@ -997,6 +997,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "fernet",
+ "flate2",
  "percent-encoding",
  "rusqlite",
  "serde",

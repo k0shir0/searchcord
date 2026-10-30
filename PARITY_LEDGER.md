@@ -2,8 +2,9 @@
 
 Python reference: `481f62c6d1e111ca6f5771554a0e89ecd42b088e`.
 Rust owns scenarios, fixtures and assertions; Python is a temporary call adapter.
-The native packed codec is implemented in `searchcord-archive`; full backend
-selection still fails explicitly until the relevant services are implemented.
+Native archive reads, snapshot exports, the viewer, message storage, vaults and
+startup migrations are implemented. Viewer contracts support explicit native
+selection; the unfinished full collector selection fails clearly.
 
 | Chunk | Source coverage | Rust owner/contracts | Status/evidence |
 |---|---|---|---|
@@ -27,8 +28,9 @@ selection still fails explicitly until the relevant services are implemented.
 | 18 | Native standalone folders, licenses, static non-root Linux image and initial fixed-fixture measurements | `searchcord-package-search`, viewer `tests/package.rs`, `parity-benchmark` | Linux: 84 Rust tests; standalone runs without Python from a path with spaces. Static scratch image HTTP/media and exclusion checks pass. Raw native and fresh Python reports recorded; performance qualification remains 36. |
 | 19 | Writable v10 schema, exact JSON, distinct revisions, tombstones/restoration, metadata/cursors, FTS/counts and rollback | `searchcord-collector::storage`; two `native_storage` contracts | Linux: 86 Rust tests; native-created archives read/written by Python, immutable IDs and injected checkpoint failures verified. Canonical float formatting prevents false cross-language revisions. |
 | 20 | External portable Fernet vaults, path derivation, private permissions, validation and verified atomic replacement | `searchcord-collector::credentials`; three `native_credentials` contracts | Linux: 89 Rust tests; bidirectional Python/Rust synthetic vaults, missing-key refusal, corrupted temporary replacement, metadata and path isolation pass. |
-| 21 | Current-user Windows DPAPI headers, no-UI protection, Windows allocation ownership and portable-vault reads | `searchcord-collector::dpapi`; Windows `windows_dpapi_vault_interchanges_current_user_without_ui_and_reads_portable`, platform vault test | Linux: 90 Rust cases and binding type-check pass. Windows runtime interchange gate runs in CI; do not claim qualification until that job succeeds. |
-| 22–38 | Remaining production implementations and qualification | Future chunks | Unimplemented |
+| 21 | Current-user Windows DPAPI headers, no-UI protection, Windows allocation ownership and portable-vault reads | `searchcord-collector::dpapi`; Windows `windows_dpapi_vault_interchanges_current_user_without_ui_and_reads_portable`, platform vault test | Linux: 90 Rust cases and binding type-check pass. Windows/Linux/macOS CI passed at `056cd5a`, including actual Windows DPAPI interchange and portable-to-native vault reading. |
+| 22 | Startup migration, historical timestamps/names/attachments, legacy credential sealing, sanitized recovery, verified gzip and idempotence/refusal | `searchcord-collector::{migrations,recovery}`; seven `native_migrations` contracts | Linux: 97 Rust tests, original Python/Node/syntax, format and Clippy pass. Native startup preserves v7/v8/legacy data, pinned WAL backups and unknown profiles/checkpoints; interruption and lossy/unknown/newer format refusals verified. |
+| 23–38 | Remaining collector implementations and final qualification | Future chunks | Unimplemented |
 
 ## Storage mapping (03)
 

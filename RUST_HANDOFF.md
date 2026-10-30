@@ -9,7 +9,9 @@ See [the migration plan](SEARCHCORD_RUST_MIGRATION_PLAN.md) and
 
 Repository: https://github.com/k0shir0/searchcord
 Published integration branch: https://github.com/k0shir0/searchcord/tree/rewrite/rust
-Chunks 01–04 and their integration history are reachable from `origin/rewrite/rust`.
+Chunks 01–04 and 06–22 are complete on the integration branch. This finishes the
+authorized 17-chunk batch. Next implementation chunk: 23. The full collector and
+final performance/qualification gates remain later work.
 Chunk 05 has not been implemented in this branch; do not assume it is present.
 
 ```sh
@@ -485,3 +487,64 @@ bidirectional Python/native protection, corrupted-ciphertext refusal and portabl
 vault reading/replacement without creating an archive or new key. Its runtime
 qualification is pending the Windows CI run on the integrated commit; verify that
 job before declaring the batch complete. Next: 22 startup migration/recovery.
+
+## Chunk 22 — startup migration and verified recovery
+
+Task branch `rewrite/rust-22-startup-migrations`, based on `056cd5a`. Native Store
+startup now handles the recognized legacy schemas, dictionary-based historical
+names and both exact UTC timestamp shapes, old history attachment columns,
+metadata/cursor upgrades, count/FTS rebuilding and v10 idempotence. Original
+attachment strings, unknown profiles and paused job JSON remain intact. Legacy
+credentials are sealed externally and replaced by metadata before recovery
+copying. Conflicting vault entries or malformed legacy credentials fail closed.
+
+Recovery uses a separate read-only SQLite backup connection while the initializer
+holds its writer reservation. The private copy removes credential settings with
+secure deletion and VACUUM, checks integrity, then publishes without overwrite.
+Gzip level 6 is stream-verified against SHA-256 before deleting the raw copy;
+failed verification preserves raw recovery and removes only owned partial output.
+Migrations validate every original ID/content/name/timestamp value and roll back
+lossy, unknown or interrupted conversions. Newer formats are rejected before
+modification. Ordinary startup never collects or resumes paused jobs.
+
+Seven new native contracts cover legacy/old-history/name-dictionary conversion,
+UTC reconstruction, canonical overrides, exact attachments, metadata upgrades,
+Python reading native upgrades, idempotence, credential merging/conflicts, live
+WAL recovery, physical secret scrubbing, corrupt compressed copies, publication
+ownership, unknown/newer formats and injected startup interruption. Linux final
+checks: 97 Rust tests, 36 original Python cases, 25 Node cases, JavaScript syntax,
+formatting and Clippy pass. Native viewer contracts/browser remain in CI.
+
+Cross-platform qualification through 21: run 41146012110 succeeded on Windows,
+Linux and macOS at integration `056cd5a`. In particular the native Windows DPAPI
+contract passed against Python under the current user without prompts. Final 22
+CI will run on its integration push; retain that evidence before final completion.
+Main remains `481f62c6d1e111ca6f5771554a0e89ecd42b088e`; 05 is still pending by
+explicit user instruction. The latest authorized scope is complete through 22;
+start 23 only on a new request.
+
+## Commit references for the 06–22 batch
+
+Each task commit is the second parent of the corresponding integration merge.
+The final 22 merge will have this task branch as its second parent, so it remains
+unambiguous without a self-referential commit hash in this document.
+
+| Chunk | Task commit | Integration merge |
+|---|---|---|
+| 06 | `c5ccfad` | `4d8c7a2` |
+| 07 | `1d98064` | `7ee7736` |
+| 08 | `f3adfd7` | `737cf48` |
+| 09 | `9acc7b5` | `cb59494` |
+| 10 | `8b1779b` | `60ab89f` |
+| 11 | `0356645` | `10b2590` |
+| 12 | `0c9d9bb` | `ebeb527` |
+| 13 | `c82fb7f` | `9457003` |
+| 14 | `f708f28` | `9b0ca44` |
+| 15 | `6a77c6e` | `14b6655` |
+| 16 | `5e676ab` | `0585849` |
+| 17 | `2859e9c` | `90a6c95` |
+| 18 | `5c9e086` | `5e3ee26` |
+| 19 | `fa1fb16` | `5edbdcd` |
+| 20 | `f8eb04f` | `c0f37db` |
+| 21 | `7e24652` | `056cd5a` |
+| 22 | `rewrite/rust-22-startup-migrations` HEAD | Final chunk-22 integration merge |

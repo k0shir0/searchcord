@@ -9,7 +9,7 @@ license = "MIT"
 
 [workspace.dependencies]
 reqwest = { version = "=0.12.24", default-features = false, features = ["blocking", "json"] }
-rusqlite = { version = "=0.37.0", features = ["bundled", "functions", "hooks"] }
+rusqlite = { version = "=0.37.0", features = ["bundled", "functions", "hooks", "backup"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.145"
 tempfile = "=3.23.0"

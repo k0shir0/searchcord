@@ -21,10 +21,20 @@ fn text(v: &Value) -> String {
         .map(str::to_owned)
         .unwrap_or_else(|| v.to_string())
 }
+fn truthy(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::Number(n) => n.as_f64().is_some_and(|n| n != 0.0),
+        Value::String(s) => !s.is_empty(),
+        Value::Array(a) => !a.is_empty(),
+        Value::Object(o) => !o.is_empty(),
+    }
+}
 fn nonempty(v: &Value) -> Option<&str> {
     v.as_str().filter(|s| !s.is_empty())
 }
-fn image_urls(attachments: &Value) -> Option<String> {
+pub(crate) fn image_urls(attachments: &Value) -> Option<String> {
     let extensions = [
         "png", "jpg", "jpeg", "jfif", "gif", "webp", "avif", "apng", "bmp", "ico", "svg", "heic",
         "heif", "tif", "tiff", "dng", "exr",
@@ -43,7 +53,11 @@ fn image_urls(attachments: &Value) -> Option<String> {
                         .decode_utf8_lossy()
                         .into_owned()
                 })
-                .unwrap_or_default();
+                .unwrap_or_else(|| {
+                    percent_encoding::percent_decode_str(url.split(['?', '#']).next().unwrap_or(""))
+                        .decode_utf8_lossy()
+                        .into_owned()
+                });
             let image = mime.starts_with("image/")
                 || mime.is_empty()
                     && extension
@@ -76,31 +90,10 @@ pub struct Store {
 }
 impl Store {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let path = std::path::absolute(path)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
+        let path = crate::credentials::resolve(path.as_ref())?;
+        crate::migrations::initialize(&path)?;
         let db = Connection::open(&path)?;
         db.busy_timeout(Duration::from_secs(30))?;
-        let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version > 10 {
-            return Err("This archive uses a newer storage format; update Searchcord first".into());
-        }
-        let has_messages = db
-            .query_row(
-                "SELECT 1 FROM sqlite_master WHERE name='messages'",
-                [],
-                |_| Ok(true),
-            )
-            .optional()?
-            .unwrap_or(false);
-        if has_messages && version != 10 {
-            return Err("Legacy schema requires startup migration".into());
-        }
-        db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
-        if !has_messages {
-            db.execute_batch(SCHEMA)?;
-        }
         Ok(Self { path, db })
     }
     pub fn connection(&self) -> &Connection {
@@ -146,9 +139,7 @@ impl Store {
                     ),
                 );
             }
-            if m.get("webhook_id")
-                .is_none_or(|v| v.is_null() || v.as_str() == Some(""))
-            {
+            if m.get("webhook_id").is_none_or(|v| !truthy(v)) {
                 tx.execute(
                     "INSERT OR IGNORE INTO channel_authors VALUES (?,?)",
                     params![context.channel_id, author],
