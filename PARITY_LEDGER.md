@@ -14,7 +14,8 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 06 | All nine `tests/test_durable_scrape.py` cases | `searchcord-parity/tests/durable_scrape.rs` | Linux: nine pass with controlled fetch/commit/credential barriers; all 30 Rust contracts, 36 Python and 25 Node pass. |
 | 07 | All five `tests/test_scrape_pacing.py` cases | `searchcord-parity/tests/scrape_pacing.rs` | Linux: all five pass with supplied clocks, draws and responses; 35 Rust contracts, 36 Python, 25 Node pass. |
 | 08 | `snapshot_codec.py`, `search_snapshot.py`, packed reader and media publication | `searchcord-parity/tests/packed_snapshot.rs` | Linux: seven contracts pass; 42 total Rust tests, original Python/Node checks green. |
-| 09–10 | Remaining routes, browser/performance | Future test-first chunks | Pending; milestone not yet reached |
+| 09 | `app.py`, `profile_api.py`, `invite_api.py`, `chat_export.py`, settings, collection lifecycle and route inventory | `searchcord-parity/tests/backend_contracts.rs` | Linux: 20 contracts pass; 62 total Rust tests, original Python/Node and syntax checks pass. |
+| 10 | Browser/performance | Future test-first chunk | Pending; milestone not yet reached |
 | 11–38 | Production Rust implementations and qualification | Future packages | Unimplemented |
 
 ## Storage mapping (03)
@@ -96,3 +97,80 @@ Each `ScrapePacingTest.test_<name>` maps to the identically named Rust contract
 | `referenced_media_export_verifies_hashes_and_excludes_unreferenced_files` | Good/corrupt/missing/unreferenced files, exact copied bytes/report, destination refusal, attachment payload hydration, HTTP headers, digest-checked serving and corrupted-file rejection. |
 | `profiles_observed_servers_and_unknown_saved_fields_survive_export` | Exact extended JSON and unknown fields, explicit presence, profile presentation, observed-server public IDs/order/counts, v9 optional profile-details table. Only profile age is excluded from equality. |
 | `snapshot_cli_reports_are_exclusive_and_media_requires_fresh_directory` | Actual CLI parser, aggregate report file/output equality, media report, report/source/destination collisions, existing-report refusal and existing-media refusal. |
+
+## Collector route ownership (09)
+
+Every explicit route is checked against this inventory by Rust. The guild-channel
+behavioral owner is pending missing prerequisite 05. Static mounting at `/` is
+covered by framework/static contracts and the browser gate in 10. The collector
+returns 404 for `/api/stats/` because its static mount handles the trailing slash;
+the parity suite records this observed behavior.
+
+| Methods | Path | Rust behavioral owner |
+|---|---|---|
+| `GET,HEAD` | `/openapi.json` | `framework_validation_documentation_health_and_startup_shutdown_are_owned` |
+| `GET,HEAD` | `/docs` | `framework_validation_documentation_health_and_startup_shutdown_are_owned` |
+| `GET,HEAD` | `/docs/oauth2-redirect` | `framework_validation_documentation_health_and_startup_shutdown_are_owned` |
+| `GET,HEAD` | `/redoc` | `framework_validation_documentation_health_and_startup_shutdown_are_owned` |
+| `GET` | `/api/health` | `framework_validation_documentation_health_and_startup_shutdown_are_owned` |
+| `GET` | `/api/token/validate` | `guild_dm_and_token_discovery_preserves_public_ids_and_errors` |
+| `GET` | `/api/guilds` | `guild_dm_and_token_discovery_preserves_public_ids_and_errors` |
+| `GET` | `/api/guilds/{guild_id}/channels` | `collection_access::readable_channels_contracts` |
+| `GET` | `/api/dms` | `guild_dm_and_token_discovery_preserves_public_ids_and_errors` |
+| `POST` | `/api/scrape/start` | `durable_scrape::simultaneous_start_reserves_channels_before_checkpoint_write` |
+| `GET` | `/api/scrape/active` | `stalled_scrape_subscriptions_are_bounded_and_snapshot_copies_do_not_mutate_jobs` |
+| `POST` | `/api/scrape/{job_id}/pause` | `stalled_scrape_subscriptions_are_bounded_and_snapshot_copies_do_not_mutate_jobs` |
+| `POST` | `/api/scrape/{job_id}/resume` | `durable_scrape::resume_cannot_launch_worker_after_shutdown_barrier` |
+| `POST` | `/api/scrape/{job_id}/stop` | `durable_scrape::stop_joins_inflight_commit_before_archive_clear` |
+| `GET` | `/api/scrape/progress/{job_id}` | `scrape_sse_reconnect_starts_with_snapshot_and_repeats_terminal_event` |
+| `POST` | `/api/dm-clear/start` | `dm_cleanup_only_deletes_current_account_and_counts_confirmed_missing_separately` |
+| `POST` | `/api/dm-clear/{job_id}/stop` | `dm_cleanup_only_deletes_current_account_and_counts_confirmed_missing_separately` |
+| `GET` | `/api/dm-clear/progress/{job_id}` | `dm_cleanup_only_deletes_current_account_and_counts_confirmed_missing_separately` |
+| `POST` | `/api/live/start` | `live_monitor_commits_observations_recovers_paused_and_enforces_account` |
+| `POST` | `/api/live/stop` | `live_monitor_commits_observations_recovers_paused_and_enforces_account` |
+| `GET` | `/api/live/status` | `live_monitor_commits_observations_recovers_paused_and_enforces_account` |
+| `GET` | `/api/live/events` | `live_monitor_commits_observations_recovers_paused_and_enforces_account` |
+| `GET` | `/api/export/participants` | `chatml_groups_turns_ignores_blank_messages_and_substitutes_names` |
+| `POST` | `/api/export/chatml` | `chatml_groups_turns_ignores_blank_messages_and_substitutes_names` |
+| `GET` | `/api/search` | `counted_search_statistics_rankings_and_filters_keep_response_shapes` |
+| `GET` | `/api/images/{message_id}/{image_index}` | `image_refresh_uses_matching_attachment_path_and_preserves_redirects` |
+| `GET` | `/api/stats` | `counted_search_statistics_rankings_and_filters_keep_response_shapes` |
+| `GET` | `/api/stats/contributors` | `counted_search_statistics_rankings_and_filters_keep_response_shapes` |
+| `GET` | `/api/stats/servers` | `counted_search_statistics_rankings_and_filters_keep_response_shapes` |
+| `GET` | `/api/search/filters` | `counted_search_statistics_rankings_and_filters_keep_response_shapes` |
+| `GET` | `/api/search/authors` | `counted_search_statistics_rankings_and_filters_keep_response_shapes` |
+| `GET` | `/api/settings` | `settings_sealed_vault_metadata_validation_switching_and_removal` |
+| `POST` | `/api/settings` | `settings_sealed_vault_metadata_validation_switching_and_removal` |
+| `DELETE` | `/api/settings/tokens` | `settings_sealed_vault_metadata_validation_switching_and_removal` |
+| `DELETE` | `/api/messages` | `archive_clear_keeps_credentials_and_reports_partial_media_cleanup` |
+| `GET` | `/api/messages/{message_id}/archive` | `message_refresh_distinguishes_generic_absence_confirmed_deletion_and_restoration` |
+| `POST` | `/api/messages/{message_id}/refresh` | `message_refresh_distinguishes_generic_absence_confirmed_deletion_and_restoration` |
+| `GET` | `/api/profiles/{uid}` | `manual_profiles_keep_full_payload_and_failed_refresh_keeps_saved_data` |
+| `GET` | `/api/profiles/{uid}/servers` | `manual_profiles_keep_full_payload_and_failed_refresh_keeps_saved_data` |
+| `POST` | `/api/profiles/{uid}/fetch` | `manual_profiles_keep_full_payload_and_failed_refresh_keeps_saved_data` |
+| `POST` | `/api/profiles/{uid}/refresh` | `manual_profiles_keep_full_payload_and_failed_refresh_keeps_saved_data` |
+| `GET` | `/api/profile-backfill` | `profile_backfill_is_exclusive_stoppable_and_fills_missing_profiles` |
+| `POST` | `/api/profile-backfill` | `profile_backfill_is_exclusive_stoppable_and_fills_missing_profiles` |
+| `POST` | `/api/profile-backfill/stop` | `stopping_profile_backfill_during_fetch_preserves_saved_profiles` |
+| `GET` | `/api/media/{key}` | `packed_snapshot::referenced_media_export_verifies_hashes_and_excludes_unreferenced_files` |
+| `POST` | `/api/invites/start` | `invite_queues_parse_deduplicate_block_recover_and_require_original_account` |
+| `GET` | `/api/invites/status` | `invite_successes_obey_spacing_and_rate_limit_retries` |
+| `POST` | `/api/invites/{job_id}/stop` | `invite_queues_parse_deduplicate_block_recover_and_require_original_account` |
+| `POST` | `/api/invites/{job_id}/resume` | `invite_queues_parse_deduplicate_block_recover_and_require_original_account` |
+
+Persisted kinds: `scrape` → durable_scrape.rs (06), `pacing` →
+scrape_pacing.rs (07), `invite` → recovery/account/cooldown contracts in
+backend_contracts.rs (09), `monitor` → observation/gap/recovery contracts there.
+DM cleanup is intentionally not restarted or persisted. Credential format coverage
+is in archive_storage.rs: native DPAPI on Windows and portable Fernet everywhere.
+
+Additional 09 behavioral cases include
+`live_gap_pages_drain_to_anchor_and_generic_404_cannot_create_tombstones` (three
+pages, exact anchors/cursors, atomic monitor checkpoint),
+`stopping_profile_backfill_during_fetch_preserves_saved_profiles` (cancellation
+keeps existing JSON), and the inventory check itself,
+`every_collector_route_has_a_behavioral_owner_in_the_ledger`. Scrape subscription
+tests check capacity/drop order and preserved terminal events. Invite tests use
+controlled time to assert 30-second spacing and 45-second retry cooldowns.
+Collector and live SSE use the actual service; infinite streams are consumed to
+a bounded prefix and disconnected. Original frontends are unmodified.

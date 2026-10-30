@@ -185,3 +185,26 @@ all Rust edits. CI execution/results must still be checked on all three systems.
 Batch scope: include missing 05 after 06–10, then continue through 21 (17 of the
 34 unfinished chunks at the start). Production Rust work remains gated by 05–10.
 Next: 09 remaining backend contracts and complete route/job-kind ownership.
+
+## Chunk 09 — remaining collector contracts
+
+Task branch `rewrite/rust-09-backend-contracts`, based on integration `737cf48`
+(08 task `f3adfd7`). Twenty contracts cover settings/credential metadata and
+removal, public discovery IDs, complete profiles/failed refresh/backfill/stop,
+invite parse/deduplication/success/block/cooldown/account/recovery, live monitor
+observations/gap draining/recovery, DM ownership/deletion counters/tombstones,
+ChatML grouping and validation, counted/cursor search, statistics/ties/filters,
+message/image refresh, archive clear with partial cleanup failure, actual SSE
+and startup/shutdown. A checked inventory owns all 49 explicit collector routes,
+including framework documentation and included profile/media/invite routers.
+All four persisted job kinds have named contracts in the ledger.
+
+The adapter rebinds production router factories to disposable paths and doubles;
+it does not import the Python tests or contain feature assertions. The actual
+collector can run on numeric loopback on the same controlled event loop. SSE
+prefix reads close their connection; tests never wait for infinite streams.
+
+Linux: all 62 Rust contracts, 36 original Python, 25 Node, JS syntax, formatting
+and Clippy pass. Production Python/frontend remain unchanged. Cross-platform
+matrix results remain to be checked; 07's formatting correction is included in 08.
+Next: 10 browser/performance baselines and missing 05 before production migration.
