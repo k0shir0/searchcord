@@ -133,3 +133,24 @@ still requires 05–10. Keep all original regressions in place.
 
 The working branch is `rewrite/rust`, tracking `origin/rewrite/rust`.
 No unfinished task branches need rebasing.
+
+## Chunk 06 — durable scrape regressions
+
+Started with 06 as requested. Chunk 05 is absent in the published baseline and
+remains an explicit test-first dependency. Task branch:
+`rewrite/rust-06-durable-scrape`, based on `9658d02`.
+
+All nine original durable cases have independent Rust scenarios and assertions.
+The adapter runs the actual collector and owner on one persistent event loop;
+Rust supplies mocked responses, legacy checkpoint JSON and fetch/commit/credential
+barriers. No Python tests are imported, no assertions are hidden in the adapter,
+and its audit hook still rejects external networking and subprocesses.
+
+Linux validation: `cargo test --workspace --locked` (30 pass), `cargo fmt --all`,
+Clippy with warnings denied, original 36 Python and 25 Node cases, and JS syntax.
+The execution sandbox needs network capability for local asyncio/socket wakeups;
+the adapter independently blocks all external connections. Windows/macOS remain
+subject to the existing CI matrix. No production/frontend files changed.
+
+Next: 07 pacing. The requested batch targets half the unfinished chunks;
+05 must also pass before production work begins at 11.
