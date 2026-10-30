@@ -356,3 +356,160 @@ pub fn packed_search(
         partial,
     })
 }
+
+pub fn standard_search(db: &Connection, query: &Query) -> rusqlite::Result<Page> {
+    if !(1..=100).contains(&query.limit) || query.window == 0 || query.window > 1_000_000 {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "Invalid search limit/window".into(),
+        ));
+    }
+    let mut bounds = vec![];
+    let mut bound_params = vec![];
+    for (clause, value) in [
+        ("id>=?", query.lower),
+        ("id<?", query.upper),
+        ("id<?", query.before),
+    ] {
+        if let Some(value) = value {
+            bounds.push(clause.to_owned());
+            bound_params.push(SqlValue::Integer(value));
+        }
+    }
+    let mut conditions = vec![];
+    let mut parameters = vec![];
+    for (column, value) in [
+        ("guild_id", &query.guild_id),
+        ("channel_id", &query.channel_id),
+        ("author_id", &query.author_id),
+    ] {
+        if let Some(value) = value.as_ref().filter(|s| !s.is_empty()) {
+            conditions.push(format!("{column}=?"));
+            parameters.push(SqlValue::Text(value.clone()));
+        }
+    }
+    conditions.extend(bounds.clone());
+    parameters.extend(bound_params.clone());
+    let condition = if conditions.is_empty() {
+        "1".into()
+    } else {
+        conditions.join(" AND ")
+    };
+    let bound_condition = if bounds.is_empty() {
+        "1".into()
+    } else {
+        bounds.join(" AND ")
+    };
+    let q = strip(&query.q);
+    let literal = format!("%{}%", like_literal(q));
+    let take = query.limit + 1;
+    let mut scan_cursor = None;
+    let candidates = if query.scan {
+        let mut params = bound_params;
+        params.push(SqlValue::Integer(query.window as i64 + 1));
+        let window = ids(
+            db,
+            &format!("SELECT id FROM messages WHERE {bound_condition} ORDER BY id DESC LIMIT ?"),
+            &params,
+        )?;
+        if window.is_empty() {
+            vec![]
+        } else {
+            let floor = window[query.window.min(window.len()) - 1];
+            let mut params = parameters;
+            params.push(SqlValue::Integer(floor));
+            let text = if q.is_empty() {
+                ""
+            } else {
+                params.push(SqlValue::Text(literal));
+                "AND content LIKE ? ESCAPE '!'"
+            };
+            params.push(SqlValue::Integer(take as i64));
+            let result = ids(
+                db,
+                &format!(
+                    "SELECT id FROM messages WHERE {condition} AND id>=? {text} ORDER BY id DESC LIMIT ?"
+                ),
+                &params,
+            )?;
+            if window.len() > query.window && result.len() < take {
+                scan_cursor = Some(floor.to_string());
+            }
+            result
+        }
+    } else if !q.is_empty() {
+        let mut params = parameters.clone();
+        params.push(SqlValue::Integer(query.window as i64 - 1));
+        let boundary: Option<i64> = db
+            .query_row(
+                &format!(
+                    "SELECT id FROM messages WHERE {condition} ORDER BY id DESC LIMIT 1 OFFSET ?"
+                ),
+                params_from_iter(&params),
+                |r| r.get(0),
+            )
+            .optional()?;
+        let floor = boundary.unwrap_or(0);
+        let mut params = parameters.clone();
+        params.extend([
+            SqlValue::Integer(floor),
+            SqlValue::Text(literal.clone()),
+            SqlValue::Integer(take as i64),
+        ]);
+        let mut result = ids(
+            db,
+            &format!(
+                "SELECT id FROM messages WHERE {condition} AND id>=? AND content LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?"
+            ),
+            &params,
+        )?;
+        if result.len() < take && boundary.is_some() {
+            let anchor = q.split(['%', '_']).fold("", |longest, item| {
+                if item.chars().count() > longest.chars().count() {
+                    item
+                } else {
+                    longest
+                }
+            });
+            let indexed = anchor.chars().count() >= 3;
+            let mut params = parameters;
+            params.push(SqlValue::Integer(floor));
+            let candidate = if indexed {
+                params.push(SqlValue::Text(format!("%{anchor}%")));
+                "AND rowid IN (SELECT rowid FROM messages_fts WHERE content LIKE ?)"
+            } else {
+                ""
+            };
+            params.extend([
+                SqlValue::Text(literal),
+                SqlValue::Integer((take - result.len()) as i64),
+            ]);
+            result.extend(ids(db,&format!("SELECT id FROM messages WHERE {condition} AND id<? {candidate} AND content LIKE ? ESCAPE '!' ORDER BY id DESC LIMIT ?"),&params)?);
+        }
+        result
+    } else {
+        let mut params = parameters;
+        params.push(SqlValue::Integer(take as i64));
+        ids(
+            db,
+            &format!("SELECT id FROM messages WHERE {condition} ORDER BY id DESC LIMIT ?"),
+            &params,
+        )?
+    };
+    let has_more = candidates.len() > query.limit || scan_cursor.is_some();
+    let records = records(db, &candidates[..query.limit.min(candidates.len())], "id")?;
+    let partial = scan_cursor.is_some();
+    let next_cursor = scan_cursor.or_else(|| {
+        if has_more {
+            records.last().map(|r| r.id.clone())
+        } else {
+            None
+        }
+    });
+    Ok(Page {
+        records,
+        has_more,
+        next_cursor,
+        scan: query.scan,
+        partial,
+    })
+}

@@ -81,30 +81,30 @@ def build_snapshot(source, destination, *, block_rows=BLOCK_ROWS, progress=None)
                 UNION SELECT name FROM source.channels WHERE name IS NOT NULL
                 UNION SELECT name FROM source.authors WHERE name IS NOT NULL""")
             fields = ','.join('r.' + column for column in FIELDS)
-            rows = db.execute(f"""SELECT {fields}, s.ref,a.ref,nc.id,ng.id,na.id FROM source.message_records r
+            with closing(db.execute(f"""SELECT {fields}, s.ref,a.ref,nc.id,ng.id,na.id FROM source.message_records r
                 LEFT JOIN message_sources s ON s.channel_id IS r.channel_id AND s.guild_id IS r.guild_id
                 LEFT JOIN ref_values a ON a.value=r.author_id
                 LEFT JOIN record_names nc ON nc.value=r.channel_name
                 LEFT JOIN record_names ng ON ng.value=r.guild_name
-                LEFT JOIN record_names na ON na.value=r.author_name ORDER BY r.id""")
-            while batch := rows.fetchmany(block_rows):
-                indices, texts, body = [], [], []
-                for row in batch:
-                    count += 1
-                    values = tuple(row[:len(FIELDS)])
-                    digest_row(source_digest, values)
-                    indices.append((count, *row[len(FIELDS):len(FIELDS)+2]))
-                    texts.append((count, values[4]))
-                    body.append((values[0], *values[4:7], *row[len(FIELDS)+2:]))
-                db.executemany('INSERT INTO message_index VALUES (?,?,?)', indices)
-                db.executemany('INSERT INTO messages_fts(rowid,content) VALUES (?,?)', texts)
-                number = (count-1)//block_rows + 1
-                db.execute('INSERT INTO message_short_fts(rowid,tokens) VALUES (?,?)',
-                           (number, short_terms([r[1] for r in body])))
-                db.execute('INSERT INTO message_blocks VALUES (?,?,?)',
-                           (number, body[0][0], zlib.compress(canonical(body), 9)))
-                if progress and count % (block_rows * 1024) == 0:
-                    progress({'phase':'pack','messages':count,'total':expected})
+                LEFT JOIN record_names na ON na.value=r.author_name ORDER BY r.id""")) as rows:
+                while batch := rows.fetchmany(block_rows):
+                    indices, texts, body = [], [], []
+                    for row in batch:
+                        count += 1
+                        values = tuple(row[:len(FIELDS)])
+                        digest_row(source_digest, values)
+                        indices.append((count, *row[len(FIELDS):len(FIELDS)+2]))
+                        texts.append((count, values[4]))
+                        body.append((values[0], *values[4:7], *row[len(FIELDS)+2:]))
+                    db.executemany('INSERT INTO message_index VALUES (?,?,?)', indices)
+                    db.executemany('INSERT INTO messages_fts(rowid,content) VALUES (?,?)', texts)
+                    number = (count-1)//block_rows + 1
+                    db.execute('INSERT INTO message_short_fts(rowid,tokens) VALUES (?,?)',
+                               (number, short_terms([r[1] for r in body])))
+                    db.execute('INSERT INTO message_blocks VALUES (?,?,?)',
+                               (number, body[0][0], zlib.compress(canonical(body), 9)))
+                    if progress and count % (block_rows * 1024) == 0:
+                        progress({'phase':'pack','messages':count,'total':expected})
             if count != expected:
                 raise RuntimeError('Message count did not round-trip')
             db.execute("INSERT INTO messages_fts(messages_fts) VALUES ('optimize')")
