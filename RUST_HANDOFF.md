@@ -332,3 +332,26 @@ pass. 13 CI passed Windows/macOS; Linux exposed floating-point drift in an invit
 test's virtual clock origin. That origin is now a fixed exact value (1000.0), so
 the asserted 30/45-second waits remain deterministic on every system. Next: 15
 native snapshot database generation. 05 remains pending.
+
+## Chunk 15 — native snapshot database generation
+
+Task branch `rewrite/rust-15-snapshot-database`, based on local integration
+`9b0ca44`. Adds the `searchcord-snapshot` library: read-only attached v9/v10
+sources, copied metadata/attachment JSON, public reference/name dictionaries,
+default 128-row zlib-level-9 blocks, trigram/short indexes, canonical SHA-256,
+SQLite/FTS integrity verification and exclusion of settings. Verification decodes
+the completed native database again before returning its report. Source cursors
+and connections close before owned temporary-file cleanup, including on Windows.
+
+Native exports at seven empty/boundary sizes are read through both Python and
+Rust and checked against independent canonical hashes. A WAL-backed source test
+checks committed WAL rows, unknown saved profile fields and attachment metadata.
+Linux: 77 Rust tests, 36 Python, 25 Node, syntax, formatting and Clippy pass.
+Publication, referenced-media copying and native CLI are the next chunk.
+
+Publishing new commits was rejected by automatic approval review despite the
+verified public remote and handoff workflow: it requires explicit user approval
+to publish new source/tests. The user was asked asynchronously; continue local
+implementation while waiting and do not attempt another push without approval.
+14 is locally integrated; its push and later CI remain pending that answer.
+Next: 16 publication/media/reports. 05 remains pending under the user's scope.

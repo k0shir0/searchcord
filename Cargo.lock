@@ -755,10 +755,24 @@ dependencies = [
  "reqwest",
  "rusqlite",
  "searchcord-archive",
+ "searchcord-snapshot",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
+]
+
+[[package]]
+name = "searchcord-snapshot"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "rusqlite",
+ "searchcord-archive",
+ "serde",
+ "serde_json",
+ "sha2",
+ "url",
 ]
 
 [[package]]
