@@ -76,11 +76,7 @@ fn native_credentials_migrate_out_of_sqlite_and_backup() {
     }
     let backup = h.command(json!({"op":"backup"}));
     let path = Path::new(backup.as_str().unwrap());
-    assert!(
-        path.canonicalize()
-            .unwrap()
-            .starts_with(h.root().canonicalize().unwrap())
-    );
+    assert!(path.starts_with(h.root()));
     assert_no_plaintext(path, token);
     let db = Connection::open(path).unwrap();
     assert_eq!(scalar::<i64>(&db, "SELECT COUNT(*) FROM settings"), 0);
@@ -296,12 +292,7 @@ fn legacy_attachment_migration_preserves_all_original_values() {
         assert_eq!(scalar::<String>(&db, "PRAGMA integrity_check"), "ok");
     }
     let backup = Path::new(result["backup"].as_str().unwrap());
-    assert!(
-        backup
-            .canonicalize()
-            .unwrap()
-            .starts_with(h.root().canonicalize().unwrap())
-    );
+    assert!(backup.starts_with(h.root()));
     let mut recovered = Vec::new();
     GzDecoder::new(fs::File::open(backup).unwrap())
         .read_to_end(&mut recovered)

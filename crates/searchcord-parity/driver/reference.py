@@ -114,9 +114,6 @@ def start_viewer(request):
 def dispatch(request):
     global event_body, job_loop, job_thread, jobs
     op = request['op']
-    if op == 'permissions':
-        from channel_access import permissions_for
-        return permissions_for(request['guild'], request['member'], request['channel'], request['channels'])
     if op == 'job':
         if jobs is None:
             from jobs import Jobs
