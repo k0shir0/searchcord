@@ -142,3 +142,63 @@ fn vault_paths_reject_archive_capture_and_insecure_permissions() {
         }
     }
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_dpapi_vault_interchanges_current_user_without_ui_and_reads_portable() {
+    let mut h = Harness::with_backend(Backend::Python).unwrap();
+    let v = Vault::platform(
+        Paths::new(&h.archive(), &h.vault(), &h.vault().with_extension("key")).unwrap(),
+    );
+    let tokens = json!([{"id":"one","label":"Synthetic DPAPI","token":"synthetic-dpapi-only"}]);
+    let state = json!({"tokens":tokens,"active_token_id":"one"});
+    h.command(json!({"op":"save_credentials","tokens":tokens,"active_token_id":"one"}));
+    assert_eq!(v.load().unwrap(), state);
+    assert!(!v.paths.key.exists());
+    v.clear().unwrap();
+    v.save(&tokens, &json!("one")).unwrap();
+    assert_eq!(h.command(json!({"op":"load_credentials"})), state);
+    let bytes = fs::read(&v.paths.vault).unwrap();
+    assert!(bytes.starts_with(b"SEARCHCORD-DPAPI-1\n"));
+    assert!(!bytes.windows(20).any(|w| w == b"synthetic-dpapi-only"));
+    assert!(!v.paths.key.exists());
+    let mut damaged = bytes.clone();
+    let last = damaged.len() - 1;
+    damaged[last] ^= 1;
+    fs::write(&v.paths.vault, &damaged).unwrap();
+    assert!(v.load().is_err());
+    assert!(v.save(&tokens, &json!("one")).is_err());
+    assert_eq!(fs::read(&v.paths.vault).unwrap(), damaged);
+    v.clear().unwrap();
+    h.command(
+        json!({"op":"save_credentials","portable":true,"tokens":tokens,"active_token_id":"one"}),
+    );
+    let key = fs::read(&v.paths.key).unwrap();
+    assert_eq!(v.load().unwrap(), state);
+    v.save(&tokens, &json!("one")).unwrap();
+    assert_eq!(h.command(json!({"op":"load_credentials"})), state);
+    assert_eq!(fs::read(&v.paths.key).unwrap(), key);
+    assert!(
+        fs::read(&v.paths.vault)
+            .unwrap()
+            .starts_with(b"SEARCHCORD-DPAPI-1\n")
+    );
+    assert!(!h.archive().exists());
+}
+
+#[test]
+fn platform_vault_preserves_external_state_and_roundtrips() {
+    let h = Harness::with_backend(Backend::Python).unwrap();
+    let v = Vault::platform(
+        Paths::new(&h.archive(), &h.vault(), &h.vault().with_extension("key")).unwrap(),
+    );
+    let tokens =
+        json!([{"id":"one","label":"Platform fixture","token":"synthetic-platform-token"}]);
+    v.save(&tokens, &json!("one")).unwrap();
+    assert_eq!(
+        v.load().unwrap(),
+        json!({"tokens":tokens,"active_token_id":"one"})
+    );
+    assert!(!h.archive().exists());
+    v.clear().unwrap();
+}
