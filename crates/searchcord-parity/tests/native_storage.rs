@@ -251,6 +251,17 @@ fn native_page_metadata_dedup_backfill_legacy_and_atomic_rollback() {
         ),
         0
     );
+    let mut real = message(ID + 26, "real author");
+    real["author"]["id"] = json!("888");
+    real["webhook_id"] = json!(0);
+    store.save_page(&[real], &context()).unwrap();
+    assert_eq!(
+        count(
+            store.connection(),
+            "SELECT COUNT(*) FROM channel_authors WHERE author_id='888'"
+        ),
+        1
+    );
     store
         .connection()
         .execute(

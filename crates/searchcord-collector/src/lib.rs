@@ -4,3 +4,5 @@ pub use storage::{PageContext, Result, Store};
 pub mod credentials;
 #[cfg(windows)]
 mod dpapi;
+pub mod migrations;
+pub mod recovery;
