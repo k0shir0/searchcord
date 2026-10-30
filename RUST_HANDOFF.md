@@ -67,7 +67,8 @@ Next: 04 reader/display regressions over real HTTP.
 ## Chunk 04 — reader/display regressions
 
 Task branch: `rewrite/rust-04-reader-display`. All nine original display cases now
-have Rust-owned fixtures and assertions over the actual Uvicorn HTTP service.
+have contracts in task commit `1d4c0c8`; integration merge: `ff2c336`.
+They use Rust-owned fixtures and assertions over the actual Uvicorn HTTP service.
 The 80-message fixture preserves out-of-order backfills, historical names,
 unsafe image URLs, Unicode labels and saved profile data. Query traversal uses
 independent expected IDs as well as SQLite's literal LIKE semantics, with normal
@@ -103,3 +104,6 @@ For this workspace, Rust was installed in `/workspace/.cargo` and
 
 Next unfinished chunk: **05 permissions and discovery**. Test-first milestone
 still requires 05–10. Keep all original regressions in place.
+
+The task branches and integration merges are local in `/workspace/searchcord`.
+The working branch is `rewrite/rust`; no unfinished task branches need rebasing.
