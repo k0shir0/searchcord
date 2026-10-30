@@ -21,6 +21,11 @@ fn json_response(status: u16, value: Value) -> Response {
 fn error(e: ArchiveError) -> Response {
     json_response(e.status, json!({"detail":e.detail}))
 }
+const JAVASCRIPT: &str = if cfg!(windows) {
+    "application/javascript"
+} else {
+    "text/javascript; charset=utf-8"
+};
 fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
     Some(match path {
         "/" | "/index.html" => (
@@ -33,7 +38,7 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
         ),
         "/search.js" => (
             include_bytes!("../../../static/search/search.js"),
-            "text/javascript; charset=utf-8",
+            JAVASCRIPT,
         ),
         "/privacy.html" => (
             include_bytes!("../../../static/search/privacy.html"),
@@ -53,7 +58,7 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
         ),
         "/profile-view.js" => (
             include_bytes!("../../../static/profile-view.js"),
-            "text/javascript; charset=utf-8",
+            JAVASCRIPT,
         ),
         _ => return None,
     })

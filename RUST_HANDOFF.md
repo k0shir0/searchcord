@@ -447,3 +447,25 @@ rollback and Python reading/writing a Rust-created archive. Linux: 86 Rust cases
 macOS; Windows stopped on cfg-specific unnecessary mutability in media directory
 creation. This chunk fixes that warning without changing runtime behavior.
 Legacy startup migrations remain explicit until 22. Next: 20 portable credentials.
+
+## Chunk 20 — portable external credentials
+
+Task branch `rewrite/rust-20-portable-vault`, based on chunk 19 integration.
+Implements SEARCHCORD-FERNET-1 via the pure Rust crypto feature of pinned fernet
+0.2.2, external canonical archive-key derivation, environment/default path rules,
+archive-directory exclusion, private key/vault/directory permissions, full state
+validation and metadata-only projection. Existing vaults must unlock before save;
+a missing key never creates a replacement. New sealed bytes are fsynced and
+decrypted/validated before atomic replacement, then the directory is fsynced.
+Temporary failure cleanup preserves the older ciphertext.
+
+Three native contracts cover Python-to-Rust and Rust-to-Python synthetic vaults,
+exact archive-key agreement, state validation, missing keys, corrupted ciphertext,
+injected verification failure, private permissions and unsafe paths. Linux: 89
+Rust cases and formatting/Clippy pass; Python/Node/syntax remain green from 19.
+No plaintext credential enters SQLite. Next: 21 Windows DPAPI protection.
+
+Windows CI for 19 reached native HTTP tests and exposed the reference's
+platform-specific JavaScript MIME: application/javascript on Windows versus
+text/javascript with UTF-8 on Unix. Native responses now match that platform
+behavior; unchanged asset bytes and MIME assertions remain strict.
