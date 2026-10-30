@@ -9,8 +9,9 @@ See [the migration plan](SEARCHCORD_RUST_MIGRATION_PLAN.md) and
 
 Repository: https://github.com/k0shir0/searchcord
 Published integration branch: https://github.com/k0shir0/searchcord/tree/rewrite/rust
-Chunks 01–04 and their integration history are reachable from `origin/rewrite/rust`.
-Chunk 05 has not been implemented in this branch; do not assume it is present.
+Chunks 01–09 and their integration history are reachable from `rewrite/rust`.
+06–09 were completed first as requested; missing 05 was then closed before
+production migration. Chunk 10 is being validated on its own task branch.
 
 ```sh
 git fetch origin
@@ -208,3 +209,27 @@ Linux: all 62 Rust contracts, 36 original Python, 25 Node, JS syntax, formatting
 and Clippy pass. Production Python/frontend remain unchanged. Cross-platform
 matrix results remain to be checked; 07's formatting correction is included in 08.
 Next: 10 browser/performance baselines and missing 05 before production migration.
+
+## Chunk 05 — permissions/discovery prerequisite
+
+Completed after 06–09, starting from `cb59494`, on
+`rewrite/rust-05-permissions`. All six original cases map to same-name Rust
+contracts (without `test_`) in `tests/collection_access.rs`: combined-role/member
+precedence, owner/admin bypass, parent thread permissions, filtered private and
+view-only channels, readable empty channels/bot names, paginated active/archived
+threads without duplicates, and transient probe failures. The seventh contract,
+`readable_channels_contracts`, owns the actual guild-channel route/empty response
+and method rejection. Payloads and assertions are authored in Rust; the adapter
+only calls the real permission function or mocked HTTP surface.
+
+All 36 original Python cases now have Rust equivalents. The source and method
+mapping is complete across archive_storage, search_display, collection_access,
+durable_scrape and scrape_pacing. 69 Rust tests, 36 Python tests, 25 Node tests,
+syntax, formatting and Clippy pass on Linux.
+
+08 CI passed Linux but exposed pre-existing 03 path-spelling assertions on
+macOS/Windows. Those two assertions now compare canonical filesystem identities
+for both paths (macOS `/var` vs `/private/var`, Windows resolved paths). No data
+or archive checks are removed. Full cross-platform runs are required again.
+Next: integrate 10 after its browser/performance checks, then the 11 production
+milestone once cross-platform tests pass.

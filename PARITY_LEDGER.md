@@ -10,7 +10,7 @@ No production Rust backend exists yet. Selecting it must fail explicitly.
 | 02 | Disposable archives, process control, HTTP, SQLite, traces, network isolation | `searchcord-parity/tests/harness.rs`: `disposable_archives_control_reference_and_verify_fts5_trigram`, `real_http_event_and_command_traces_are_collected`, `driver_blocks_live_network_and_path_escape`, `backend_selection_rejects_unfinished_rust_instead_of_skipping`, `dropping_harness_joins_reference_and_removes_temporary_archives` | Linux: all five pass; formatting and Clippy pass. SSE fixture verifies transport capture only; production job event contracts remain in 06–09. |
 | 03 | Seven `tests/test_archive_storage.py` cases | `searchcord-parity/tests/archive_storage.rs` | Linux: all 7 pass, plus 5 harness tests; original 36 Python + 25 Node remain green. |
 | 04 | Nine `tests/test_search_display.py` cases | `searchcord-parity/tests/search_display.rs` | Linux: all 9 pass over real HTTP, including forced empty partial scan pages; formatting/Clippy pass. |
-| 05 | Permissions and discovery | Future test-first chunk | Pending |
+| 05 | All six `tests/test_collection_access.py` cases plus the collector HTTP adapter | `searchcord-parity/tests/collection_access.rs` | Linux: seven pass; 69 total Rust contracts, original Python/Node checks pass. Canonical path comparisons fix older macOS/Windows storage assertions. |
 | 06 | All nine `tests/test_durable_scrape.py` cases | `searchcord-parity/tests/durable_scrape.rs` | Linux: nine pass with controlled fetch/commit/credential barriers; all 30 Rust contracts, 36 Python and 25 Node pass. |
 | 07 | All five `tests/test_scrape_pacing.py` cases | `searchcord-parity/tests/scrape_pacing.rs` | Linux: all five pass with supplied clocks, draws and responses; 35 Rust contracts, 36 Python, 25 Node pass. |
 | 08 | `snapshot_codec.py`, `search_snapshot.py`, packed reader and media publication | `searchcord-parity/tests/packed_snapshot.rs` | Linux: seven contracts pass; 42 total Rust tests, original Python/Node checks green. |
@@ -50,8 +50,8 @@ the same name without `test_`, in `tests/search_display.rs`.
 | `saved_profile_is_readable_without_collection_routes` | Exact saved fields/details/connections, message count/avatar, observed servers with public IDs, basic fallback, missing/invalid IDs, collection routes absent, shared profile assets. |
 | `missing_old_and_wal_archives` | Missing files stay absent; old schema rejected; pending WAL refused in immutable mode; v9 reads without an upgrade or changed bytes. |
 
-Coverage after 07: **30 of 36 original Python cases** have Rust-owned contracts,
-plus five infrastructure tests. The other six original cases belong to 05.
+Coverage after 05–09: **all 36 original Python cases** have Rust-owned contracts,
+plus five infrastructure tests and additional packed/export/backend cases.
 Packed/export, remaining backend, browser and performance coverage in 08–10 is
 still pending. All migrated scenarios currently target Python; selecting Rust
 returns an explicit unimplemented error, never a skipped case.
@@ -101,7 +101,7 @@ Each `ScrapePacingTest.test_<name>` maps to the identically named Rust contract
 ## Collector route ownership (09)
 
 Every explicit route is checked against this inventory by Rust. The guild-channel
-behavioral owner is pending missing prerequisite 05. Static mounting at `/` is
+behavioral owner is implemented in 05. Static mounting at `/` is
 covered by framework/static contracts and the browser gate in 10. The collector
 returns 404 for `/api/stats/` because its static mount handles the trailing slash;
 the parity suite records this observed behavior.
@@ -174,3 +174,22 @@ tests check capacity/drop order and preserved terminal events. Invite tests use
 controlled time to assert 30-second spacing and 45-second retry cooldowns.
 Collector and live SSE use the actual service; infinite streams are consumed to
 a bounded prefix and disconnected. Original frontends are unmodified.
+
+## Permission/discovery mapping (05)
+
+All six original `PermissionsTest`/`AccessTest.test_<name>` methods map to
+same-name Rust cases (without `test_`) in `tests/collection_access.rs`:
+
+| Name | Independent expectations |
+|---|---|
+| `role_allows_win_over_combined_role_denies_then_member_wins` | Combined role allow overrides role deny/everyone deny; member history denial wins last. |
+| `owner_and_administrator_bypass_overwrites` | Both owner and administrator retain full readable bits against overwrites. |
+| `thread_uses_parent_not_its_own_overwrites` | Parent history denial wins over a thread's own explicit allow. |
+| `filters_private_and_view_only_but_keeps_empty_readable_and_bots` | Exact channel response, four limit-one probes, hidden/view-only never probed, empty-readable/bot channels retained. |
+| `discovers_and_paginates_threads_without_duplicates` | Exact four public IDs, active/archived/private deduplication, public timestamp cursor and parent inheritance. |
+| `transient_probe_does_not_misreport_a_partial_scan` | HTTP 503 and exact error instead of partial results. |
+
+`readable_channels_contracts` additionally owns the collector's empty-guild
+response and POST method rejection. No original Python tests are invoked by the
+Rust driver. Canonical path identity in two older storage contracts accommodates
+macOS/Windows spelling without changing archive assertions.
