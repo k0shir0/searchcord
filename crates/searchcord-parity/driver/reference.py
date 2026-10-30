@@ -141,8 +141,17 @@ def dispatch(request):
         return start_viewer(request)
     if op == 'readonly_execute':
         from archive_reader import Archive
+        failure = None
         with Archive(ARCHIVE, True).connect() as db:
-            return db.execute(request['sql']).fetchall()
+            # Capture at the connection boundary, like an assertion inside the
+            # caller's context. Archive translates errors that escape its body.
+            try:
+                result = db.execute(request['sql']).fetchall()
+            except Exception as exc:
+                failure = exc
+        if failure is not None:
+            raise failure
+        return result
     if op == 'sse_fixture':
         event_body = request['body']
         return None
