@@ -50,6 +50,14 @@ jobs:
         run: cargo test --locked -p searchcord-parity --test browser unchanged_viewer
         env:
           SEARCHCORD_PARITY_BACKEND: rust
+      - name: Static Linux viewer package and scratch image
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --locked --target x86_64-unknown-linux-gnu -p searchcord-viewer
+          target/x86_64-unknown-linux-gnu/release/searchcord-package-search .native-viewer
+          docker build -t searchcord-native-check .native-viewer
+          docker run --rm searchcord-native-check --help
       - run: python -m unittest discover -s tests -t . -v
       - run: node --test tests/test_collection_queue.mjs
       - name: JavaScript syntax

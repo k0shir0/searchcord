@@ -20,3 +20,9 @@ percent-encoding.workspace = true
 sha2.workspace = true
 chrono.workspace = true
 tower.workspace = true
+[[bin]]
+name = "searchcord-package-search"
+path = "src/package_main.rs"
+[dev-dependencies]
+tempfile.workspace = true
+reqwest.workspace = true

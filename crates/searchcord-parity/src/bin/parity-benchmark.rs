@@ -1,7 +1,7 @@
 //! Linux baseline runner. Artifacts contain aggregate measurements only.
 use reqwest::blocking::Client;
 use searchcord_parity::{
-    Harness,
+    Backend, Harness,
     performance::{self, BASE, STEP},
 };
 use serde_json::{Value, json};
@@ -14,15 +14,37 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-fn worker(h: &Harness, operation: &str, source: &Path, destination: &Path) -> Value {
+fn worker(
+    h: &Harness,
+    operation: &str,
+    source: &Path,
+    destination: &Path,
+    backend: Backend,
+) -> Value {
+    assert!(
+        backend == Backend::Python || operation == "snapshot",
+        "Native message saving remains unfinished at chunk 18"
+    );
+    let native = std::env::var_os("SEARCHCORD_PARITY_RUST_SNAPSHOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .unwrap()
+                .with_file_name("searchcord-snapshot")
+        });
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("driver/benchmark.py");
     let output =
         Command::new(std::env::var_os("SEARCHCORD_PARITY_PYTHON").unwrap_or("python".into()))
             .arg("-I")
             .arg(script)
-            .arg(operation)
+            .arg(if backend == Backend::Rust {
+                "native-snapshot"
+            } else {
+                operation
+            })
             .arg(source)
             .arg(destination)
+            .arg(native)
             .env("SEARCHCORD_DATA_DIR", h.root().join("archive"))
             .env(
                 "SEARCHCORD_CREDENTIAL_FILE",
@@ -48,7 +70,11 @@ fn main() {
     );
     assert_eq!(std::env::consts::ARCH, "x86_64");
     let args: Vec<_> = std::env::args().collect();
-    assert_eq!(args.len(), 3, "usage: parity-benchmark ROWS REPORT.json");
+    assert!(
+        (3..=4).contains(&args.len()),
+        "usage: parity-benchmark ROWS REPORT.json [python|rust]"
+    );
+    let backend = Backend::parse(args.get(3).map(String::as_str).unwrap_or("python")).unwrap();
     let rows: usize = args[1].parse().unwrap();
     assert!(rows >= 1000);
     let output = Path::new(&args[2]);
@@ -59,7 +85,13 @@ fn main() {
     let mut packed = source.root().join("archive/packed.db");
     for run in 0..3 {
         let destination = source.root().join(format!("archive/packed-{run}.db"));
-        let result = worker(&source, "snapshot", &source.archive(), &destination);
+        let result = worker(
+            &source,
+            "snapshot",
+            &source.archive(),
+            &destination,
+            backend,
+        );
         assert_eq!(result["result"]["messages"], rows);
         assert_eq!(result["result"]["records_sha256"], digest);
         assert_eq!(result["result"]["integrity"], "ok");
@@ -71,7 +103,7 @@ fn main() {
     let mut searches = vec![];
     for (format, path) in [("standard", source.archive()), ("packed", packed)] {
         for concurrency in [1, 16] {
-            let mut viewer = Harness::new().unwrap();
+            let mut viewer = Harness::viewer_with_backend(backend).unwrap();
             fs::create_dir_all(viewer.root().join("archive")).unwrap();
             fs::copy(&path, viewer.archive()).unwrap();
             viewer.start_viewer("synthetic.db", true, None);
@@ -133,13 +165,13 @@ fn main() {
         }
     }
     let mut saves = vec![];
-    for run in 0..3 {
+    for run in 0..if backend == Backend::Python { 3 } else { 0 } {
         let mut target = Harness::new().unwrap();
         target.init();
         let messages:Vec<_>=(0..10_000).map(|i|json!({"id":(BASE+i as i64*STEP).to_string(),"author":{"id":"30","username":"Fixture"},"content":performance::content(i),"attachments":[]})).collect();
         let payload = target.root().join("save.json");
         fs::write(&payload, serde_json::to_vec(&messages).unwrap()).unwrap();
-        let result = worker(&target, "save", &target.archive(), &payload);
+        let result = worker(&target, "save", &target.archive(), &payload, backend);
         assert_eq!(result["result"]["messages"], 10_000);
         assert_eq!(
             target
@@ -156,11 +188,11 @@ fn main() {
         .find(|s| s.starts_with("model name"))
         .unwrap_or("unknown")
         .to_owned();
-    let report = json!({"schema":1,"backend":"python","reference_sha":"481f62c6d1e111ca6f5771554a0e89ecd42b088e",
+    let report = json!({"schema":1,"backend":if backend==Backend::Python {"python"}else{"rust"},"reference_sha":"481f62c6d1e111ca6f5771554a0e89ecd42b088e",
         "toolchain":"1.90.0","captured_unix_seconds":SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs(),
         "machine":{"os":std::env::consts::OS,"arch":std::env::consts::ARCH,"cpu":cpu,"parallelism":thread::available_parallelism().unwrap().get()},
         "fixture":{"recipe":"v1-public-id-backfill","messages":rows,"records_sha256":digest,"source_bytes":fs::metadata(source.archive()).unwrap().len(),"block_rows":128,"compression_level":9},
-        "exports":exports,"searches":searches,"saves":saves,"qualification":false});
+        "exports":exports,"searches":searches,"saves":saves,"qualification":false,"unimplemented_measurements":if backend==Backend::Rust {vec!["message_save"]}else{vec![]},"export_timing":if backend==Backend::Rust {"whole native subprocess including startup"}else{"reference function after interpreter imports"}});
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).unwrap();
     }
@@ -172,5 +204,9 @@ fn main() {
         .unwrap();
     file.write_all(serde_json::to_string_pretty(&report).unwrap().as_bytes())
         .unwrap();
-    println!("Recorded Python baseline in {}", output.display());
+    println!(
+        "Recorded {:?} development measurements in {}",
+        backend,
+        output.display()
+    );
 }

@@ -87,3 +87,38 @@ at most 0.80 times Python under the sixteen-worker workload. Other latency,
 throughput, memory and snapshot-size metrics may regress by at most ten percent.
 The improvement must repeat in both sessions. Functional/interchange/browser
 qualification and Windows/macOS packaging remain separate required gates.
+
+## Initial native measurements (18)
+
+Build the release viewer/exporter and development runner, then select the measured
+backend explicitly. Python only generates disposable fixtures and collects the
+native export child's resource usage; it is not part of the native application.
+
+```sh
+cargo build --release --locked -p searchcord-viewer -p searchcord-snapshot -p searchcord-parity
+SEARCHCORD_PARITY_PYTHON=/absolute/python target/release/parity-benchmark 100000 /new/rust.json rust
+SEARCHCORD_PARITY_PYTHON=/absolute/python target/release/parity-benchmark 100000 /new/python.json python
+```
+
+The [initial native report](benchmarks/rust-linux-initial-v1.json) and
+[fresh Python comparison](benchmarks/python-linux-initial-v2.json) use the same
+100,000-message digest, fields and verification. Median export throughput is
+14,466 versus 16,229 messages/second; output sizes are 9,457,664 versus 9,007,104
+bytes. Packed-viewer peak RSS with sixteen HTTP workers is 20,549,632 versus
+59,289,600 bytes; warm p95 is 48.0 versus 100.0 ms. These are initial development
+measurements, not a passed performance gate: export throughput needs attention,
+the runs were sequential rather than five alternating pairs in two sessions,
+and local save performance remains explicitly unimplemented in the native report.
+Native export timing includes process startup; the Python function timing starts
+after imports. Python viewer RSS includes its reference adapter. Qualification
+must resolve these boundaries and repeat the full agreed procedure in chunk 36.
+
+Native packaging has a Rust smoke test that launches the approved standalone
+folder with spaces in its name and Python absent from PATH. Linux validation
+compiled a static PIE (no ELF interpreter), built `Dockerfile.native` from that
+folder, and ran the scratch image as 65534:65534. Actual HTTP verified summary,
+full search fields, approved assets, verified media and absent collector routes.
+Exporting the clean image confirmed its 17 files include no Python, collector,
+archives or vaults. A temporary named volume held the synthetic archive; it was
+removed after the test. CI repeats standalone tests on all platforms and the
+static-image build/run on Linux.

@@ -401,3 +401,31 @@ reference validation, methods, assets, media corruption, gzip and range semantic
 No frontend changes. Native viewer normal dependencies exclude collector, vault
 and upstream HTTP client code. Next: 18 native packaging/image/measurements.
 Publishing and remote cross-platform CI remain pending explicit approval.
+
+## Chunk 18 — standalone native viewer and measurements
+
+Task branch `rewrite/rust-18-viewer-package`, based on `90a6c95`. Adds a fresh-folder
+packager with an explicit asset list, original dependency license notices, Windows
+launcher, deployment instructions and scratch Dockerfile. The image uses a
+prebuilt static Linux viewer and runs as 65534:65534. No collector, Python, archive
+or vault enters the image. Rust packaging test runs a folder with spaces from
+another working directory with PATH empty; it verifies API refusals and file list.
+
+Linux: 84 Rust cases and formatting/Clippy pass; unchanged Python/Node checks
+remain green from 17. Static build used `RUSTFLAGS='-C target-feature=+crt-static'`
+with explicit x86_64-unknown-linux-gnu target. `file`/`readelf` verify static PIE,
+then actual Docker HTTP checks verify three synthetic messages, media bytes and
+absent collector routes. A clean image export has 17 files and no data/credentials.
+CI now builds/runs this image on Linux.
+
+Initial 100k release native and fresh Python reports and limitations are recorded
+in docs/rust-benchmarks.md. Native packed-viewer peak RSS at sixteen requests is
+20.55 MB versus 59.29 MB; export medians 14,466 versus 16,229 messages/second. This
+is development evidence, not the final performance gate; native local-save
+measurement is explicitly unfinished. All record hashes and integrity checks stay
+enabled. Next: 19 writable message storage.
+
+The workspace runtime briefly disconnected; retries recovered the existing files.
+The user explicitly approved pushing rewrite/rust. Integrated 14–17 were pushed
+successfully; future completed chunks may be pushed under that authorization.
+Main remains unchanged, and 05 remains pending.
