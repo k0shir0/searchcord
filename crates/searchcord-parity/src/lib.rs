@@ -219,6 +219,20 @@ impl Harness {
 
     /// Raw response, including the original Python exception class on failure.
     pub fn exchange(&mut self, request: Value) -> Value {
+        if self.backend == Backend::Rust && request["op"] == "process_metrics" {
+            let pid = self.viewer.as_ref().expect("native viewer process").id();
+            let status = std::fs::read_to_string(format!("/proc/{pid}/status"))
+                .expect("Linux benchmark process metrics");
+            let peak = status
+                .lines()
+                .find_map(|line| line.strip_prefix("VmHWM:"))
+                .and_then(|s| s.split_whitespace().next())
+                .unwrap()
+                .parse::<u64>()
+                .unwrap()
+                * 1024;
+            return json!({"ok":true,"result":{"peak_rss_bytes":peak}});
+        }
         if self.backend == Backend::Rust && request["op"] == "readonly_execute" {
             let archive = searchcord_archive::Archive::new(self.archive(), true);
             let session = archive.connect().expect("native readonly session");
@@ -267,13 +281,12 @@ impl Harness {
             let binary = std::env::var_os("SEARCHCORD_PARITY_RUST_VIEWER")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| {
-                    std::env::current_exe()
-                        .unwrap()
-                        .parent()
-                        .unwrap()
-                        .parent()
-                        .unwrap()
-                        .join(format!("searchcord-search{}", std::env::consts::EXE_SUFFIX))
+                    let executable = std::env::current_exe().unwrap();
+                    let mut directory = executable.parent().unwrap();
+                    if directory.file_name().is_some_and(|name| name == "deps") {
+                        directory = directory.parent().unwrap();
+                    }
+                    directory.join(format!("searchcord-search{}", std::env::consts::EXE_SUFFIX))
                 });
             let mut cmd = Command::new(binary);
             cmd.arg("--db")

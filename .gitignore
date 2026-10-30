@@ -128,3 +128,8 @@
 !/crates/searchcord-viewer/src/*.rs
 !/crates/searchcord-viewer/tests/
 !/crates/searchcord-viewer/tests/*.rs
+
+!/deploy/search/Dockerfile.native
+!/deploy/search/Dockerfile.native.dockerignore
+!/deploy/search/README.native.md
+!/deploy/search/THIRD_PARTY_NOTICES.md

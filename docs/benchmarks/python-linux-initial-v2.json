@@ -1,0 +1,112 @@
+{
+  "backend": "python",
+  "captured_unix_seconds": 1793402957,
+  "export_timing": "reference function after interpreter imports",
+  "exports": [
+    {
+      "messages_per_second": 16229.260292935585,
+      "peak_rss_bytes": 31232000,
+      "python": "3.12.14",
+      "run": 0,
+      "seconds": 6.161710280999614,
+      "snapshot_bytes": 9007104
+    },
+    {
+      "messages_per_second": 16105.135382851693,
+      "peak_rss_bytes": 31064064,
+      "python": "3.12.14",
+      "run": 1,
+      "seconds": 6.209199589000491,
+      "snapshot_bytes": 9007104
+    },
+    {
+      "messages_per_second": 16393.02283794892,
+      "peak_rss_bytes": 31068160,
+      "python": "3.12.14",
+      "run": 2,
+      "seconds": 6.100156205999156,
+      "snapshot_bytes": 9007104
+    }
+  ],
+  "fixture": {
+    "block_rows": 128,
+    "compression_level": 9,
+    "messages": 100000,
+    "recipe": "v1-public-id-backfill",
+    "records_sha256": "567e0d5a4443edd5f48615695d2034cee49f2923b633e18f8b5b25b50d1e6c58",
+    "source_bytes": 29995008
+  },
+  "machine": {
+    "arch": "x86_64",
+    "cpu": "model name\t: AMD EPYC 9V74 80-Core Processor",
+    "os": "linux",
+    "parallelism": 2
+  },
+  "qualification": false,
+  "reference_sha": "481f62c6d1e111ca6f5771554a0e89ecd42b088e",
+  "saves": [
+    {
+      "messages_per_second": 23054.150825161807,
+      "peak_rss_bytes": 55992320,
+      "run": 0,
+      "seconds": 0.43376136799997767
+    },
+    {
+      "messages_per_second": 21296.111546573124,
+      "peak_rss_bytes": 55996416,
+      "run": 1,
+      "seconds": 0.4695692910008802
+    },
+    {
+      "messages_per_second": 22196.006715976975,
+      "peak_rss_bytes": 56143872,
+      "run": 2,
+      "seconds": 0.45053149100021983
+    }
+  ],
+  "schema": 1,
+  "searches": [
+    {
+      "concurrency": 1,
+      "format": "standard",
+      "fresh_ms": 17.741689,
+      "peak_rss_bytes": 48705536,
+      "warm_p50_ms": 43.990343,
+      "warm_p95_ms": 44.076632,
+      "warm_requests": 8,
+      "warm_seconds": 0.311395102
+    },
+    {
+      "concurrency": 16,
+      "format": "standard",
+      "fresh_ms": 24.923519000000002,
+      "peak_rss_bytes": 61673472,
+      "warm_p50_ms": 52.678219999999996,
+      "warm_p95_ms": 85.447594,
+      "warm_requests": 128,
+      "warm_seconds": 0.50785729
+    },
+    {
+      "concurrency": 1,
+      "format": "packed",
+      "fresh_ms": 13.403083,
+      "peak_rss_bytes": 48947200,
+      "warm_p50_ms": 44.096852999999996,
+      "warm_p95_ms": 46.789796,
+      "warm_requests": 8,
+      "warm_seconds": 0.318368048
+    },
+    {
+      "concurrency": 16,
+      "format": "packed",
+      "fresh_ms": 12.601017,
+      "peak_rss_bytes": 59289600,
+      "warm_p50_ms": 52.691081000000004,
+      "warm_p95_ms": 99.989409,
+      "warm_requests": 128,
+      "warm_seconds": 0.512308035
+    }
+  ],
+  "toolchain": "1.90.0",
+  "unimplemented_measurements": []
+}

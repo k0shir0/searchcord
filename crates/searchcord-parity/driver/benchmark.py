@@ -11,13 +11,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 
 def offline(event, args):
+    if event == 'subprocess.Popen' and sys.argv[1] == 'native-snapshot' and args[0] == sys.argv[4]:
+        return
     if event in {'socket.connect', 'socket.getaddrinfo', 'subprocess.Popen', 'os.system'}:
         raise RuntimeError('benchmark workers are offline')
 
 
 sys.addaudithook(offline)
 operation, source, destination = sys.argv[1:4]
-if operation == 'snapshot':
+if operation == 'native-snapshot':
+    import subprocess
+    report = str(destination) + '.report.json'
+    started = time.perf_counter()
+    completed = subprocess.run([sys.argv[4], source, destination, '--report', report], capture_output=True)
+    if completed.returncode:
+        raise RuntimeError(completed.stderr.decode('utf-8'))
+    result = json.loads(Path(report).read_text(encoding='utf-8'))
+elif operation == 'snapshot':
     from search_snapshot import build_snapshot
     started = time.perf_counter()
     result = build_snapshot(source, destination)
@@ -36,5 +46,5 @@ elif operation == 'save':
 else:
     raise ValueError('unsupported benchmark operation')
 print(json.dumps({'seconds': time.perf_counter() - started, 'result': result,
-    'peak_rss_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024),
+    'peak_rss_bytes': resource.getrusage(resource.RUSAGE_CHILDREN if operation == 'native-snapshot' else resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024),
     'python': sys.version.split()[0]}))
