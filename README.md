@@ -100,8 +100,9 @@ To prepare a standalone folder containing only the search service and its assets
 python deploy/search/package.py dist/searchcord-search
 ```
 
-Copy that folder and your chosen database to the server. Follow the included
-[deployment guide](deploy/search/README.md) for setup and container commands.
+Copy that folder and your chosen database to the server. From that folder,
+install `deploy/search/requirements.txt` and run the viewer with the
+`python search_app.py --db /path/to/archive.db` command above.
 The viewer needs a Python server; a static host cannot run it on its own.
 
 ## Your data

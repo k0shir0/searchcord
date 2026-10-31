@@ -1,8 +1,8 @@
 # Production allowlist: everything else stays local and ignored.
-# Add new runtime, deployment, or operating-documentation files explicitly.
+# Add new runtime or deployment files explicitly.
 *
 
-# Repository metadata and operating documentation
+# Repository metadata
 !/.gitattributes
 !/.gitignore
 !/LICENSE
@@ -50,7 +50,6 @@
 !/deploy/search/
 !/deploy/search/Dockerfile
 !/deploy/search/Dockerfile.dockerignore
-!/deploy/search/README.md
 !/deploy/search/package.py
 !/deploy/search/requirements.txt
 
@@ -68,6 +67,3 @@
 !/deploy/search.env.example
 
 # Production operating documentation
-!/docs/
-!/docs/profiles.md
-!/docs/search-display.md
