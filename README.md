@@ -124,8 +124,9 @@ To prepare a standalone folder containing only the search service and its assets
 python deploy/search/package.py dist/searchcord-search
 ```
 
-Copy that folder and your chosen database to the server. Follow the included
-[deployment guide](deploy/search/README.md) for setup and container commands.
+Copy that folder and your chosen database to the server. From that folder,
+install `deploy/search/requirements.txt` and run the viewer with the
+`python search_app.py --db /path/to/archive.db` command above.
 The viewer needs a Python server; a static host cannot run it on its own.
 
 ## Your data
@@ -159,18 +160,6 @@ compression fails) and contain the same private tokens and messages as the
 source archive. Migration checks SQLite and full-text integrity. Fields already
 discarded by an older migration can only be recovered from an original archive
 or backup. Test upgrades on a separate copy first.
-
-## Documentation
-
-- [Saved profiles and backfill](docs/profiles.md)
-- [Read-only search behavior](docs/search-display.md)
-- [Standalone deployment](deploy/search/README.md)
-
-The production branch contains the application, required assets, deployment
-files, licenses and operating documentation. `.gitignore` explicitly lists the
-allowed files. Keep local checks, benchmarks, review reports, experiments and
-generated output ignored; add new production files to the allowlist before
-committing them.
 
 ## Release timeline
 
