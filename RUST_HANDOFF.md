@@ -10,7 +10,8 @@ See [the migration plan](SEARCHCORD_RUST_MIGRATION_PLAN.md) and
 Repository: https://github.com/k0shir0/searchcord
 Published integration branch: https://github.com/k0shir0/searchcord/tree/rewrite/rust
 Chunks 01–04 and 06–22 are complete on the integration branch. This finishes the
-authorized 17-chunk batch. Next implementation chunk: 23. The full collector and
+authorized 17-chunk batch. [Final implementation CI](https://github.com/k0shir0/searchcord/actions/runs/41147270510) passed on
+Windows, Linux and macOS at `61c8d23`. Next implementation chunk: 23. The full collector and
 final performance/qualification gates remain later work.
 Chunk 05 has not been implemented in this branch; do not assume it is present.
 
@@ -518,7 +519,8 @@ formatting and Clippy pass. Native viewer contracts/browser remain in CI.
 Cross-platform qualification through 21: run 41146012110 succeeded on Windows,
 Linux and macOS at integration `056cd5a`. In particular the native Windows DPAPI
 contract passed against Python under the current user without prompts. Final 22
-CI will run on its integration push; retain that evidence before final completion.
+CI passed on Windows, Linux and macOS at `61c8d23`; run 41147270510 records
+that final evidence.
 Main remains `481f62c6d1e111ca6f5771554a0e89ecd42b088e`; 05 is still pending by
 explicit user instruction. The latest authorized scope is complete through 22;
 start 23 only on a new request.
@@ -547,10 +549,29 @@ unambiguous without a self-referential commit hash in this document.
 | 19 | `fa1fb16` | `5edbdcd` |
 | 20 | `f8eb04f` | `c0f37db` |
 | 21 | `7e24652` | `056cd5a` |
-| 22 | `rewrite/rust-22-startup-migrations` HEAD | Final chunk-22 integration merge |
+| 22 | `04d0c71`, correction `63228a3` | `de854ab`, correction `61c8d23` |
 
 Final 22 Windows CI found checkout CRLF in the bundled schema: section splitting
 using LF-only delimiters accidentally included the read view before converting
 legacy messages. Native schema section loading now normalizes checkout line
 endings before choosing DDL phases. Existing migration assertions stay unchanged
-and must pass again on Windows, Linux and macOS before batch completion.
+and subsequently passed on Windows, Linux and macOS. The seven migration cases
+also passed locally with the bundled SQL deliberately converted to CRLF.
+
+## Final qualification — 2026-10-31
+
+The requested 06–22 batch is complete and published on rewrite/rust.
+Implementation commit `61c8d23fa04691100e40d31be1aec02802063155` passed
+[CI run 41147270510](https://github.com/k0shir0/searchcord/actions/runs/41147270510) on Windows, Linux and macOS. Each
+platform passed 97 Rust tests, nine explicitly native viewer HTTP contracts, the
+native viewer WebDriver workflow, all 36 original Python cases, 25 Node cases,
+JavaScript syntax, Rust formatting and Clippy. Linux also built the static native
+viewer package and non-root scratch image. Windows passed actual DPAPI
+interchange and all seven startup migration/recovery contracts.
+
+The documentation-only qualification commit records this evidence without
+rerunning unchanged implementation checks. Both local and remote main remain
+`481f62c6d1e111ca6f5771554a0e89ecd42b088e`. Frontend assets and original collector
+behavior remain unchanged. Chunk 05 remains pending, and 23 is the next numbered
+implementation chunk for a later request. The initial benchmark reports remain
+development evidence; final performance qualification is still chunk 36.
