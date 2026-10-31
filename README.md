@@ -104,7 +104,6 @@ invite queues and live monitors recover paused. Select their original saved
 account and resume them when ready; no upstream action restarts automatically.
 Request pacing and mandatory breaks are shared across scrape jobs and cannot
 be bypassed by pause/resume or starting another job.
-See [collection controls and limits](docs/collection.md) for the full behavior.
 
 Search results load one page at a time. Collection retries temporary failures
 and keeps saved messages when stopped. Re-fetched IDs update searchable content
@@ -129,10 +128,6 @@ Open <http://127.0.0.1:8001>. You can also use
 Windows users can pass the same arguments to `start-search.bat`.
 Without either option, the reader opens `data/searchcord.db`.
 
-Cursor reads in both frontends use `archive_reader.Archive`, independently of
-web setup or collector startup. Standard archives and packed snapshots share
-the same search/profile read interface and public message-ID cursors.
-
 For a smaller file to deploy, export to a **new** destination:
 
 ```bash
@@ -151,10 +146,9 @@ To prepare a standalone folder containing only the search service and its assets
 python deploy/search/package.py dist/searchcord-search
 ```
 
-Copy that folder and your chosen database to the server. Follow the included
-[deployment guide](deploy/search/README.md) to run the search-only viewer directly
-with Python or build and run its Docker container. Both options serve existing
-archives; scraping and archive administration use the Python collector (`app.py`).
+Copy that folder and your chosen database to the server. From that folder,
+install `deploy/search/requirements.txt` and run the viewer with the
+`python search_app.py --db /path/to/archive.db` command above.
 The viewer needs a Python server; a static host cannot run it on its own.
 
 ## Your data
@@ -194,34 +188,6 @@ and retain private messages; older copies may contain plaintext tokens.
 Migration checks SQLite and full-text integrity. Fields already
 discarded by an older migration can only be recovered from an original archive
 or backup. Test upgrades on a separate copy first.
-
-## Documentation
-
-- [Collection, invites, scanning and pause/resume](docs/collection.md)
-- [Saved profiles and backfill](docs/profiles.md)
-- [Read-only search behavior](docs/search-display.md)
-- [Standalone deployment](deploy/search/README.md)
-- [Archive reliability, credentials and remaining limits](docs/archive-reliability.md)
-
-The production branch contains the application, required assets, deployment
-files, licenses, operating documentation and maintained PR tests. `.gitignore`
-explicitly lists the allowed files. Keep scratch checks, benchmarks, review
-reports, experiments and generated output ignored.
-
-## Tests
-
-Every pull request runs the maintained Python regressions, browser queue tests
-and JavaScript syntax checks on Windows. Run the same checks locally after
-installing `requirements.txt` and Node.js 22:
-
-```powershell
-python -m unittest discover -s tests -t . -v
-node --test tests/test_collection_queue.mjs
-Get-ChildItem static -Recurse -Filter *.js | ForEach-Object { node --check $_.FullName; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
-```
-
-The tests use disposable archives and mocked Discord requests. They need no
-saved accounts, live Discord connection or personal archive.
 
 ## Release timeline
 

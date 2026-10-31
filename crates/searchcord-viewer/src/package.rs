@@ -50,10 +50,6 @@ pub fn build(destination: &Path, viewer: &Path) -> io::Result<PathBuf> {
             include_bytes!("../../../deploy/search/THIRD_PARTY_NOTICES.md").as_slice(),
         ),
         (
-            "README.md",
-            include_bytes!("../../../deploy/search/README.native.md").as_slice(),
-        ),
-        (
             "Dockerfile",
             include_bytes!("../../../deploy/search/Dockerfile.native").as_slice(),
         ),

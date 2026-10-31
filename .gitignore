@@ -1,15 +1,14 @@
 # Production allowlist: everything else stays local and ignored.
-# Add new runtime, deployment, or operating-documentation files explicitly.
+# Add new runtime or deployment files explicitly.
 # Maintained PR checks are also tracked; scratch checks remain ignored.
 *
 
-# Repository metadata and operating documentation
+# Repository metadata
 !/.gitattributes
 !/.gitignore
 !/.dockerignore
 !/LICENSE
 !/README.md
-!/GLOSSARY.md
 !/.github/
 !/.github/workflows/
 !/.github/workflows/pr-tests.yml
@@ -53,11 +52,6 @@
 !/tests/test_durable_scrape.py
 !/tests/test_scrape_pacing.py
 !/tests/test_search_display.py
-!/docs/
-!/docs/profiles.md
-!/docs/search-display.md
-!/docs/collection.md
-!/docs/archive-reliability.md
 
 # Application, archive tools, dependencies, and launchers
 !/app.py
@@ -102,7 +96,6 @@
 !/static/search/search.css
 !/static/search/search.js
 !/static/brand/
-!/static/brand/README.md
 !/static/brand/searchcord-logo-dark.png
 !/static/brand/searchcord-logo.png
 !/static/vendor/
@@ -114,7 +107,6 @@
 !/deploy/search/
 !/deploy/search/Dockerfile
 !/deploy/search/Dockerfile.dockerignore
-!/deploy/search/README.md
 !/deploy/search/package.py
 !/deploy/search/requirements.txt
 
@@ -127,7 +119,6 @@
 
 !/deploy/search/Dockerfile.native
 !/deploy/search/Dockerfile.native.dockerignore
-!/deploy/search/README.native.md
 !/deploy/search/THIRD_PARTY_NOTICES.md
 
 !/crates/searchcord-collector/
