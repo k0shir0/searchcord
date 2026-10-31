@@ -47,5 +47,4 @@ traversable by that identity. Snapshot media is private to its owner by default;
 grant access only to the approved deployment copy, or use the owner's numeric
 container identity. Verify a media response as well as search before deployment.
 
-Initial benchmark evidence is in `docs/rust-benchmarks.md` in the full checkout.
 This read-only milestone does not complete the collector or performance gates.

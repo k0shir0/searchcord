@@ -1048,8 +1048,8 @@ const ROUTE_OWNERS: &[(&str, &str, &str)] = &[
 ];
 
 #[test]
-fn every_collector_route_has_a_behavioral_owner_in_the_ledger() {
-    use std::{collections::BTreeSet, path::Path};
+fn every_collector_route_has_a_behavioral_test_owner() {
+    use std::collections::BTreeSet;
     let mut h = fixture(vec![]);
     let inventory = call(&mut h, json!({"action":"route_inventory"}));
     let mut actual = BTreeSet::new();
@@ -1065,17 +1065,11 @@ fn every_collector_route_has_a_behavioral_owner_in_the_ledger() {
         }
     }
     let mut expected = BTreeSet::new();
-    let ledger =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../PARITY_LEDGER.md"))
-            .unwrap();
     for (methods, path, owner) in ROUTE_OWNERS {
         for method in methods.split(',') {
             expected.insert((path.to_string(), method.to_owned()));
         }
-        assert!(
-            ledger.contains(&format!("| `{methods}` | `{path}` | `{owner}` |")),
-            "missing ledger route: {methods} {path}"
-        );
+        assert!(!owner.is_empty(), "missing test owner: {methods} {path}");
     }
     assert_eq!(actual, expected);
 }

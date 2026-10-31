@@ -14,9 +14,8 @@
 !/.github/workflows/
 !/.github/workflows/pr-tests.yml
 !/.github/workflows/rust-parity.yml
-!/SEARCHCORD_RUST_MIGRATION_PLAN.md
-!/RUST_HANDOFF.md
-!/PARITY_LEDGER.md
+# Research, plans, handoffs, and benchmark evidence stay private unless the
+# repository owner explicitly authorizes their publication.
 !/requirements-parity.txt
 !/Cargo.toml
 !/Cargo.lock
@@ -59,9 +58,6 @@
 !/docs/search-display.md
 !/docs/collection.md
 !/docs/archive-reliability.md
-!/docs/rust-benchmarks.md
-!/docs/benchmarks/
-!/docs/benchmarks/*.json
 
 # Application, archive tools, dependencies, and launchers
 !/app.py

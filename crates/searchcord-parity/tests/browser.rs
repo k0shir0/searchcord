@@ -19,7 +19,7 @@ struct Browser {
 }
 impl Browser {
     fn new() -> Self {
-        let executable=std::env::var_os("SEARCHCORD_WEBDRIVER").expect("Set SEARCHCORD_WEBDRIVER to pinned ChromeDriver; see docs/rust-benchmarks.md. Browser gates never silently skip.");
+        let executable=std::env::var_os("SEARCHCORD_WEBDRIVER").expect("Set SEARCHCORD_WEBDRIVER to ChromeDriver installed by driver/install_webdriver.py. Browser gates never silently skip.");
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
