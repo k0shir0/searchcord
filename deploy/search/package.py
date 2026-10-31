@@ -9,7 +9,7 @@ FILES = (
     'search_app.py', 'archive_reader.py', 'snapshot_codec.py', 'search_snapshot.py',
     'profile_store.py', 'media_store.py', 'cli.py', 'LICENSE',
     'deploy/search/requirements.txt', 'deploy/search/Dockerfile',
-    'deploy/search/Dockerfile.dockerignore', 'deploy/search/README.md',
+    'deploy/search/Dockerfile.dockerignore',
     'static/search/index.html', 'static/search/search.css', 'static/search/search.js',
     'static/search/privacy.html', 'static/search/privacy.css',
     'static/bauhaus.css', 'static/profile-view.css', 'static/profile-view.js',
