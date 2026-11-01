@@ -91,6 +91,15 @@ impl Default for Control {
     }
 }
 impl Control {
+    pub fn is_stopped(&self) -> bool {
+        *self.0.borrow() == Status::Stopped
+    }
+    pub async fn ready(&self) -> Result<()> {
+        running(&mut self.0.subscribe()).await
+    }
+    pub async fn stopped(&self) {
+        until_stopped(&mut self.0.subscribe()).await;
+    }
     pub fn pause(&self) {
         self.update(Status::Paused);
     }
