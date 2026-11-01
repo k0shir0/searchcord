@@ -558,9 +558,21 @@ impl<C: Clock> Scrapes<C> {
                     if job.control.is_stopped() {
                         return Err(error);
                     }
-                    let transient=error.downcast_ref::<reqwest::Error>().is_some_and(|e|!e.is_builder())
-                        || error.downcast_ref::<rusqlite::Error>().is_some_and(|e|matches!(e.sqlite_error_code(),Some(rusqlite::ErrorCode::DatabaseBusy|rusqlite::ErrorCode::DatabaseLocked)));
-                    if !transient { return Err(error); }
+                    let transient = error
+                        .downcast_ref::<reqwest::Error>()
+                        .is_some_and(|e| !e.is_builder())
+                        || error.downcast_ref::<rusqlite::Error>().is_some_and(|e| {
+                            matches!(
+                                e.sqlite_error_code(),
+                                Some(
+                                    rusqlite::ErrorCode::DatabaseBusy
+                                        | rusqlite::ErrorCode::DatabaseLocked
+                                )
+                            )
+                        });
+                    if !transient {
+                        return Err(error);
+                    }
                     (error.to_string(), 0.0)
                 }
             };
