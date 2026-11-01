@@ -605,6 +605,30 @@ async fn backfill_is_stopped_on_startup_exclusive_bounded_and_refreshes_only_sta
 }
 
 #[tokio::test]
+async fn stop_preserves_idle_and_completed_status_when_no_worker_is_active() {
+    let f = Fixture::new(&["30"]).await;
+    let idle = f.profiles.stop().await;
+    assert!(idle.cancelled);
+    assert!(!idle.running);
+    assert_eq!(idle.status, "idle");
+    assert!(f.requests().is_empty());
+    f.profiles.start("synthetic-token", false).await.unwrap();
+    let complete = f.done().await;
+    assert_eq!(complete.status, "Complete.");
+    assert_eq!(complete.saved, 1);
+    let stopped = f.profiles.stop().await;
+    assert!(stopped.cancelled);
+    assert_eq!(stopped.status, complete.status);
+    assert_eq!(
+        (stopped.saved, stopped.failed),
+        (complete.saved, complete.failed)
+    );
+    assert_eq!(stopped.current_user, complete.current_user);
+    assert_eq!(stopped.wait_seconds, complete.wait_seconds);
+    assert_eq!(f.profiles.stop().await.status, "Complete.");
+}
+
+#[tokio::test]
 async fn backfill_stops_on_auth_failure_continues_unavailable_and_joins_immediate_stop() {
     let f = Fixture::new(&["30", "31", "32"]).await;
     f.replies([Reply::json(403, json!({})), Reply::json(401, json!({}))]);

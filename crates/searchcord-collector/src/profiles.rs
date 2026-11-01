@@ -456,6 +456,7 @@ impl<C: Clock> Profiles<C> {
     }
     pub async fn stop(&self) -> BackfillState {
         let mut job = self.job.lock().await;
+        let active = job.task.as_ref().is_some_and(|task| !task.is_finished());
         self.state.lock().unwrap().cancelled = true;
         if let Some(control) = job.control.take() {
             control.stop();
@@ -464,10 +465,12 @@ impl<C: Clock> Profiles<C> {
             let _ = task.await;
         }
         let mut state = self.state.lock().unwrap();
-        state.running = false;
-        state.current_user = None;
-        state.wait_seconds = 0.0;
-        state.status = "Stopped. Saved profiles are kept.".into();
+        if active {
+            state.running = false;
+            state.current_user = None;
+            state.wait_seconds = 0.0;
+            state.status = "Stopped. Saved profiles are kept.".into();
+        }
         state.clone()
     }
     async fn backfill(&self, token: &str, refresh_stale: bool, control: Control) -> Result<()> {
