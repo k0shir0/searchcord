@@ -21,11 +21,55 @@ fn json_response(status: u16, value: Value) -> Response {
 fn error(e: ArchiveError) -> Response {
     json_response(e.status, json!({"detail":e.detail}))
 }
-const JAVASCRIPT: &str = if cfg!(windows) {
-    "application/javascript"
-} else {
-    "text/javascript; charset=utf-8"
-};
+fn javascript_type() -> &'static str {
+    #[cfg(windows)]
+    {
+        // Python's mimetypes uses the registered Content Type when present.
+        // A Windows installation without a .js registration uses the default.
+        static MIME: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+            use windows_sys::Win32::System::Registry::{
+                HKEY_CLASSES_ROOT, RRF_RT_REG_SZ, RegGetValueW,
+            };
+            let key: Vec<u16> = ".js\0".encode_utf16().collect();
+            let value: Vec<u16> = "Content Type\0".encode_utf16().collect();
+            let mut data = [0u16; 256];
+            let mut bytes = std::mem::size_of_val(&data) as u32;
+            // The buffer and size remain valid for this synchronous registry read.
+            let result = unsafe {
+                RegGetValueW(
+                    HKEY_CLASSES_ROOT,
+                    key.as_ptr(),
+                    value.as_ptr(),
+                    RRF_RT_REG_SZ,
+                    std::ptr::null_mut(),
+                    data.as_mut_ptr().cast(),
+                    &mut bytes,
+                )
+            };
+            let mut mime = if result == 0 {
+                let length = data.iter().position(|c| *c == 0).unwrap_or(data.len());
+                String::from_utf16(&data[..length]).unwrap_or_default()
+            } else {
+                String::new()
+            };
+            if mime.is_empty() {
+                mime = "text/javascript".into();
+            }
+            if mime.starts_with("text/") && !mime.to_lowercase().contains("charset=") {
+                mime.push_str("; charset=utf-8");
+            }
+            if axum::http::HeaderValue::from_str(&mime).is_err() {
+                mime = "text/javascript; charset=utf-8".into();
+            }
+            mime
+        });
+        &MIME
+    }
+    #[cfg(not(windows))]
+    {
+        "text/javascript; charset=utf-8"
+    }
+}
 fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
     Some(match path {
         "/" | "/index.html" => (
@@ -38,7 +82,7 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
         ),
         "/search.js" => (
             include_bytes!("../../../static/search/search.js"),
-            JAVASCRIPT,
+            javascript_type(),
         ),
         "/privacy.html" => (
             include_bytes!("../../../static/search/privacy.html"),
@@ -58,7 +102,7 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
         ),
         "/profile-view.js" => (
             include_bytes!("../../../static/profile-view.js"),
-            JAVASCRIPT,
+            javascript_type(),
         ),
         _ => return None,
     })
