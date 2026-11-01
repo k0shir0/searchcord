@@ -366,16 +366,17 @@ async fn retryable_responses_stay_on_same_user_and_stop_interrupts_retry_wait() 
             .collect::<Vec<_>>(),
         ["30", "30"]
     );
-    let info = retried.lock().unwrap();
-    assert_eq!(
-        (
-            info[0].attempt,
-            info[0].wait_seconds,
-            info[0].reason.as_str()
-        ),
-        (1, 2.0, "HTTP 408")
-    );
-    drop(info);
+    {
+        let info = retried.lock().unwrap();
+        assert_eq!(
+            (
+                info[0].attempt,
+                info[0].wait_seconds,
+                info[0].reason.as_str()
+            ),
+            (1, 2.0, "HTTP 408")
+        );
+    }
     for http in [401, 403, 404] {
         f.replies([Reply::json(http, json!({}))]);
         assert_eq!(
