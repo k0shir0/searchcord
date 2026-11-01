@@ -118,6 +118,9 @@ impl Drop for Fixture {
     }
 }
 fn serve(mut stream: TcpStream, state: &State) {
+    // Accepted sockets may inherit the listener's nonblocking mode on Windows
+    // and macOS. This fixture's request parser uses blocking buffered reads.
+    stream.set_nonblocking(false).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(3)))
         .unwrap();
