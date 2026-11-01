@@ -48,7 +48,6 @@ fn standalone_folder_is_fresh_has_only_approved_files_and_runs_without_python() 
         format!("searchcord-search{}", std::env::consts::EXE_SUFFIX),
         "LICENSE".into(),
         "THIRD_PARTY_NOTICES.md".into(),
-        "README.md".into(),
         "Dockerfile".into(),
         ".dockerignore".into(),
         "start-search.bat".into(),

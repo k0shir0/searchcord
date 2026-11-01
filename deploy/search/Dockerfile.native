@@ -3,7 +3,7 @@ FROM scratch
 WORKDIR /app
 COPY --chmod=0555 searchcord-search /app/searchcord-search
 COPY static /app/static
-COPY LICENSE THIRD_PARTY_NOTICES.md README.md /app/
+COPY LICENSE THIRD_PARTY_NOTICES.md /app/
 USER 65534:65534
 EXPOSE 8001
 ENTRYPOINT ["/app/searchcord-search"]

@@ -20,6 +20,8 @@ percent-encoding.workspace = true
 sha2.workspace = true
 chrono.workspace = true
 tower.workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_System_Registry"] }
 [[bin]]
 name = "searchcord-package-search"
 path = "src/package_main.rs"
