@@ -3,7 +3,7 @@ use crate::{
     PageContext, Result,
     discord::{Discord, Request},
     discovery::{HttpError, http_error},
-    pacing::{Clock, Control, Options, retry_after},
+    pacing::{Clock, Control, Options, WaitEvent, retry_after},
     profiles::Profiles,
     writer::Writer,
 };
@@ -132,11 +132,12 @@ struct Job {
     state: Arc<Mutex<Value>>,
     control: Control,
     events: broadcast::Sender<Value>,
-    notice: Mutex<Option<Value>>,
+    notice: std::sync::Mutex<Option<Value>>,
     recovered: AtomicBool,
     suspending: AtomicBool,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     commands: Mutex<()>,
+    on_break: AtomicBool,
 }
 struct Inner<C: Clock> {
     path: PathBuf,
@@ -146,6 +147,7 @@ struct Inner<C: Clock> {
     jobs: Mutex<Vec<Arc<Job>>>,
     closing: AtomicBool,
     accounts: std::sync::Mutex<Option<crate::accounts::Accounts>>,
+    media: std::sync::Mutex<Option<crate::media_collection::MediaCollector>>,
 }
 pub struct Scrapes<C: Clock>(Arc<Inner<C>>);
 impl<C: Clock> Clone for Scrapes<C> {
@@ -168,12 +170,17 @@ impl<C: Clock> Scrapes<C> {
             jobs: Mutex::new(Vec::new()),
             closing: AtomicBool::new(false),
             accounts: std::sync::Mutex::new(None),
+            media: std::sync::Mutex::new(None),
         }));
         owner.recover().await?;
         Ok(owner)
     }
     pub fn with_accounts(self, accounts: crate::accounts::Accounts) -> Self {
         *self.0.accounts.lock().unwrap() = Some(accounts);
+        self
+    }
+    pub fn with_media(self, media: crate::media_collection::MediaCollector) -> Self {
+        *self.0.media.lock().unwrap() = Some(media);
         self
     }
     fn job(id: String, state: Value, recovered: bool) -> Arc<Job> {
@@ -186,11 +193,12 @@ impl<C: Clock> Scrapes<C> {
             state: Arc::new(Mutex::new(state)),
             control,
             events: broadcast::channel(1000).0,
-            notice: Mutex::new(None),
+            notice: std::sync::Mutex::new(None),
             recovered: AtomicBool::new(recovered),
             suspending: AtomicBool::new(false),
             task: Mutex::new(None),
             commands: Mutex::new(()),
+            on_break: AtomicBool::new(false),
         })
     }
     async fn get(&self, id: &str) -> Result<Arc<Job>> {
@@ -252,7 +260,7 @@ impl<C: Clock> Scrapes<C> {
         snapshot["last_event"] = job
             .notice
             .lock()
-            .await
+            .unwrap()
             .clone()
             .unwrap_or_else(|| state["last_event"].clone());
         snapshot
@@ -263,13 +271,16 @@ impl<C: Clock> Scrapes<C> {
     }
     pub async fn snapshot(&self, id: &str) -> Result<Value> {
         let job = self.get(id).await?;
-        Ok(Self::snapshot_job(&job).await)
+        let mut snapshot = Self::snapshot_job(&job).await;
+        snapshot["break_seconds"] = json!(self.0.client.break_seconds());
+        Ok(snapshot)
     }
     pub async fn active(&self) -> Vec<Value> {
         let jobs = self.0.jobs.lock().await.clone();
         let mut result = vec![];
         for job in jobs {
-            let snapshot = Self::snapshot_job(&job).await;
+            let mut snapshot = Self::snapshot_job(&job).await;
+            snapshot["break_seconds"] = json!(self.0.client.break_seconds());
             if snapshot["running"] == true {
                 result.push(snapshot);
             }
@@ -281,7 +292,9 @@ impl<C: Clock> Scrapes<C> {
         let _commands = job.commands.lock().await;
         let state = job.state.lock().await;
         let events = job.events.subscribe();
-        Ok((Self::snapshot_locked(&job, &state).await, events))
+        let mut snapshot = Self::snapshot_locked(&job, &state).await;
+        snapshot["break_seconds"] = json!(self.0.client.break_seconds());
+        Ok((snapshot, events))
     }
     async fn transition(&self, job: Arc<Job>, event: Option<Value>, changes: Value) -> Result<()> {
         let writer = self.0.writer.clone();
@@ -298,16 +311,75 @@ impl<C: Clock> Scrapes<C> {
                 .await?;
             *state = next;
             if let Some(event) = event {
-                *job.notice.lock().await = None;
+                *job.notice.lock().unwrap() = None;
                 let _ = job.events.send(event);
             }
             Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
         })
         .await?
     }
-    async fn report(job: &Job, event: Value) {
-        *job.notice.lock().await = Some(event.clone());
+    fn report(job: &Job, event: Value) {
+        *job.notice.lock().unwrap() = Some(event.clone());
         let _ = job.events.send(event);
+    }
+    fn options(&self, job: Arc<Job>) -> Options {
+        let owner = self.clone();
+        let control = job.control.clone();
+        Options {
+            scrape: true,
+            control,
+            on_wait: Some(Arc::new(move |event| match event {
+                WaitEvent::Paused => {
+                    let owner = owner.clone();
+                    let job = job.clone();
+                    tokio::spawn(async move {
+                        let mut state = job.state.lock().await;
+                        if !job.control.is_paused()
+                            || state["pause_requested"] != true
+                            || state["paused"] == true
+                            || state["running"] != true
+                        {
+                            return;
+                        }
+                        let event = json!({"type":"paused"});
+                        let next = project(
+                            &state,
+                            Some(&event),
+                            &json!({"paused":true,"pause_requested":true}),
+                        );
+                        let saved = next.clone();
+                        let id = job.id.clone();
+                        if let Err(error) = owner
+                            .0
+                            .writer
+                            .write(move |store| {
+                                save_job(store.connection(), &id, "scrape", &saved)?;
+                                Ok(Value::Null)
+                            })
+                            .await
+                        {
+                            eprintln!("Could not pause scrape {}: {error}", job.id);
+                            return;
+                        }
+                        *state = next;
+                        *job.notice.lock().unwrap() = None;
+                        let _ = job.events.send(event);
+                    });
+                }
+                WaitEvent::ScrapeBreak(seconds) => {
+                    if !job.on_break.swap(true, Ordering::AcqRel) {
+                        Self::report(&job, json!({"type":"scrape_break","wait_seconds":seconds}));
+                    }
+                }
+                WaitEvent::BreakFinished => {
+                    if job.on_break.swap(false, Ordering::AcqRel) {
+                        Self::report(&job, json!({"type":"scrape_break_end"}));
+                    }
+                }
+                WaitEvent::Waiting(_) => {}
+            })),
+            ..Options::default()
+        }
     }
     pub async fn start(
         &self,
@@ -410,7 +482,8 @@ impl<C: Clock> Scrapes<C> {
         drop(state);
         self.transition(
             job.clone(),
-            was_paused.then(|| json!({"type":"resumed","break_seconds":0})),
+            was_paused
+                .then(|| json!({"type":"resumed","break_seconds":self.0.client.break_seconds()})),
             json!({"pause_requested":false,"paused":false}),
         )
         .await?;
@@ -493,8 +566,21 @@ impl<C: Clock> Scrapes<C> {
         }
         job.control.ready().await
     }
-    async fn wait(job: &Job, seconds: f64) -> Result<()> {
-        tokio::select! { _=job.control.stopped()=>Err("Scrape stopped".into()),_=tokio::time::sleep(std::time::Duration::from_secs_f64(seconds.max(0.0)))=>Ok(())}
+    async fn wait(&self, job: Arc<Job>, seconds: f64, pause: bool) -> Result<()> {
+        let mut remaining = seconds.max(0.0);
+        while remaining > 0.0 {
+            let before = tokio::time::Instant::now();
+            if pause {
+                self.checkpoint(job.clone()).await?;
+            }
+            let sleep = (remaining - before.elapsed().as_secs_f64()).clamp(0.0, 0.1);
+            if sleep == 0.0 {
+                return Ok(());
+            }
+            tokio::select! {_=job.control.stopped()=>return Err("Scrape stopped".into()),_=tokio::time::sleep(std::time::Duration::from_secs_f64(sleep))=>{}}
+            remaining -= before.elapsed().as_secs_f64();
+        }
+        Ok(())
     }
     async fn fetch(
         &self,
@@ -512,20 +598,16 @@ impl<C: Clock> Scrapes<C> {
             let result = self
                 .0
                 .client
-                .request(
-                    request,
-                    Options {
-                        scrape: true,
-                        control: job.control.clone(),
-                        ..Options::default()
-                    },
-                )
+                .request(request, self.options(job.clone()))
                 .await;
             let (reason, delay) = match result {
                 Ok(response) if response.status == 200 => match response.json() {
                     Ok(Value::Array(messages)) => {
                         if attempts > 0 {
-                            Self::report(&job,json!({"type":"retry_resumed","channel_id":channel,"stage":"fetch","attempts":attempts})).await;
+                            Self::report(
+                                &job,
+                                json!({"type":"retry_resumed","channel_id":channel,"stage":"fetch","attempts":attempts}),
+                            );
                         }
                         return Ok(messages);
                     }
@@ -578,8 +660,11 @@ impl<C: Clock> Scrapes<C> {
             };
             attempts += 1;
             let delay = delay.max((2f64.powi(attempts.min(10) as i32)).min(60.0));
-            Self::report(&job,json!({"type":"retry_wait","channel_id":channel,"stage":"fetch","attempt":attempts,"wait_seconds":delay,"reason":reason})).await;
-            Self::wait(&job, delay).await?;
+            Self::report(
+                &job,
+                json!({"type":"retry_wait","channel_id":channel,"stage":"fetch","attempt":attempts,"wait_seconds":delay,"reason":reason}),
+            );
+            self.wait(job.clone(), delay, true).await?;
         }
     }
     async fn channel_state(&self, job: Arc<Job>, channel: &Value) -> Result<()> {
@@ -610,7 +695,7 @@ impl<C: Clock> Scrapes<C> {
                 else {let pending=(!history&&more).then(||(old["channel_state"]["anchor"].as_str(),next["before"].as_str()));let context=PageContext {channel_id:cid,channel_name:channel["name"].as_str().unwrap_or(""),guild_id:channel["guild_id"].as_str(),guild_name:channel["guild_name"].as_str().unwrap_or(""),history_page:history,pending,clear_pending:!history&&!more,history_complete:history&&!more};store.save_page_with_hook(&messages,&context,checkpoint)?;}
                 Ok(committed)
             }).await?;
-            *state=saved;*job.notice.lock().await=None;let _=job.events.send(state["last_event"].clone());Ok::<_,Box<dyn std::error::Error+Send+Sync>>(())
+            *state=saved;*job.notice.lock().unwrap()=None;let _=job.events.send(state["last_event"].clone());Ok::<_,Box<dyn std::error::Error+Send+Sync>>(())
         }).await?
     }
     async fn profiles(&self, job: Arc<Job>, channel: &Value, token: &str) -> Result<()> {
@@ -633,12 +718,8 @@ impl<C: Clock> Scrapes<C> {
                 .collect_missing(
                     uid,
                     token,
-                    Options {
-                        scrape: true,
-                        control: job.control.clone(),
-                        ..Options::default()
-                    },
-                    None,
+                    self.options(job.clone()),
+                    {let progress_job=job.clone();let cid=channel["id"].clone();Some(Arc::new(move|info:crate::profiles::RetryInfo|{Self::report(&progress_job,json!({"type":"profile_retry","channel_id":cid,"user_id":info.user_id,"reason":info.reason,"attempt":info.attempt,"wait_seconds":info.wait_seconds}));}))},
                 )
                 .await;
             let saved = match result {
@@ -661,7 +742,10 @@ impl<C: Clock> Scrapes<C> {
                         .await?;
                         return Ok(());
                     }
-                    Self::report(&job,json!({"type":"profile_warning","message":format!("Profile HTTP {status}")})).await;
+                    Self::report(
+                        &job,
+                        json!({"type":"profile_warning","message":format!("Profile HTTP {status}")}),
+                    );
                     false
                 }
             };
@@ -783,11 +867,22 @@ impl<C: Clock> Scrapes<C> {
                     {
                         attempts += 1;
                         let delay = 2f64.powi(attempts.min(10) as i32).min(60.0);
-                        Self::report(&job,json!({"type":"retry_wait","channel_id":channel["id"],"stage":"save","attempt":attempts,"wait_seconds":delay,"reason":"database busy"})).await;
-                        Self::wait(&job, delay).await?;
+                        Self::report(
+                            &job,
+                            json!({"type":"retry_wait","channel_id":channel["id"],"stage":"save","attempt":attempts,"wait_seconds":delay,"reason":"database busy"}),
+                        );
+                        self.wait(job.clone(), delay, false).await?;
                     }
                     Err(e) => return Err(e),
                 }
+            }
+            let media = self.0.media.lock().unwrap().clone();
+            if !fresh.is_empty()
+                && let Some(media) = media
+            {
+                let _ = media
+                    .archive_message_media(&fresh, Some(job.control.clone()))
+                    .await;
             }
         }
     }

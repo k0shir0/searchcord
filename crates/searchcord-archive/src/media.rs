@@ -102,7 +102,17 @@ pub fn directory(path: &Path) -> PathBuf {
     resolved.parent().unwrap_or(Path::new(".")).join("media")
 }
 fn symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path).is_ok_and(|s| s.file_type().is_symlink())
+    fs::symlink_metadata(path).is_ok_and(|s| {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            s.file_attributes() & 0x400 != 0
+        }
+        #[cfg(not(windows))]
+        {
+            s.file_type().is_symlink()
+        }
+    })
 }
 fn file_valid(directory: &Path, key: &str, data: &Value, verify: bool) -> std::io::Result<bool> {
     let binary = directory.join(format!("{key}.bin"));
