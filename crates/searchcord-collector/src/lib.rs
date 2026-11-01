@@ -8,5 +8,5 @@ pub mod discovery;
 mod dpapi;
 pub mod migrations;
 pub mod pacing;
-pub mod recovery;
 pub mod profiles;
+pub mod recovery;
