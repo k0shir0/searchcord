@@ -1,8 +1,24 @@
 use searchcord_archive::{Archive, SearchOptions};
 use searchcord_parity::performance;
 use searchcord_snapshot::build_database;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::fs;
+
+#[test]
+fn short_term_tokens_keep_ascii_fold_unicode_nul_and_sorted_block_identity() {
+    let body = vec![
+        vec![json!(1), json!("AaA\0x")],
+        vec![json!(2), json!("é😀x")],
+    ];
+    assert_eq!(
+        searchcord_snapshot::short_terms(&body),
+        "p000061000061 p0000e901f600 p01f600000078 u000061 u000078 u0000e9 u01f600"
+    );
+    assert_eq!(
+        searchcord_snapshot::short_terms(&[vec![json!(3), Value::Null]]),
+        ""
+    );
+}
 
 #[test]
 fn native_exports_are_python_readable_with_exact_records_hashes_metadata_and_blocks() {

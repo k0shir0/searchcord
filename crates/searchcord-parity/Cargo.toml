@@ -14,6 +14,7 @@ serde_json.workspace = true
 tempfile.workspace = true
 sha2.workspace = true
 searchcord-archive = { path = "../searchcord-archive" }
+searchcord-collector = { path = "../searchcord-collector" }
 
 [dev-dependencies]
 tower.workspace = true
@@ -21,4 +22,3 @@ tokio = { workspace = true, features = ["test-util"] }
 axum.workspace = true
 flate2.workspace = true
 searchcord-snapshot = { path = "../searchcord-snapshot" }
-searchcord-collector = { path = "../searchcord-collector" }
