@@ -73,17 +73,23 @@ fn standalone_folder_is_fresh_has_only_approved_files_and_runs_without_python() 
             .spawn()
             .unwrap(),
     );
-    let mut line = String::new();
-    BufReader::new(child.0.stdout.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
-    let origin = line.trim().strip_prefix("Searchcord: ").unwrap();
+    let mut stdout = BufReader::new(child.0.stdout.take().unwrap());
+    let origin = loop {
+        let mut line = String::new();
+        assert!(
+            stdout.read_line(&mut line).unwrap() > 0,
+            "native package exited before readiness"
+        );
+        if let Some(origin) = line.trim().strip_prefix("Searchcord: ") {
+            break origin.to_owned();
+        }
+    };
     let client = reqwest::blocking::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    let index = client.get(origin).send().unwrap();
+    let index = client.get(&origin).send().unwrap();
     assert_eq!(index.status().as_u16(), 200);
     assert!(index.text().unwrap().contains("<title>searchcord</title>"));
     assert_eq!(

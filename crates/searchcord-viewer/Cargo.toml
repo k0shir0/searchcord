@@ -21,7 +21,9 @@ sha2.workspace = true
 chrono.workspace = true
 tower.workspace = true
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Win32_System_Registry"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_System_Registry", "Win32_System_Console"] }
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.191"
 [[bin]]
 name = "searchcord-package-search"
 path = "src/package_main.rs"

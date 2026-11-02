@@ -23,43 +23,31 @@
 
 ## Get started
 
-Use **Python 3.12 or newer** with SQLite's FTS5 trigram support.
+Searchcord runs as a native application on Windows, Linux and macOS.
 Collection requires a Discord token. Searching an existing archive does not.
 Read the [use warning in the license](LICENSE) before collecting data.
+
+Build from source with Rust and a C compiler. Cargo uses the pinned toolchain
+and dependency lockfile, including SQLite with FTS5 trigram support:
 
 ```bash
 git clone https://github.com/k0shir0/searchcord.git
 cd searchcord
-python -m venv .venv
+cargo build --release --locked --workspace
+./target/release/searchcord --data-dir "$PWD/data"
 ```
 
-Activate the environment:
-
-```bash
-# Linux / macOS
-source .venv/bin/activate
-```
-
-```bat
-:: Windows Command Prompt
-.venv\Scripts\activate
-```
-
-Install and start:
-
-```bash
-python -m pip install -r requirements.txt
-python app.py
-```
-
-Open <http://127.0.0.1:8000>. Windows users can also run `start.bat`.
+Open <http://127.0.0.1:8000>. On Windows, run `start.bat` after building.
 A first upgrade of a large archive may take several minutes. The browser opens
 when the database is ready.
 
-Windows launchers discover `.venv`, then `venv`, then a working `py -3`, then
-`python` on PATH. They run from their own repository directory, including paths
-with spaces. Install dependencies into the selected interpreter with
-`run-python.bat -m pip install -r requirements.txt`.
+The native application does not require Python. Windows launchers use the binary
+beside the launcher, then `target\release`, and support paths with spaces. They
+keep the archive in the launcher's `data` folder unless `SEARCHCORD_DATA_DIR`
+is set. Direct binary launches resolve relative archive paths beside the binary;
+use an absolute `--data-dir` or `--db` to select an existing archive explicitly.
+The collector supports `SEARCHCORD_HOST`, `SEARCHCORD_PORT` and
+`SEARCHCORD_NO_BROWSER=1`, or `--host`, `--port` and `--no-browser`.
 
 Both startup commands show a white terminal banner with large mint Searchcord
 lettering. Wider windows use a larger seven-row block font with clearer letter
@@ -120,7 +108,7 @@ returns to the beginning. Queries accept up to 200 characters.
 Run the separate frontend in `static/search` with an existing SearchCord archive:
 
 ```bash
-python search_app.py --db /path/to/archive.db
+./target/release/searchcord-search --db /path/to/archive.db
 ```
 
 Open <http://127.0.0.1:8001>. You can also use
@@ -131,8 +119,8 @@ Without either option, the reader opens `data/searchcord.db`.
 For a smaller file to deploy, export to a **new** destination:
 
 ```bash
-python search_snapshot.py data/searchcord.db packed/searchcord.db
-python search_app.py --data-dir packed --snapshot
+./target/release/searchcord-snapshot "$PWD/data/searchcord.db" "$PWD/packed/searchcord.db"
+./target/release/searchcord-search --data-dir "$PWD/packed" --snapshot
 ```
 
 The export preserves message text, names, timestamps, image links and saved
@@ -143,17 +131,51 @@ Use the original database for collection.
 To prepare a standalone folder containing only the search service and its assets:
 
 ```bash
-python deploy/search/package.py dist/searchcord-search
+./target/release/searchcord-package-search dist/searchcord-search
 ```
 
-Copy that folder and your chosen database to the server. From that folder,
-install `deploy/search/requirements.txt` and run the viewer with the
-`python search_app.py --db /path/to/archive.db` command above.
-The viewer needs a Python server; a static host cannot run it on its own.
+Copy that folder and your chosen database to a server running the same operating
+system and architecture. Run `./searchcord-search --db /path/to/archive.db` there.
+The folder contains the native viewer, approved assets, licenses and a Dockerfile.
+It contains no collector, Python runtime, credentials or archive. A static host
+cannot run the service on its own.
+
+For the included non-root Linux image, first build a static Linux viewer and
+package it on Linux:
+
+```bash
+RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --locked --target x86_64-unknown-linux-gnu -p searchcord-viewer
+./target/x86_64-unknown-linux-gnu/release/searchcord-package-search dist/searchcord-search
+docker build -t searchcord-search dist/searchcord-search
+docker run --rm -p 8001:8001 -v /absolute/archive-folder:/app/data:ro searchcord-search
+```
+
+The mounted folder must contain `searchcord.db`. Use `--snapshot` only for an
+offline copy with no active WAL. Omit it when reading an archive being collected.
+
+## Upgrade and rollback
+
+Stop the previous collector before starting the native application. Keep a copy
+of the archive folder, including `media`, and the separate credential vault and
+portable key before upgrading. Windows DPAPI vaults remain tied to the same user.
+Point the native collector at the original standard archive. Collection schema
+v10, read schemas v9/v10, packed schema v101 and saved job checkpoints are retained.
+Packed snapshots remain read-only and must not replace the collection archive.
+
+Recovered scrapes, monitors and invite queues stay paused. Select the original
+account before resuming. Interrupted invite joins remain uncertain; check Discord
+before retrying them. DM cleanup does not restart automatically.
+
+To roll back, stop the native collector, restore the saved archive and vault
+copies, and run the previous application from a separate folder. The Python
+baseline is available at revision `481f62c6d1e111ca6f5771554a0e89ecd42b088e`;
+it requires Python 3.12 and its `requirements.txt`. Never run two collectors on
+the same database. An older-schema upgrade also creates a verified recovery
+backup beside the archive; retain it until the upgraded data has been checked.
 
 ## Your data
 
-- The collector stores messages, profiles and saved tokens in `data/searchcord.db`.
+- The collector stores messages, profiles and credential metadata in `data/searchcord.db`.
   Saved credentials live in a separate encrypted vault outside the archive
   directory. Windows protects it with the current user's DPAPI identity; other
   systems use a separate private encryption key. Keep archives and backups private.
@@ -198,6 +220,7 @@ have been published.
 
 | Date | Update |
 | --- | --- |
+| 2026-11-01 | Native collector, search viewer and archive tools, using existing archives and the same browser interface. |
 | 2026-10-09 | Durable paused job recovery, observed message revisions, local attachments and protected saved credentials. |
 | 2026-10-09 | Invite queues, readable server/thread scans and reload-recoverable scrape pause/resume, with enforced request pacing and breaks. |
 | 2026-10-07 | Portable Windows startup, terminal banner and saved-token removal. |

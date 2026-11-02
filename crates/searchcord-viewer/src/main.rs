@@ -79,6 +79,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if database.is_some() && data.is_some() {
         return Err("--db and --data-dir are mutually exclusive".into());
     }
+    let _terminal = searchcord_viewer::terminal::Terminal::start();
     let path = database
         .or_else(|| data.map(|p| p.join("searchcord.db")))
         .or_else(|| std::env::var_os("SEARCHCORD_DB").map(PathBuf::from))

@@ -80,13 +80,13 @@ fn driver_blocks_live_network_and_path_escape() {
 }
 
 #[test]
-fn backend_selection_rejects_unfinished_rust_instead_of_skipping() {
+fn backend_selection_distinguishes_reference_commands_from_native_services() {
     assert_eq!(Backend::parse("python").unwrap(), Backend::Python);
     assert!(Backend::parse("other").is_err());
     let error = Harness::with_backend(Backend::Rust)
         .err()
-        .expect("unfinished backend fails");
-    assert!(error.to_string().contains("unimplemented"));
+        .expect("reference-only command adapter rejects native selection");
+    assert!(error.to_string().contains("Python fixtures"));
 }
 
 #[test]
