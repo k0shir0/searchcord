@@ -5,6 +5,7 @@ pub mod accounts;
 pub mod credentials;
 pub mod discord;
 pub mod discovery;
+pub mod dm_cleanup;
 #[cfg(windows)]
 mod dpapi;
 pub mod invites;
