@@ -9,6 +9,7 @@ pub mod discovery;
 pub mod dm_cleanup;
 #[cfg(windows)]
 mod dpapi;
+pub mod http;
 pub mod invites;
 pub mod media_collection;
 pub mod migrations;

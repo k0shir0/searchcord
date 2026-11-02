@@ -1,5 +1,5 @@
 //! Credential-free HTTP adapter. SQLite and digest operations run on blocking workers.
-mod assets;
+pub mod assets;
 use axum::{
     Router,
     body::Body,
@@ -21,7 +21,7 @@ fn json_response(status: u16, value: Value) -> Response {
 fn error(e: ArchiveError) -> Response {
     json_response(e.status, json!({"detail":e.detail}))
 }
-fn javascript_type() -> &'static str {
+pub fn javascript_type() -> &'static str {
     #[cfg(windows)]
     {
         // Python's mimetypes uses the registered Content Type when present.
@@ -108,12 +108,12 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
     })
 }
 #[derive(Default)]
-struct Validation {
+pub struct Validation {
     params: BTreeMap<String, String>,
-    errors: Vec<Value>,
+    pub errors: Vec<Value>,
 }
 impl Validation {
-    fn new(query: &str) -> Self {
+    pub fn new(query: &str) -> Self {
         Self {
             params: url::form_urlencoded::parse(query.as_bytes())
                 .into_owned()
@@ -121,17 +121,17 @@ impl Validation {
             ..Self::default()
         }
     }
-    fn string(&self, key: &str) -> Option<String> {
+    pub fn string(&self, key: &str) -> Option<String> {
         self.params.get(key).cloned()
     }
-    fn text(&mut self, key: &str, max: usize) -> String {
+    pub fn text(&mut self, key: &str, max: usize) -> String {
         let value = self.string(key).unwrap_or_default();
         if value.chars().count() > max {
             self.errors.push(json!({"type":"string_too_long","loc":["query",key],"msg":format!("String should have at most {max} characters"),"input":value,"ctx":{"max_length":max}}));
         }
         value
     }
-    fn number(&mut self, key: &str, default: Option<i64>, min: i64, max: i64) -> Option<i64> {
+    pub fn number(&mut self, key: &str, default: Option<i64>, min: i64, max: i64) -> Option<i64> {
         let Some(raw) = self.string(key) else {
             return default;
         };
@@ -184,7 +184,7 @@ impl Validation {
             }
         }
     }
-    fn boolean(&mut self, key: &str) -> bool {
+    pub fn boolean(&mut self, key: &str) -> bool {
         let Some(raw) = self.string(key) else {
             return false;
         };

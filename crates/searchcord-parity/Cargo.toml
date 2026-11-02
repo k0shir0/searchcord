@@ -16,6 +16,7 @@ sha2.workspace = true
 searchcord-archive = { path = "../searchcord-archive" }
 
 [dev-dependencies]
+tower.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 axum.workspace = true
 flate2.workspace = true
