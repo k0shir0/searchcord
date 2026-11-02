@@ -2,6 +2,7 @@
 pub mod storage;
 pub use storage::{PageContext, Result, Store};
 pub mod accounts;
+pub mod analytics;
 pub mod credentials;
 pub mod discord;
 pub mod discovery;
