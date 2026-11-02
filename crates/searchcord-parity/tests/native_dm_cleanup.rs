@@ -136,7 +136,14 @@ fn http(error: Box<dyn std::error::Error + Send + Sync>, status: u16, detail: &s
     assert_eq!(e.detail, detail);
 }
 async fn finish(service: &DmCleanup<VirtualClock>, id: &str) -> Value {
-    tokio::time::timeout(Duration::from_secs(30), service.barrier(id))
+    finish_with_timeout(service, id, Duration::from_secs(30)).await
+}
+async fn finish_with_timeout(
+    service: &DmCleanup<VirtualClock>,
+    id: &str,
+    timeout: Duration,
+) -> Value {
+    tokio::time::timeout(timeout, service.barrier(id))
         .await
         .unwrap()
         .unwrap();
@@ -384,7 +391,10 @@ async fn full_pages_use_oldest_cursor_and_stalled_progress_is_bounded() {
     let started = service.start("20", "fixture".into()).await.unwrap();
     let id = started["job_id"].as_str().unwrap();
     let (_, mut events) = service.subscribe(id).await.unwrap();
-    let terminal = finish(&service, id).await;
+    // This stress case performs 1,205 real loopback requests and durable pacing
+    // writes. Allow hosted Windows disk latency without changing retry policy,
+    // event capacity, request count, cursor assertions or production deadlines.
+    let terminal = finish_with_timeout(&service, id, Duration::from_secs(120)).await;
     assert_eq!(terminal["failed"], 300);
     assert_eq!(terminal["scanned"], 300);
     assert!(matches!(
@@ -392,6 +402,7 @@ async fn full_pages_use_oldest_cursor_and_stalled_progress_is_bounded() {
         Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_))
     ));
     let requests = fixture.requests.lock().unwrap();
+    assert_eq!(requests.len(), 1205);
     assert_eq!(requests[402]["query"], "limit=100&before=1");
     assert_eq!(requests[803]["query"], "limit=100&before=1");
     drop(requests);
