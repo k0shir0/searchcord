@@ -299,6 +299,7 @@ fn profile_backfill_is_exclusive_stoppable_and_fills_missing_profiles() {
 #[test]
 fn invite_queues_parse_deduplicate_block_recover_and_require_original_account() {
     let mut h = fixture(vec![]);
+    call(&mut h, json!({"action":"invite_clock"}));
     assert_eq!(
         get(&mut h, "/api/invites/status")["body"],
         json!({"job":null})

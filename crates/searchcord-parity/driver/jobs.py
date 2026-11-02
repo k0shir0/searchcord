@@ -248,7 +248,9 @@ class Jobs:
                 self.patches.enter_context(patch.object(app, key, value))
             return None
         if action == 'wait_http':
-            async with asyncio.timeout(4):
+            # Virtual job time is controlled separately. This wall-time budget
+            # allows durable fixture writes on loaded hosted Windows runners.
+            async with asyncio.timeout(15):
                 while True:
                     reply = await self.invoke({'action': 'http', 'method': 'GET', 'path': r['path']})
                     value = reply['body']
