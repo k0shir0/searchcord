@@ -49,6 +49,9 @@ pub struct MediaCollector {
 fn stopped() -> Box<dyn std::error::Error + Send + Sync> {
     io::Error::new(io::ErrorKind::Interrupted, "Media collection stopped").into()
 }
+fn cancelled(control: &Control, stop_on_pause: bool) -> bool {
+    control.is_stopped() || (stop_on_pause && control.is_paused())
+}
 fn symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| {
         #[cfg(windows)]
@@ -199,7 +202,7 @@ impl MediaCollector {
         let control = control.unwrap_or_default();
         tokio::task::spawn_blocking(move || {
             let client = client()?;
-            this.cache_sync(&url, &client, &control, None)
+            this.cache_sync(&url, &client, &control, None, false)
         })
         .await?
     }
@@ -207,6 +210,22 @@ impl MediaCollector {
         &self,
         messages: &[Value],
         control: Option<Control>,
+    ) -> Result<Vec<Value>> {
+        self.archive_media(messages, control, false).await
+    }
+    /// Scrape pages stop caching on pause; profiles and monitors remain stop-only.
+    pub async fn archive_scrape_media(
+        &self,
+        messages: &[Value],
+        control: Control,
+    ) -> Result<Vec<Value>> {
+        self.archive_media(messages, Some(control), true).await
+    }
+    async fn archive_media(
+        &self,
+        messages: &[Value],
+        control: Option<Control>,
+        stop_on_pause: bool,
     ) -> Result<Vec<Value>> {
         let urls = message_media_urls(messages);
         if urls.is_empty() {
@@ -226,13 +245,14 @@ impl MediaCollector {
                 // A client's internal runtime is built and dropped on this worker.
                 let client = client()?;
                 loop {
-                    if control.is_stopped() {
+                    if cancelled(&control, stop_on_pause) {
                         return Ok(());
                     }
                     let Some(url) = pending.lock().unwrap().pop_front() else {
                         return Ok(());
                     };
-                    let result = this.cache_sync(&url, &client, &control, Some(deadline))?;
+                    let result =
+                        this.cache_sync(&url, &client, &control, Some(deadline), stop_on_pause)?;
                     results.lock().unwrap().push(result);
                 }
             });
@@ -275,6 +295,7 @@ impl MediaCollector {
         client: &Client,
         control: &Control,
         deadline: Option<Instant>,
+        stop_on_pause: bool,
     ) -> Result<Value> {
         let Some(key) = media::media_key(url) else {
             return Ok(json!({"status":"unavailable","reason":"unsupported_host"}));
@@ -289,7 +310,7 @@ impl MediaCollector {
             return Ok(existing);
         }
         let mut data = json!({"source_url":media::canonical_url(url),"status":"unavailable","reason":null,"observed_at":crate::storage::now()});
-        if control.is_stopped() {
+        if cancelled(control, stop_on_pause) {
             return Err(stopped());
         }
         let attempt = (|| -> Result<()> {
@@ -377,7 +398,7 @@ impl MediaCollector {
             let mut size = 0u64;
             let mut buffer = [0u8; 64 * 1024];
             loop {
-                if control.is_stopped() {
+                if cancelled(control, stop_on_pause) {
                     return Err(stopped());
                 }
                 if Instant::now() >= file_deadline {
@@ -408,7 +429,7 @@ impl MediaCollector {
             Ok(())
         })();
         if let Err(error) = attempt {
-            if control.is_stopped()
+            if cancelled(control, stop_on_pause)
                 && error
                     .downcast_ref::<io::Error>()
                     .is_some_and(|error| error.kind() == io::ErrorKind::Interrupted)

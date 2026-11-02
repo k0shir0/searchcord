@@ -881,7 +881,7 @@ impl<C: Clock> Scrapes<C> {
                 && let Some(media) = media
             {
                 let _ = media
-                    .archive_message_media(&fresh, Some(job.control.clone()))
+                    .archive_scrape_media(&fresh, job.control.clone())
                     .await;
             }
         }
@@ -924,6 +924,7 @@ impl<C: Clock> Scrapes<C> {
         }
         if let Err(e) = self.transition(job.clone(), Some(event), changes).await {
             eprintln!("Could not checkpoint scrape {}: {e}", job.id);
+            return;
         }
         if !job.suspending.load(Ordering::Acquire) {
             let owner = self.clone();

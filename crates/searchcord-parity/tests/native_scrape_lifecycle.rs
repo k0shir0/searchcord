@@ -249,6 +249,7 @@ impl Fixture {
                 Point::Progress=>("UPDATE","NEW.kind='scrape' AND json_extract(NEW.state_json,'$.last_event.type')='progress'"),
                 Point::Pause=>("UPDATE","NEW.kind='scrape' AND json_extract(NEW.state_json,'$.pause_requested')=1 AND json_extract(OLD.state_json,'$.pause_requested')=0"),
                 Point::Resume=>("UPDATE","NEW.kind='scrape' AND json_extract(NEW.state_json,'$.pause_requested')=0 AND json_extract(OLD.state_json,'$.pause_requested')=1"),
+                Point::Terminal=>("UPDATE","NEW.kind='scrape' AND json_extract(NEW.state_json,'$.running')=0"),
             };
             store.connection().execute_batch(&format!("DROP TRIGGER IF EXISTS temp.lifecycle_gate;CREATE TEMP TRIGGER lifecycle_gate BEFORE {operation} ON main.collection_jobs WHEN {condition} BEGIN SELECT lifecycle_checkpoint_gate();END;"))?;Ok(Value::Null)
         }).await.unwrap();
@@ -268,6 +269,7 @@ enum Point {
     Progress,
     Pause,
     Resume,
+    Terminal,
 }
 struct CommitGate {
     ready: Option<oneshot::Receiver<()>>,
@@ -768,6 +770,55 @@ async fn cancelled_start_still_owns_initial_checkpoint_and_can_be_stopped() {
     .unwrap();
     f.owner.stop(&id).await.unwrap();
     assert_eq!(f.saved(&id)["running"], false);
+    f.finish().await;
+}
+
+#[tokio::test]
+async fn failed_terminal_checkpoint_keeps_job_controls_and_channel_reservation_after_retention() {
+    let f = Fixture::new().await;
+    let mut gate = f.checkpoint_gate(Point::Terminal, 1).await;
+    f.replies([Reply::json(json!([message(1)]))]);
+    let id = f.start(1, false, json!([channel("20")])).await;
+    let entered = tokio::time::timeout(Duration::from_secs(5), gate.ready.take().unwrap()).await;
+    assert!(
+        entered.is_ok(),
+        "terminal checkpoint not reached: saved={}, requests={:?}",
+        f.saved(&id),
+        f.requests()
+    );
+    entered.unwrap().unwrap();
+    gate.release();
+    f.writer.barrier().await.unwrap();
+    f.owner.pause(&id).await.unwrap();
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(61)).await;
+    tokio::task::yield_now().await;
+    let state = f.owner.snapshot(&id).await.unwrap();
+    assert_eq!(state["running"], true);
+    assert_eq!(state["pause_requested"], true);
+    assert_eq!(state["total_messages"], 1);
+    assert_eq!(f.saved(&id)["running"], true);
+    assert_eq!(f.owner.active().await.len(), 1);
+    let error = f
+        .owner
+        .start(
+            json!([channel("20")]),
+            0,
+            false,
+            "account".into(),
+            "synthetic-token".into(),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.downcast_ref::<HttpError>().unwrap().status, 409);
+    f.owner.stop(&id).await.unwrap();
+    assert_eq!(f.saved(&id)["running"], false);
+    assert_eq!(f.saved(&id)["cancelled"], true);
+    assert_eq!(f.requests().len(), 1);
+    tokio::time::resume();
     f.finish().await;
 }
 
