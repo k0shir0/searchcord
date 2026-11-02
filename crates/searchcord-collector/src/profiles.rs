@@ -160,6 +160,7 @@ pub struct Profiles<C: Clock = SystemClock> {
     exclusion: Arc<AsyncMutex<()>>,
     state: Arc<Mutex<BackfillState>>,
     job: Arc<AsyncMutex<Job>>,
+    media: Option<crate::media_collection::MediaCollector>,
 }
 impl<C: Clock> Clone for Profiles<C> {
     fn clone(&self) -> Self {
@@ -169,6 +170,7 @@ impl<C: Clock> Clone for Profiles<C> {
             exclusion: self.exclusion.clone(),
             state: self.state.clone(),
             job: self.job.clone(),
+            media: self.media.clone(),
         }
     }
 }
@@ -182,7 +184,12 @@ impl<C: Clock> Profiles<C> {
             exclusion: Arc::new(AsyncMutex::new(())),
             state: Arc::new(Mutex::new(BackfillState::default())),
             job: Arc::new(AsyncMutex::new(Job::default())),
+            media: None,
         }
+    }
+    pub fn with_media(mut self, media: crate::media_collection::MediaCollector) -> Self {
+        self.media = Some(media);
+        self
     }
     async fn database<T: Send + 'static>(
         &self,
@@ -221,6 +228,7 @@ impl<C: Clock> Profiles<C> {
     }
     async fn attempt(&self, uid: &str, token: &str, mut options: Options) -> Result<Value> {
         options.retry_rate_limits = false;
+        let control = options.control.clone();
         let mut request = Request::new(Method::GET, format!("/users/{uid}/profile"), token);
         request.params = vec![
             ("with_mutual_guilds".into(), "true".into()),
@@ -292,6 +300,17 @@ impl<C: Clock> Profiles<C> {
             tx.commit()?;
             Ok(())
         }).await?;
+        if let Some(media) = &self.media {
+            let mut user = payload["user"].clone();
+            user["banner"] = payload["user_profile"]["banner"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(Value::from)
+                .unwrap_or_else(|| user["banner"].clone());
+            let _ = media
+                .archive_message_media(&[serde_json::json!({"author":user})], Some(control))
+                .await;
+        }
         Ok(payload)
     }
     /// One manual fetch/refresh, only for known archive identities. Returns the
@@ -351,7 +370,7 @@ impl<C: Clock> Profiles<C> {
         on_retry: Option<OnRetry>,
     ) -> Result<Option<Value>> {
         validate_id(uid)?;
-        options.control.ready().await?;
+        options.ready().await?;
         let guard = tokio::select! {
             guard = self.exclusion.clone().lock_owned() => guard,
             _ = options.control.stopped() => return Err(stopped()),
@@ -363,7 +382,7 @@ impl<C: Clock> Profiles<C> {
         // is dropped. Stop controls cancel requests and retries, never an accepted save.
         tokio::spawn(async move {
             let _guard = guard;
-            options.control.ready().await?;
+            options.ready().await?;
             if let Some(cutoff) = needed
                 && !service.needed(&uid, cutoff).await?
             {
@@ -371,7 +390,7 @@ impl<C: Clock> Profiles<C> {
             }
             let mut attempts = 0u32;
             loop {
-                options.control.ready().await?;
+                options.ready().await?;
                 match service.attempt(&uid, &token, options.clone()).await {
                     Ok(payload) => return Ok(Some(payload)),
                     Err(err) => {
@@ -384,6 +403,7 @@ impl<C: Clock> Profiles<C> {
                         attempts = attempts.saturating_add(1);
                         let delay = supplied
                             .max((2.0 * 2f64.powi((attempts - 1).min(10) as i32)).min(60.0));
+                        let allow_pause = reason != "database busy";
                         if let Some(callback) = &on_retry {
                             callback(RetryInfo {
                                 user_id: uid.clone(),
@@ -396,12 +416,16 @@ impl<C: Clock> Profiles<C> {
                         // value remains cancellable without overflowing timers.
                         let mut remaining = delay;
                         while remaining > 0.0 {
-                            let seconds = remaining.min(60.0);
+                            let before = std::time::Instant::now();
+                            if allow_pause {
+                                options.ready().await?;
+                            }
+                            let seconds = remaining.min(0.25);
                             tokio::select! {
                                 _ = tokio::time::sleep(Duration::from_secs_f64(seconds)) => {},
                                 _ = options.control.stopped() => return Err(stopped()),
                             }
-                            remaining -= seconds;
+                            remaining -= before.elapsed().as_secs_f64();
                         }
                     }
                 }
@@ -512,7 +536,7 @@ impl<C: Clock> Profiles<C> {
                         let seconds = match event {
                             WaitEvent::Waiting(v) => v,
                             WaitEvent::ScrapeBreak(v) => v as f64,
-                            WaitEvent::BreakFinished => return,
+                            WaitEvent::BreakFinished | WaitEvent::Paused => return,
                         };
                         let mut state = state.lock().unwrap();
                         state.retries += 1;

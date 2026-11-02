@@ -7,6 +7,7 @@ pub mod discord;
 pub mod discovery;
 #[cfg(windows)]
 mod dpapi;
+pub mod media_collection;
 pub mod migrations;
 pub mod pacing;
 pub mod profiles;

@@ -12,7 +12,10 @@ use serde_json::Value;
 use std::{
     future::Future,
     path::PathBuf,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::{Mutex, watch};
@@ -50,6 +53,7 @@ pub trait Clock: Send + Sync + 'static {
     fn uniform(&self, low: f64, high: f64) -> Result<f64>;
     fn sleep(&self, seconds: f64) -> impl Future<Output = ()> + Send;
 }
+#[derive(Clone)]
 pub struct SystemClock(tokio::time::Instant);
 impl Default for SystemClock {
     fn default() -> Self {
@@ -91,6 +95,9 @@ impl Default for Control {
     }
 }
 impl Control {
+    pub fn is_paused(&self) -> bool {
+        *self.0.borrow() == Status::Paused
+    }
     pub fn is_stopped(&self) -> bool {
         *self.0.borrow() == Status::Stopped
     }
@@ -145,6 +152,7 @@ async fn until_stopped(receiver: &mut watch::Receiver<Status>) {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WaitEvent {
+    Paused,
     Waiting(f64),
     ScrapeBreak(u64),
     BreakFinished,
@@ -167,6 +175,12 @@ impl Default for Options {
     }
 }
 impl Options {
+    pub(crate) async fn ready(&self) -> Result<()> {
+        if self.control.is_paused() {
+            self.emit(WaitEvent::Paused);
+        }
+        self.control.ready().await
+    }
     fn emit(&self, event: WaitEvent) {
         if let Some(callback) = &self.on_wait {
             callback(event);
@@ -282,6 +296,7 @@ pub struct Gate<C: Clock = SystemClock> {
     state: Arc<Mutex<State>>,
     clock: Arc<C>,
     path: PathBuf,
+    break_deadline: Arc<AtomicU64>,
 }
 impl<C: Clock> Clone for Gate<C> {
     fn clone(&self) -> Self {
@@ -289,6 +304,7 @@ impl<C: Clock> Clone for Gate<C> {
             state: self.state.clone(),
             clock: self.clock.clone(),
             path: self.path.clone(),
+            break_deadline: self.break_deadline.clone(),
         }
     }
 }
@@ -300,6 +316,7 @@ impl<C: Clock> Gate<C> {
             None => State::default(),
         };
         Ok(Self {
+            break_deadline: Arc::new(AtomicU64::new(state.break_until.to_bits())),
             state: Arc::new(Mutex::new(state)),
             clock: Arc::new(clock),
             path,
@@ -310,6 +327,11 @@ impl<C: Clock> Gate<C> {
             .lock()
             .await
             .checkpoint(self.clock.now(), self.clock.wall())
+    }
+    pub fn break_seconds(&self) -> u64 {
+        (f64::from_bits(self.break_deadline.load(Ordering::Acquire)) - self.clock.now())
+            .max(0.0)
+            .ceil() as u64
     }
     /// After stopping callers, join any accepted attempt and checkpoint write.
     pub async fn barrier(&self) -> Result<()> {
@@ -340,6 +362,9 @@ impl<C: Clock> Gate<C> {
                 0.0
             };
             let response = loop {
+                if *receiver.borrow() == Status::Paused {
+                    options.emit(WaitEvent::Paused);
+                }
                 running(&mut receiver).await?;
                 let mut guard = tokio::select! {
                     guard = self.state.clone().lock_owned() => guard,
@@ -415,6 +440,8 @@ impl<C: Clock> Gate<C> {
                         }
                     }
                     let wall = gate.clock.wall();
+                    gate.break_deadline
+                        .store(guard.break_until.to_bits(), Ordering::Release);
                     if let Err(error) =
                         persist(gate.path.clone(), guard.checkpoint(now, wall), wall).await
                     {

@@ -42,7 +42,7 @@ pub fn search_label(value: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
-fn unicode_digits(value: &str) -> bool {
+pub fn unicode_digits(value: &str) -> bool {
     static DIGITS: OnceLock<Vec<[u32; 2]>> = OnceLock::new();
     let ranges = DIGITS.get_or_init(|| {
         serde_json::from_str(include_str!("digits-15.json")).expect("bundled Unicode digits")

@@ -43,6 +43,9 @@ impl<C: Clock> Clone for Discord<C> {
     }
 }
 impl<C: Clock> Discord<C> {
+    pub fn break_seconds(&self) -> u64 {
+        self.gate.break_seconds()
+    }
     pub fn new(gate: Gate<C>) -> Result<Self> {
         Self::client(gate, "https://discord.com/api/v10".into(), false)
     }
