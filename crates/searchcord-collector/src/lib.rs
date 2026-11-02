@@ -10,6 +10,7 @@ mod dpapi;
 pub mod invites;
 pub mod media_collection;
 pub mod migrations;
+pub mod monitor;
 pub mod pacing;
 pub mod profiles;
 pub mod recovery;
