@@ -1,5 +1,6 @@
 //! Credential-free HTTP adapter. SQLite and digest operations run on blocking workers.
 pub mod assets;
+pub mod terminal;
 use axum::{
     Router,
     body::Body,

@@ -99,6 +99,7 @@ pub fn parse_events(body: &str) -> Vec<Event> {
 pub struct Harness {
     backend: Backend,
     viewer: Option<Child>,
+    viewer_reader: Option<JoinHandle<()>>,
     child: Child,
     input: ChildStdin,
     output: Receiver<std::io::Result<String>>,
@@ -118,16 +119,21 @@ impl Harness {
     pub fn with_backend(backend: Backend) -> Result<Self> {
         if backend == Backend::Rust {
             return Err(
-                "Rust backend is unimplemented for parity contracts; no contracts were skipped"
+                "The JSON command adapter controls Python fixtures. Native contracts use Rust services directly; HTTP/browser fixtures use new_collector_fixture or new_viewer_fixture."
                     .into(),
             );
         }
         Self::fixture_backend(backend)
     }
 
-    /// Only the viewer capability is native. Python remains an explicit fixture
-    /// writer; unfinished collector contracts still reject native selection.
+    /// Python writes explicit fixture inputs. The selected native HTTP process
+    /// handles viewer requests; native service contracts call Rust directly.
     pub fn new_viewer_fixture() -> Result<Self> {
+        let backend =
+            Backend::parse(&std::env::var("SEARCHCORD_PARITY_BACKEND").unwrap_or("python".into()))?;
+        Self::fixture_backend(backend)
+    }
+    pub fn new_collector_fixture() -> Result<Self> {
         let backend =
             Backend::parse(&std::env::var("SEARCHCORD_PARITY_BACKEND").unwrap_or("python".into()))?;
         Self::fixture_backend(backend)
@@ -183,6 +189,7 @@ impl Harness {
         let harness = Self {
             backend,
             viewer: None,
+            viewer_reader: None,
             child,
             input,
             output,
@@ -306,16 +313,29 @@ impl Harness {
             let stdout = child.stdout.take().unwrap();
             let (tx, rx) = mpsc::channel();
             let reader = thread::spawn(move || {
-                let mut line = String::new();
-                let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
-                let _ = tx.send(result);
+                let mut ready = false;
+                for line in BufReader::new(stdout).lines() {
+                    match line {
+                        Ok(line) if !ready && line.starts_with("Searchcord: ") => {
+                            ready = true;
+                            let _ = tx.send(Ok(line));
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            if !ready {
+                                let _ = tx.send(Err(error));
+                            }
+                            break;
+                        }
+                    }
+                }
             });
             self.viewer = Some(child);
+            self.viewer_reader = Some(reader);
             let line = rx
                 .recv_timeout(Duration::from_secs(15))
                 .expect("native viewer readiness timeout")
                 .unwrap();
-            reader.join().unwrap();
             let origin = line
                 .trim()
                 .strip_prefix("Searchcord: ")
@@ -333,6 +353,57 @@ impl Harness {
     }
 
     pub fn start_collector(&mut self) {
+        if self.backend == Backend::Rust {
+            let binary = std::env::var_os("SEARCHCORD_PARITY_RUST_COLLECTOR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    let executable = std::env::current_exe().unwrap();
+                    let mut directory = executable.parent().unwrap();
+                    if directory.file_name().is_some_and(|s| s == "deps") {
+                        directory = directory.parent().unwrap();
+                    }
+                    directory.join(format!("searchcord{}", std::env::consts::EXE_SUFFIX))
+                });
+            let mut child = Command::new(binary)
+                .args(["--no-browser", "--port", "0", "--host", "127.0.0.1", "--db"])
+                .arg(self.archive())
+                .env("NO_COLOR", "1")
+                .env("SEARCHCORD_CREDENTIAL_FILE", self.vault())
+                .env(
+                    "SEARCHCORD_CREDENTIAL_KEY_FILE",
+                    self.root().join("credentials/synthetic.key"),
+                )
+                .stdout(Stdio::piped())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .expect("build native collector before browser qualification");
+            let stdout = child.stdout.take().unwrap();
+            let (tx, rx) = mpsc::channel();
+            self.viewer_reader = Some(thread::spawn(move || {
+                let mut ready = false;
+                for line in BufReader::new(stdout).lines() {
+                    match line {
+                        Ok(line) => {
+                            if !ready
+                                && let Some(url) =
+                                    line.strip_prefix("Local database ready. Searchcord: ")
+                            {
+                                ready = true;
+                                let _ = tx.send(url.to_owned());
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            }));
+            self.viewer = Some(child);
+            let origin = rx
+                .recv_timeout(Duration::from_secs(15))
+                .expect("native collector readiness timeout");
+            assert!(origin.starts_with("http://127.0.0.1:"));
+            self.origin = Some(origin);
+            return;
+        }
         let reply = self.command(json!({"op":"job","action":"start_http"}));
         let port = reply["port"].as_u64().expect("collector port");
         assert!((1..=65535).contains(&port));
@@ -449,6 +520,9 @@ impl Drop for Harness {
         if let Some(mut child) = self.viewer.take() {
             let _ = child.kill();
             let _ = child.wait();
+        }
+        if let Some(reader) = self.viewer_reader.take() {
+            let _ = reader.join();
         }
         let _ = writeln!(self.input, "{{\"op\":\"shutdown\"}}");
         let _ = self.input.flush();
