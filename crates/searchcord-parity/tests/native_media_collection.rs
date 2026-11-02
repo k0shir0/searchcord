@@ -607,6 +607,85 @@ async fn stopping_active_download_drains_worker_and_removes_temporary_binary() {
     no_temporary(&fixture.path);
 }
 
+#[tokio::test]
+async fn paused_scrape_media_skips_downloads_while_other_media_collection_continues() {
+    let fixture = Fixture::new(HashMap::from([
+        ("/first".into(), Reply::bytes(b"first")),
+        ("/second".into(), Reply::bytes(b"second")),
+    ]));
+    let collector = fixture.collector(Limits::default());
+    let messages = json!([{"attachments":[
+        {"url":"https://cdn.discordapp.com/first"},
+        {"url":"https://cdn.discordapp.com/second"}
+    ]}]);
+    let control = Control::default();
+    control.pause();
+    assert!(
+        collector
+            .archive_scrape_media(messages.as_array().unwrap(), control.clone())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(fixture.trace().is_empty());
+    let results = collector
+        .archive_message_media(messages.as_array().unwrap(), Some(control))
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results.iter().all(|result| result["status"] == "saved"));
+    assert_eq!(fixture.trace().len(), 2);
+    no_temporary(&fixture.path);
+}
+
+#[tokio::test]
+async fn pausing_scrape_media_drains_active_download_without_starting_pending_downloads() {
+    let fixture = Fixture::new(HashMap::from([
+        (
+            "/pause-active".into(),
+            Reply {
+                body_delay: Duration::from_millis(150),
+                ..Reply::bytes(b"partial")
+            },
+        ),
+        ("/pending".into(), Reply::bytes(b"pending")),
+    ]));
+    let collector = fixture.collector(Limits {
+        parallel_downloads: 1,
+        ..Default::default()
+    });
+    let messages = json!([{"attachments":[
+        {"url":"https://cdn.discordapp.com/pause-active"},
+        {"url":"https://cdn.discordapp.com/pending"}
+    ]}]);
+    let control = Control::default();
+    let task = {
+        let control = control.clone();
+        tokio::spawn(async move {
+            collector
+                .archive_scrape_media(messages.as_array().unwrap(), control)
+                .await
+        })
+    };
+    for _ in 0..100 {
+        if !fixture.trace().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    assert_eq!(fixture.trace().len(), 1);
+    control.pause();
+    assert!(task.await.unwrap().is_err());
+    assert_eq!(fixture.trace().len(), 1);
+    assert!(
+        std::fs::read_dir(media::directory(&fixture.path))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+    no_temporary(&fixture.path);
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn media_directory_symlinks_cannot_escape_archive() {

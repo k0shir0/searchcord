@@ -86,10 +86,10 @@ pub fn parse_invites(text: &str) -> Result<Vec<String>> {
     // Split retains empty segments in Python; those still count toward Item N.
     let mut tokens = Vec::new();
     let mut start = 0;
-    let trimmed = text.trim();
+    let trimmed = searchcord_archive::search::strip(text);
     let mut in_separator = false;
     for (i, c) in trimmed.char_indices() {
-        if c.is_whitespace() || c == ',' || c == ';' {
+        if c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}' | ',' | ';') {
             if !in_separator {
                 tokens.push(&trimmed[start..i]);
             }

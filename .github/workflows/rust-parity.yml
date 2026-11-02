@@ -2,9 +2,9 @@ name: Rust migration parity
 
 on:
   pull_request:
-    branches: [rewrite/rust]
+    branches: [main, rewrite/rust]
   push:
-    branches: [rewrite/rust, 'rewrite/rust-*']
+    branches: [main, rewrite/rust]
   workflow_dispatch:
 
 permissions:
@@ -46,8 +46,8 @@ jobs:
         run: cargo test --locked -p searchcord-parity --test search_display
         env:
           SEARCHCORD_PARITY_BACKEND: rust
-      - name: Native viewer browser
-        run: cargo test --locked -p searchcord-parity --test browser unchanged_viewer
+      - name: Native collector and viewer browser
+        run: cargo test --locked -p searchcord-parity --test browser
         env:
           SEARCHCORD_PARITY_BACKEND: rust
       - name: Static Linux viewer package and scratch image

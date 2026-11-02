@@ -190,7 +190,7 @@ fn fixture(viewer: bool) -> Harness {
     let mut h = if viewer {
         Harness::new_viewer_fixture()
     } else {
-        Harness::new()
+        Harness::new_collector_fixture()
     }
     .unwrap();
     h.init();
@@ -294,4 +294,274 @@ fn unchanged_collector_search_statistics_settings_and_queue_render_in_browser() 
         "0"
     );
     browser.assert_no_script_errors();
+}
+
+#[derive(Default)]
+struct UpstreamTrace(std::sync::Mutex<Vec<Value>>);
+async fn native_browser_upstream(
+    axum::extract::State(trace): axum::extract::State<std::sync::Arc<UpstreamTrace>>,
+    request: axum::extract::Request,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let path = request.uri().path().strip_prefix("/api/v10").unwrap_or("");
+    let query = request.uri().query().unwrap_or("");
+    let token = request
+        .headers()
+        .get("authorization")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let beta = token == "synthetic-beta";
+    trace
+        .0
+        .lock()
+        .unwrap()
+        .push(json!({"method":request.method().as_str(),"path":path,"query":query,"token":token}));
+    let message = |n: i64, author: &str| json!({"id":(searchcord_parity::performance::BASE+n).to_string(),"channel_id":"20","author":{"id":author,"username":"Fixture Author"},"content":format!("Browser message {n}"),"attachments":[]});
+    let payload = match (request.method().as_str(), path) {
+        ("GET", "/users/@me") => {
+            json!({"id":if beta {"32"}else{"30"},"username":if beta {"Beta"}else{"Alpha"}})
+        }
+        ("GET", "/users/@me/guilds") => json!([{"id":"10","name":"Fixture Server","owner":true}]),
+        ("GET", "/users/@me/channels") => {
+            json!([{"id":"21","type":1,"recipients":[{"id":"31","username":"Fixture Other"}]}])
+        }
+        ("GET", "/guilds/10") => {
+            json!({"id":"10","name":"Fixture Server","owner_id":"30","roles":[{"id":"10","permissions":"3072"}]})
+        }
+        ("GET", "/guilds/10/members/30") => json!({"user":{"id":"30"},"roles":[]}),
+        ("GET", "/guilds/10/channels") => {
+            json!([{"id":"20","guild_id":"10","name":"general","type":0,"permission_overwrites":[]}])
+        }
+        ("GET", "/guilds/10/threads/active") => json!({"threads":[],"members":[],"has_more":false}),
+        ("GET", "/channels/20/messages")
+            if query.contains("before=") || query.contains("after=") =>
+        {
+            json!([])
+        }
+        ("GET", "/channels/20/messages") if query.contains("limit=100") => {
+            // Let the real UI pause during the fetch, then require its accepted
+            // page save to finish before reporting a paused checkpoint.
+            tokio::time::sleep(Duration::from_millis(1200)).await;
+            json!(
+                (5000..5100)
+                    .rev()
+                    .map(|n| message(n, "30"))
+                    .collect::<Vec<_>>()
+            )
+        }
+        ("GET", "/channels/20/messages") => json!([message(5099, "30")]),
+        ("GET", "/channels/21/messages") => json!([
+            {"id":(searchcord_parity::performance::BASE+1001).to_string(),"channel_id":"21","author":{"id":"30"},"content":"answer","attachments":[]},
+            {"id":(searchcord_parity::performance::BASE+1000).to_string(),"channel_id":"21","author":{"id":"31"},"content":"question","attachments":[]}
+        ]),
+        ("GET", "/invites/browser-fixture") => json!({"guild":{"id":"10","name":"Fixture Server"}}),
+        ("POST", "/invites/browser-fixture") => {
+            json!({"guild":{"id":"10","name":"Fixture Server"}})
+        }
+        ("DELETE", p)
+            if p == format!(
+                "/channels/21/messages/{}",
+                searchcord_parity::performance::BASE + 1001
+            ) =>
+        {
+            return axum::http::StatusCode::NO_CONTENT.into_response();
+        }
+        ("GET", p) if p.ends_with("/profile") => {
+            json!({"user":{"id":"30","username":"Fixture Author"},"user_profile":{"bio":"Saved fixture"}})
+        }
+        _ => {
+            return (
+                axum::http::StatusCode::NOT_IMPLEMENTED,
+                axum::Json(json!({"unexpected":path})),
+            )
+                .into_response();
+        }
+    };
+    axum::Json(payload).into_response()
+}
+
+#[test]
+fn native_collector_account_queue_recovery_invites_monitor_cleanup_and_export_work_in_browser() {
+    use searchcord_collector::{
+        accounts::Accounts,
+        credentials::Paths,
+        discord::Discord,
+        http::{App, router},
+        media_collection::MediaCollector,
+        pacing::{Gate, SystemClock},
+        writer::Writer,
+    };
+    use std::sync::Arc;
+    let h = fixture(false);
+    {
+        let db = h.database();
+        db.execute_batch("INSERT INTO channels VALUES ('21',NULL,'Fixture DM'); INSERT INTO authors(id,name) VALUES ('31','Fixture Other');").unwrap();
+        for (offset, author, content) in [(1000, "31", "question"), (1001, "30", "answer")] {
+            db.execute(
+                "INSERT INTO messages(id,channel_id,author_id,content) VALUES (?,21,?,?)",
+                rusqlite::params![
+                    searchcord_parity::performance::BASE + offset,
+                    author,
+                    content
+                ],
+            )
+            .unwrap();
+        }
+    }
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .unwrap();
+    let (app, trace, upstream, server, origin) = runtime.block_on(async {
+        let trace = Arc::new(UpstreamTrace::default());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let fixture = axum::Router::new()
+            .fallback(native_browser_upstream)
+            .with_state(trace.clone());
+        let upstream = tokio::spawn(async move { axum::serve(listener, fixture).await.unwrap() });
+        let clock = SystemClock::default();
+        let writer = Writer::open(h.archive()).await.unwrap();
+        let gate = Gate::open(h.archive(), clock.clone()).await.unwrap();
+        let discord = Discord::for_loopback(gate, &origin).unwrap();
+        let media = MediaCollector::for_loopback(h.archive(), &origin, Default::default()).unwrap();
+        let mut app =
+            App::open_with_media(h.archive(), discord, Arc::new(clock), writer.clone(), media)
+                .await
+                .unwrap();
+        let paths = Paths::new(
+            &h.archive(),
+            &h.root().join("credentials/browser.vault"),
+            &h.root().join("credentials/browser.key"),
+        )
+        .unwrap();
+        let accounts = Accounts::with_paths(paths, writer);
+        app.scrapes = app.scrapes.clone().with_accounts(accounts.clone());
+        app.monitor = app.monitor.clone().with_accounts(accounts.clone());
+        app.accounts = accounts;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let origin = format!("http://{}", listener.local_addr().unwrap());
+        let http = router(app.clone());
+        let server = tokio::spawn(async move { axum::serve(listener, http).await.unwrap() });
+        (app, trace, upstream, server, origin)
+    });
+    let browser = Browser::new();
+    browser.navigate(&origin);
+    browser.wait("return document.querySelector('#homeMessages').textContent==='83'");
+    browser.click("#menuBtn");
+    for (label, token) in [("Alpha", "synthetic-alpha"), ("Beta", "synthetic-beta")] {
+        browser.js(&format!("document.querySelector('#tokenName').value={};document.querySelector('#tokenInput').value={};return true",json!(label),json!(token)));
+        browser.click("#saveToken");
+        browser.wait(&format!("return document.querySelector('#tokenStatus').textContent.includes({}) && !document.querySelector('#saveToken').disabled",json!(format!("connected as {label}"))));
+    }
+    assert_eq!(
+        browser.js("return document.querySelector('#savedTokenSelect').options.length"),
+        2
+    );
+    browser.js("const s=document.querySelector('#savedTokenSelect');s.selectedIndex=0;s.dispatchEvent(new Event('change',{bubbles:true}));return true");
+    browser.wait("return document.querySelector('#tokenStatus').textContent.includes('connected as Alpha') && !document.querySelector('#savedTokenSelect').disabled");
+    browser.click("#closeSettings");
+    browser.click(".tab[data-view='scrape']");
+    browser.wait("return document.querySelector('#serverList .server-item')!==null");
+    browser.click("#serverList .server-item");
+    browser.wait("return document.querySelector('#cpBody [data-id=\"20\"]')!==null");
+    browser.click("#cpBody .ch-live-btn");
+    browser
+        .wait("return document.querySelector('#cpBody .ch-live-btn').textContent==='stop monitor'");
+    browser.click("#cpBody .ch-live-btn");
+    browser.wait("return document.querySelector('#cpBody .ch-live-btn').textContent==='monitor'");
+
+    browser.click("#cpBody [aria-label='Toggle scrape queue']");
+    browser.click("#startScrape");
+    browser.wait("return !document.querySelector('#pauseQueueScrape').disabled");
+    browser.click("#pauseQueueScrape");
+    browser
+        .wait("return document.querySelector('#queueProgressTitle').textContent==='Scrape paused'");
+    browser.navigate(&origin);
+    browser.click(".tab[data-view='scrape']");
+    browser.wait("return document.querySelector('#queueProgressTitle').textContent==='Scrape paused' && document.querySelector('#pauseQueueScrape').textContent==='resume scraping'");
+    browser.click("#pauseQueueScrape");
+    browser.wait("return !document.querySelector('#dismissQueueProgress').hidden");
+    assert_eq!(
+        h.database()
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE id>=?",
+                [searchcord_parity::performance::BASE + 5000],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+        100
+    );
+
+    browser.js("document.querySelector('#inviteInput').value='https://discord.gg/browser-fixture browser-fixture';document.querySelector('#inviteForm').requestSubmit();return true");
+    browser.wait("return document.querySelector('#inviteResults strong')?.textContent==='joined' && !document.querySelector('#startInvites').disabled");
+    assert_eq!(
+        browser.js("return document.querySelectorAll('#inviteResults li').length"),
+        1
+    );
+    browser.click("#sourceDms");
+    browser.wait("return document.querySelector('#dmBody [data-id=\"21\"]')!==null");
+    browser.click("#dmBody [aria-label='Export to ChatML JSONL']");
+    browser.wait("return document.querySelector('#exportParticipants .persona-item')!==null");
+    browser.click("#exportParticipants .persona-item[data-id='30']");
+    browser.js("const original=window.fetch;window.fetch=async(...args)=>{const response=await original(...args);if(String(args[0]).includes('/api/export/chatml'))window.parityExport=await response.clone().text();return response;};return true");
+    browser.click("#runExportBtn");
+    browser.wait("return typeof window.parityExport==='string' && !document.querySelector('#exportModalBg').classList.contains('visible')");
+    let export = browser.js("return window.parityExport");
+    let line: Value =
+        serde_json::from_str(export.as_str().unwrap().lines().next().unwrap()).unwrap();
+    assert_eq!(
+        line["messages"][1],
+        json!({"role":"user","content":"Fixture Other: question"})
+    );
+    assert_eq!(
+        line["messages"][2],
+        json!({"role":"assistant","content":"answer"})
+    );
+    browser.click("#dmBody .ch-clear-btn");
+    browser.click("#dmBody .ch-clear-btn");
+    browser.wait("return document.querySelector('#moStats').textContent==='1 deleted · 0 failed · 0 already missing' && document.querySelector('#modalFoot').classList.contains('visible')");
+    assert_eq!(
+        h.database()
+            .query_row(
+                "SELECT COUNT(*) FROM message_payloads WHERE message_id=? AND deleted_at IS NOT NULL",
+                [searchcord_parity::performance::BASE + 1000],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        h.database()
+            .query_row(
+                "SELECT COUNT(*) FROM message_payloads WHERE message_id=? AND deleted_at IS NOT NULL",
+                [searchcord_parity::performance::BASE + 1001],
+                |r| r.get::<_, u64>(0)
+            )
+            .unwrap(),
+        1
+    );
+    browser.assert_no_script_errors();
+    let requests = trace.0.lock().unwrap().clone();
+    assert!(requests.iter().any(|r| r["token"] == "synthetic-beta"));
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|r| r["method"] == "POST" && r["path"] == "/invites/browser-fixture")
+            .count(),
+        1
+    );
+    assert_eq!(
+        requests.iter().filter(|r| r["method"] == "DELETE").count(),
+        1
+    );
+    drop(browser);
+    runtime.block_on(async {
+        app.shutdown().await.unwrap();
+        app.writer.shutdown().await.unwrap();
+        upstream.abort();
+        server.abort();
+    });
 }
