@@ -1202,20 +1202,25 @@ dependencies = [
 name = "searchcord-collector"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "chrono",
  "fernet",
  "flate2",
+ "futures-core",
  "getrandom 0.3.4",
  "libc",
  "percent-encoding",
  "reqwest",
  "rusqlite",
  "searchcord-archive",
+ "searchcord-viewer",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "tokio",
+ "tower",
+ "tower-http",
  "url",
  "windows-sys 0.61.2",
 ]
@@ -1236,6 +1241,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
+ "tower",
 ]
 
 [[package]]

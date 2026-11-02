@@ -19,6 +19,11 @@ flate2.workspace = true
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tokio = { workspace = true, features = ["sync", "time"] }
 getrandom = "=0.3.4"
+futures-core = "=0.3.34"
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+searchcord-viewer = { path = "../searchcord-viewer" }
 searchcord-archive = { path = "../searchcord-archive" }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem"] }
