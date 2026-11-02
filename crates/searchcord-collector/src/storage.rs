@@ -7,6 +7,13 @@ use std::{
 };
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 pub const SCHEMA: &str = include_str!("schema.sql");
+fn cached_execute(
+    db: &Connection,
+    sql: &str,
+    params: impl rusqlite::Params,
+) -> rusqlite::Result<usize> {
+    db.prepare_cached(sql)?.execute(params)
+}
 pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, false)
 }
@@ -93,6 +100,7 @@ impl Store {
         let path = crate::credentials::resolve(path.as_ref())?;
         crate::migrations::initialize(&path)?;
         let db = Connection::open(&path)?;
+        db.set_prepared_statement_cache_capacity(64);
         db.busy_timeout(Duration::from_secs(30))?;
         Ok(Self { path, db })
     }
@@ -116,9 +124,17 @@ impl Store {
         }
         let tx = self.db.transaction()?;
         if let Some(guild) = context.guild_id {
-            tx.execute("INSERT INTO guilds VALUES (?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name WHERE name IS NOT excluded.name",params![guild,context.guild_name])?;
+            cached_execute(
+                &tx,
+                "INSERT INTO guilds VALUES (?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name WHERE name IS NOT excluded.name",
+                params![guild, context.guild_name],
+            )?;
         }
-        tx.execute("INSERT INTO channels VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=excluded.guild_id,name=excluded.name WHERE guild_id IS NOT excluded.guild_id OR name IS NOT excluded.name",params![context.channel_id,context.guild_id,context.channel_name])?;
+        cached_execute(
+            &tx,
+            "INSERT INTO channels VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=excluded.guild_id,name=excluded.name WHERE guild_id IS NOT excluded.guild_id OR name IS NOT excluded.name",
+            params![context.channel_id, context.guild_id, context.channel_name],
+        )?;
         let mut authors: HashMap<String, (i64, String)> = HashMap::new();
         let mut newest = i64::MIN;
         let mut oldest = i64::MAX;
@@ -140,24 +156,47 @@ impl Store {
                 );
             }
             if m.get("webhook_id").is_none_or(|v| !truthy(v)) {
-                tx.execute(
+                cached_execute(
+                    &tx,
                     "INSERT OR IGNORE INTO channel_authors VALUES (?,?)",
                     params![context.channel_id, author],
                 )?;
             }
         }
         for (author, (id, name)) in authors {
-            tx.execute("INSERT INTO authors VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,last_message_id=excluded.last_message_id WHERE CAST(excluded.last_message_id AS INTEGER)>CAST(authors.last_message_id AS INTEGER)",params![author,name,id.to_string()])?;
+            cached_execute(
+                &tx,
+                "INSERT INTO authors VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,last_message_id=excluded.last_message_id WHERE CAST(excluded.last_message_id AS INTEGER)>CAST(authors.last_message_id AS INTEGER)",
+                params![author, name, id.to_string()],
+            )?;
         }
         let inserted = save_payloads(&tx, messages, context, "collection")?;
-        tx.execute("INSERT INTO scrape_cursors(channel_id,guild_id,newest_message_id,oldest_message_id) VALUES (?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET guild_id=excluded.guild_id,newest_message_id=CASE WHEN CAST(excluded.newest_message_id AS INTEGER)>CAST(scrape_cursors.newest_message_id AS INTEGER) THEN excluded.newest_message_id ELSE scrape_cursors.newest_message_id END,oldest_message_id=CASE WHEN excluded.oldest_message_id IS NULL THEN scrape_cursors.oldest_message_id WHEN scrape_cursors.oldest_message_id IS NULL OR CAST(excluded.oldest_message_id AS INTEGER)<CAST(scrape_cursors.oldest_message_id AS INTEGER) THEN excluded.oldest_message_id ELSE scrape_cursors.oldest_message_id END",params![context.channel_id,context.guild_id,newest.to_string(),context.history_page.then(||oldest.to_string())])?;
+        cached_execute(
+            &tx,
+            "INSERT INTO scrape_cursors(channel_id,guild_id,newest_message_id,oldest_message_id) VALUES (?,?,?,?) ON CONFLICT(channel_id) DO UPDATE SET guild_id=excluded.guild_id,newest_message_id=CASE WHEN CAST(excluded.newest_message_id AS INTEGER)>CAST(scrape_cursors.newest_message_id AS INTEGER) THEN excluded.newest_message_id ELSE scrape_cursors.newest_message_id END,oldest_message_id=CASE WHEN excluded.oldest_message_id IS NULL THEN scrape_cursors.oldest_message_id WHEN scrape_cursors.oldest_message_id IS NULL OR CAST(excluded.oldest_message_id AS INTEGER)<CAST(scrape_cursors.oldest_message_id AS INTEGER) THEN excluded.oldest_message_id ELSE scrape_cursors.oldest_message_id END",
+            params![
+                context.channel_id,
+                context.guild_id,
+                newest.to_string(),
+                context.history_page.then(|| oldest.to_string())
+            ],
+        )?;
         if let Some((after, before)) = context.pending {
-            tx.execute("UPDATE scrape_cursors SET pending_after_message_id=?,pending_before_message_id=? WHERE channel_id=?",params![after,before,context.channel_id])?;
+            cached_execute(
+                &tx,
+                "UPDATE scrape_cursors SET pending_after_message_id=?,pending_before_message_id=? WHERE channel_id=?",
+                params![after, before, context.channel_id],
+            )?;
         } else if context.clear_pending {
-            tx.execute("UPDATE scrape_cursors SET pending_after_message_id=NULL,pending_before_message_id=NULL WHERE channel_id=?",[context.channel_id])?;
+            cached_execute(
+                &tx,
+                "UPDATE scrape_cursors SET pending_after_message_id=NULL,pending_before_message_id=NULL WHERE channel_id=?",
+                [context.channel_id],
+            )?;
         }
         if context.history_complete {
-            tx.execute(
+            cached_execute(
+                &tx,
                 "UPDATE scrape_cursors SET history_complete=1 WHERE channel_id=?",
                 [context.channel_id],
             )?;
@@ -187,7 +226,7 @@ struct Old {
     deleted: Option<String>,
 }
 fn old(db: &Connection, id: i64) -> rusqlite::Result<Option<Old>> {
-    db.query_row("SELECT m.rowid,m.channel_id,m.guild_id,m.author_id,m.content,m.image_urls,p.payload,p.deleted_at FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id WHERE m.id=?",[id],|r|Ok(Old{_rowid:r.get(0)?,channel:r.get(1)?,guild:r.get(2)?,author:r.get(3)?,content:r.get(4)?,images:r.get(5)?,payload:r.get(6)?,deleted:r.get(7)?})).optional()
+    db.prepare_cached("SELECT m.rowid,m.channel_id,m.guild_id,m.author_id,m.content,m.image_urls,p.payload,p.deleted_at FROM messages m LEFT JOIN message_payloads p ON p.message_id=m.id WHERE m.id=?")?.query_row([id],|r|Ok(Old{_rowid:r.get(0)?,channel:r.get(1)?,guild:r.get(2)?,author:r.get(3)?,content:r.get(4)?,images:r.get(5)?,payload:r.get(6)?,deleted:r.get(7)?})).optional()
 }
 fn legacy(id: i64, old: &Old) -> Value {
     json!({"id":id.to_string(),"channel_id":old.channel.map(|n|n.to_string()).unwrap_or("None".into()),"guild_id":old.guild.map(|n|n.to_string()),"author":{"id":old.author.map(|n|n.to_string()).unwrap_or("None".into())},"content":old.content,"archived_image_urls":old.images.as_deref().map(|s|s.split('\n').collect::<Vec<_>>()).unwrap_or_default()})
@@ -200,7 +239,11 @@ fn revision(
     source: &str,
     payload: Option<&str>,
 ) -> Result<()> {
-    db.execute("INSERT INTO message_revisions(message_id,observed_at,event,source,payload) VALUES (?,?,?,?,?)",params![id,now,event,source,payload])?;
+    cached_execute(
+        db,
+        "INSERT INTO message_revisions(message_id,observed_at,event,source,payload) VALUES (?,?,?,?,?)",
+        params![id, now, event, source, payload],
+    )?;
     Ok(())
 }
 pub fn save_payloads(
@@ -271,8 +314,23 @@ pub fn save_payloads(
         if previous.is_none() {
             inserts += 1;
         }
-        db.execute("INSERT INTO messages(id,channel_id,guild_id,author_id,content,image_urls) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET content=excluded.content,image_urls=excluded.image_urls WHERE content IS NOT excluded.content OR image_urls IS NOT excluded.image_urls",params![id,channel,context.guild_id.map(str::parse::<i64>).transpose()?,author,nonempty(&m["content"]).unwrap_or(""),image_urls(&m["attachments"])])?;
-        db.execute("INSERT INTO message_payloads(message_id,payload,first_seen_at,last_seen_at) VALUES (?,?,?,?) ON CONFLICT(message_id) DO UPDATE SET payload=excluded.payload,last_seen_at=excluded.last_seen_at,deleted_at=NULL,complete=1",params![id,payload,now,now])?;
+        cached_execute(
+            db,
+            "INSERT INTO messages(id,channel_id,guild_id,author_id,content,image_urls) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET content=excluded.content,image_urls=excluded.image_urls WHERE content IS NOT excluded.content OR image_urls IS NOT excluded.image_urls",
+            params![
+                id,
+                channel,
+                context.guild_id.map(str::parse::<i64>).transpose()?,
+                author,
+                nonempty(&m["content"]).unwrap_or(""),
+                image_urls(&m["attachments"])
+            ],
+        )?;
+        cached_execute(
+            db,
+            "INSERT INTO message_payloads(message_id,payload,first_seen_at,last_seen_at) VALUES (?,?,?,?) ON CONFLICT(message_id) DO UPDATE SET payload=excluded.payload,last_seen_at=excluded.last_seen_at,deleted_at=NULL,complete=1",
+            params![id, payload, now, now],
+        )?;
     }
     Ok(inserts)
 }
@@ -290,10 +348,15 @@ pub fn mark_deleted(db: &Connection, ids: &[i64], source: &str) -> Result<usize>
         }
         if old.payload.is_none() {
             let payload = canonical_json(&legacy(id, &old))?;
-            db.execute("INSERT INTO message_payloads(message_id,payload,first_seen_at,last_seen_at,deleted_at,complete) VALUES (?,?,?,?,?,0)",params![id,payload,now,now,now])?;
+            cached_execute(
+                db,
+                "INSERT INTO message_payloads(message_id,payload,first_seen_at,last_seen_at,deleted_at,complete) VALUES (?,?,?,?,?,0)",
+                params![id, payload, now, now, now],
+            )?;
             revision(db, id, &now, "message", "legacy_archive", Some(&payload))?;
         } else {
-            db.execute(
+            cached_execute(
+                db,
                 "UPDATE message_payloads SET deleted_at=? WHERE message_id=?",
                 params![now, id],
             )?;

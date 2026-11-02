@@ -1,8 +1,8 @@
 use searchcord_parity::performance;
 #[test]
 fn performance_fixture_is_reproducible_and_keeps_out_of_order_public_ids() {
-    let a = performance::fixture(1000);
-    let b = performance::fixture(1000);
+    let a = performance::benchmark_fixture(1000);
+    let b = performance::benchmark_fixture(1000);
     assert_eq!(
         performance::records_digest(&a.database()),
         performance::records_digest(&b.database())
@@ -35,4 +35,20 @@ fn performance_fixture_is_reproducible_and_keeps_out_of_order_public_ids() {
         )
         .unwrap();
     assert_eq!(rare, 2);
+    assert_eq!(
+        db.query_row("SELECT COUNT(*) FROM profile_details", [], |r| r
+            .get::<_, i64>(0))
+            .unwrap(),
+        64
+    );
+    assert_eq!(
+        db.query_row(
+            "SELECT COUNT(*) FROM messages WHERE image_urls IS NOT NULL",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        4
+    );
+    assert_eq!(db.query_row("SELECT COUNT(*) FROM message_payloads WHERE json_array_length(json_extract(payload,'$.attachments'))=1",[],|r|r.get::<_,i64>(0)).unwrap(),4);
 }

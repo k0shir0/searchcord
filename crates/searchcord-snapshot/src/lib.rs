@@ -127,7 +127,8 @@ pub fn records_digest(db: &Connection, order: &str) -> Result<String> {
     Ok(format!("{:x}", hash.finalize()))
 }
 pub fn short_terms(contents: &[Vec<Value>]) -> String {
-    let mut terms = BTreeSet::new();
+    let mut singles = BTreeSet::new();
+    let mut pairs = BTreeSet::new();
     for row in contents {
         let text = row[1]
             .as_str()
@@ -137,14 +138,19 @@ pub fn short_terms(contents: &[Vec<Value>]) -> String {
             .unwrap_or("")
             .to_ascii_lowercase();
         let chars: Vec<_> = text.chars().collect();
-        for c in &chars {
-            terms.insert(short_token(&c.to_string()));
-        }
+        singles.extend(chars.iter().copied());
         for pair in chars.windows(2) {
-            terms.insert(short_token(&pair.iter().collect::<String>()));
+            pairs.insert((pair[0], pair[1]));
         }
     }
-    terms.into_iter().collect::<Vec<_>>().join(" ")
+    // Fixed-width hexadecimal preserves codepoint order. Pair tokens sort
+    // before single tokens, matching the original block index exactly.
+    pairs
+        .into_iter()
+        .map(|(a, b)| format!("p{:06x}{:06x}", a as u32, b as u32))
+        .chain(singles.into_iter().map(|c| short_token(&c.to_string())))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Write a verified database at an exclusive, fresh temporary path. Publication
@@ -264,6 +270,9 @@ fn build_inner(
             LEFT JOIN record_names nc ON nc.value=r.channel_name LEFT JOIN record_names ng ON ng.value=r.guild_name
             LEFT JOIN record_names na ON na.value=r.author_name ORDER BY r.id"))?;
         let mut rows = statement.query([])?;
+        let mut index_insert = db.prepare_cached("INSERT INTO message_index VALUES (?,?,?)")?;
+        let mut text_insert =
+            db.prepare_cached("INSERT INTO messages_fts(rowid,content) VALUES (?,?)")?;
         let mut body = Vec::with_capacity(block_rows);
         let mut first = None;
         loop {
@@ -277,18 +286,12 @@ fn build_inner(
                 if first.is_none() {
                     first = values[0].as_i64();
                 }
-                db.execute(
-                    "INSERT INTO message_index VALUES (?,?,?)",
-                    params![
-                        count,
-                        row.get::<_, Option<i64>>(10)?,
-                        row.get::<_, Option<i64>>(11)?
-                    ],
-                )?;
-                db.execute(
-                    "INSERT INTO messages_fts(rowid,content) VALUES (?,?)",
-                    params![count, values[4].as_str()],
-                )?;
+                index_insert.execute(params![
+                    count,
+                    row.get::<_, Option<i64>>(10)?,
+                    row.get::<_, Option<i64>>(11)?
+                ])?;
+                text_insert.execute(params![count, values[4].as_str()])?;
                 body.push(vec![
                     values[0].clone(),
                     values[4].clone(),
