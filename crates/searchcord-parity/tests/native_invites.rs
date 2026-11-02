@@ -135,6 +135,8 @@ fn parser_matches_real_python_for_links_wrappers_errors_and_limits() {
     };
     let cases = vec![
         "https://discord.gg/Abc Abc;discord.com/invite/Def".to_owned(),
+        "\u{1c}Abc\u{1d};Def\u{1e}\u{1f}".into(),
+        "\u{1c} \u{1d} \u{1e} \u{1f}".into(),
         "<HTTPS://WWW.CANARY.DISCORDAPP.COM/invite/Ab_C-1/?x=1#ok>. 'abc' abc ABC".into(),
         ", ; invalid/link".into(),
         "[] () ...".into(),
