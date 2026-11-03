@@ -1,0 +1,20 @@
+Searchcord read-only viewer
+
+Run ./searchcord-search --db /absolute/path/to/archive.db, or start-search.bat
+with the same arguments on Windows. No Python runtime or Discord token is needed.
+The viewer opens http://127.0.0.1:8001. Pass --host or --port to change the binding.
+Without --db or --data-dir it reads data/searchcord.db beside the executable.
+
+Use --snapshot only with an offline copy that has no active WAL. Standard v9/v10
+archives and packed v101 snapshots are supported. The viewer never upgrades or
+writes an archive. Copy the exported media folder beside its database to retain
+available attachments and saved profile pictures.
+
+For a Linux package containing a static viewer:
+  docker build -t searchcord-search .
+  docker run --rm -p 8001:8001 -v /absolute/archive-folder:/app/data:ro searchcord-search
+The mounted folder must contain searchcord.db. The image runs as a non-root user.
+
+Keep archives private. The viewer has no built-in login. A hosted deployment needs
+access control and HTTPS provided by its host. To update it, export to a new file
+and restart the viewer with that file. Retain the previous file for rollback.

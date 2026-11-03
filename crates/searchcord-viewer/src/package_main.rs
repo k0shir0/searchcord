@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+const USAGE: &str = "Usage: searchcord-package-search NEW_DIRECTORY [--viewer BINARY]";
 fn main() {
     if let Err(e) = run() {
         eprintln!("{e}");
@@ -7,10 +8,12 @@ fn main() {
 }
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
-    let destination = PathBuf::from(
-        args.next()
-            .ok_or("Usage: searchcord-package-search NEW_DIRECTORY [--viewer BINARY]")?,
-    );
+    let destination = args.next().ok_or(USAGE)?;
+    if matches!(destination.to_str(), Some("--help" | "-h")) {
+        println!("{USAGE}");
+        return Ok(());
+    }
+    let destination = PathBuf::from(destination);
     let viewer = match args.next() {
         None => std::env::current_exe()?
             .with_file_name(format!("searchcord-search{}", std::env::consts::EXE_SUFFIX)),
