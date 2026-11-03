@@ -104,11 +104,12 @@
 
 # Standalone search deployment
 !/deploy/
+!/deploy/native/
+!/deploy/native/README.txt
 !/deploy/search/
 !/deploy/search/Dockerfile
 !/deploy/search/Dockerfile.dockerignore
-!/deploy/search/package.py
-!/deploy/search/requirements.txt
+!/deploy/search/RUNNING.txt
 
 !/crates/searchcord-viewer/
 !/crates/searchcord-viewer/Cargo.toml

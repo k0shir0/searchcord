@@ -14,6 +14,14 @@ use std::{
 #[test]
 fn standalone_folder_is_fresh_has_only_approved_files_and_runs_without_python() {
     let root = tempfile::tempdir().unwrap();
+    let help = Command::new(env!("CARGO_BIN_EXE_searchcord-package-search"))
+        .arg("--help")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(help.status.success());
+    assert!(String::from_utf8_lossy(&help.stdout).contains("Usage: searchcord-package-search"));
+    assert!(!root.path().join("--help").exists());
     let folder = root.path().join("native viewer with spaces");
     let output = Command::new(env!("CARGO_BIN_EXE_searchcord-package-search"))
         .arg(&folder)
@@ -47,6 +55,7 @@ fn standalone_folder_is_fresh_has_only_approved_files_and_runs_without_python() 
     let mut expected = vec![
         format!("searchcord-search{}", std::env::consts::EXE_SUFFIX),
         "LICENSE".into(),
+        "README.txt".into(),
         "THIRD_PARTY_NOTICES.md".into(),
         "Dockerfile".into(),
         ".dockerignore".into(),

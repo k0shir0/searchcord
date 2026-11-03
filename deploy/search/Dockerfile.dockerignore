@@ -1,12 +1,5 @@
-# Only the search runtime is sent to the builder, including from a full checkout.
 **
-!search_app.py
-!archive_reader.py
-!snapshot_codec.py
-!search_snapshot.py
-!profile_store.py
-!media_store.py
-!cli.py
+!searchcord-search
 !static/
 static/**
 !static/search/
@@ -19,10 +12,7 @@ static/search/**
 !static/bauhaus.css
 !static/profile-view.css
 !static/profile-view.js
-!deploy/
-deploy/**
-!deploy/search/
-deploy/search/**
-!deploy/search/Dockerfile
-!deploy/search/Dockerfile.dockerignore
-!deploy/search/requirements.txt
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!Dockerfile
+!.dockerignore

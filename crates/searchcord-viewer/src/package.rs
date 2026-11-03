@@ -46,6 +46,10 @@ pub fn build(destination: &Path, viewer: &Path) -> io::Result<PathBuf> {
     for (name, bytes) in [
         ("LICENSE", include_bytes!("../../../LICENSE").as_slice()),
         (
+            "README.txt",
+            include_bytes!("../../../deploy/search/RUNNING.txt").as_slice(),
+        ),
+        (
             "THIRD_PARTY_NOTICES.md",
             include_bytes!("../../../deploy/search/THIRD_PARTY_NOTICES.md").as_slice(),
         ),
