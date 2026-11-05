@@ -1351,7 +1351,7 @@ async def search(
     for r in rows:
         r["id"] = str(r["id"])
         avatar = avatars.get(r["author_id"])
-        r["avatar_url"] = discord_avatar_url(r["author_id"], avatar)
+        r["avatar_url"] = archived_media_url(DB_PATH, discord_avatar_url(r["author_id"], avatar))
         urls = r.pop("image_urls")
         r["attachments"] = [f"/api/images/{r['id']}/{i}" for i, _ in
                             enumerate(urls.splitlines())] if urls else []

@@ -7,7 +7,7 @@ import sqlite3
 import unicodedata
 
 from fastapi import HTTPException
-from media_store import local_url, media_status
+from media_store import local_url, media_status, profile_images_enabled
 
 STALE_AFTER_SECONDS = 24 * 60 * 60
 
@@ -26,6 +26,8 @@ def search_label(value):
 
 
 def image_url(uid, value, kind='avatars', size=256):
+    if not profile_images_enabled():
+        return None
     if not isinstance(value, str) or not re.fullmatch(r'(?:a_)?[A-Za-z0-9]+', value):
         return None
     extension = 'gif' if value.startswith('a_') else 'png'

@@ -189,6 +189,9 @@ backup beside the archive; retain it until the upgraded data has been checked.
   banners beside the database in `media/`. Missing or oversized downloads are
   recorded explicitly. Export with `--with-media` to preserve available binaries
   in the viewer; refresh inaccessible remote links through the collector.
+- For smaller media, set `SEARCHCORD_MEDIA_MODE=compact` for lossy WebP copies,
+  or `none` to stop new media downloads. Set `SEARCHCORD_PROFILE_IMAGES=shapes`
+  to keep geometric message avatars and skip profile pictures/banners.
 - An older archive upgrade keeps a recovery backup. Allow extra disk space and
   check the upgraded archive before removing a backup.
 - **Clear All Data** removes archived messages and derived metadata after
