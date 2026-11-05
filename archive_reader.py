@@ -304,7 +304,7 @@ class Archive:
         selected = []
         for column, value in (("guild_id", guild_id), ("channel_id", channel_id), ("author_id", author_id)):
             if value:
-                if not value.isascii() or not value.isdigit() or not 0 < int(value) <= MAX_ID:
+                if len(value) > 19 or not value.isascii() or not value.isdigit() or not 0 < int(value) <= MAX_ID:
                     raise HTTPException(400, "Choose a filter suggestion or enter a valid Discord ID.")
                 selected.append((column, int(value)))
         lower = snowflake_day(date_from) if date_from else None
