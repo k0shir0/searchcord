@@ -10,7 +10,9 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
+import threading
 import time
+import weakref
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
@@ -23,6 +25,8 @@ BATCH_SECONDS = 30
 PARALLEL_DOWNLOADS = 4
 HOSTS = frozenset({'cdn.discordapp.com', 'media.discordapp.net'})
 INLINE_TYPES = frozenset({'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'})
+_OBJECT_LOCKS = weakref.WeakValueDictionary()
+_OBJECT_LOCKS_GUARD = threading.Lock()
 
 
 def media_mode():
@@ -151,6 +155,27 @@ def _record(directory, key, data):
 
 
 async def cache_media(path, url, *, client=None, cancelled=None, seconds=FILE_SECONDS, deadline=None):
+    key = media_key(url)
+    if not key:
+        return {'status': 'unavailable', 'reason': 'unsupported_host'}
+    with _OBJECT_LOCKS_GUARD:
+        lock = _OBJECT_LOCKS.setdefault((media_directory(path), key), threading.Lock())
+    # Do not occupy executor threads while waiting: the current publisher needs
+    # that executor for hashing and encoding. Locks also coordinate event loops.
+    while not lock.acquire(blocking=False):
+        if cancelled and cancelled():
+            raise asyncio.CancelledError
+        if deadline is not None and time.monotonic() >= deadline:
+            return {'status': 'unavailable', 'reason': 'batch_time_limit'}
+        await asyncio.sleep(.01)
+    try:
+        return await _cache_media(path, url, client=client, cancelled=cancelled,
+                                  seconds=seconds, deadline=deadline)
+    finally:
+        lock.release()
+
+
+async def _cache_media(path, url, *, client=None, cancelled=None, seconds=FILE_SECONDS, deadline=None):
     """A failed binary never prevents its original message/profile being saved."""
     key = media_key(url)
     if not key:
@@ -163,7 +188,7 @@ async def cache_media(path, url, *, client=None, cancelled=None, seconds=FILE_SE
         return existing
     if client is None:
         async with httpx.AsyncClient(timeout=FILE_SECONDS, follow_redirects=False, trust_env=False) as client:
-            return await cache_media(path, url, client=client, cancelled=cancelled,
+            return await _cache_media(path, url, client=client, cancelled=cancelled,
                                      seconds=seconds, deadline=deadline)
     directory = media_directory(path)
     data = {'source_url': canonical_url(url), 'status': 'unavailable', 'reason': None,
