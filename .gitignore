@@ -34,6 +34,8 @@
 !/collection_state.py
 !/durable_scrape.py
 !/media_store.py
+!/media_optimize.py
+!/tests/test_media_storage.py
 !/chat_export.py
 !/search_app.py
 !/archive_reader.py
