@@ -1,0 +1,32 @@
+[package]
+name = "searchcord-viewer"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+[[bin]]
+name = "searchcord-search"
+path = "src/main.rs"
+[dependencies]
+searchcord-archive = { path = "../searchcord-archive" }
+axum.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+serde_json.workspace = true
+flate2.workspace = true
+url.workspace = true
+percent-encoding.workspace = true
+sha2.workspace = true
+chrono.workspace = true
+tower.workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_System_Registry", "Win32_System_Console"] }
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.191"
+[[bin]]
+name = "searchcord-package-search"
+path = "src/package_main.rs"
+[dev-dependencies]
+tempfile.workspace = true
+reqwest.workspace = true

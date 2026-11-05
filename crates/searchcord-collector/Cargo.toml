@@ -1,0 +1,36 @@
+[package]
+name = "searchcord-collector"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+[[bin]]
+name = "searchcord"
+path = "src/main.rs"
+[dependencies]
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+url.workspace = true
+percent-encoding.workspace = true
+fernet.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+flate2.workspace = true
+image = { version = "=0.25.8", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+webp = { version = "=0.3.1", default-features = false }
+reqwest = { workspace = true, features = ["rustls-tls"] }
+tokio = { workspace = true, features = ["sync", "time"] }
+getrandom = "=0.3.4"
+futures-core = "=0.3.34"
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+searchcord-archive = { path = "../searchcord-archive" }
+searchcord-viewer = { path = "../searchcord-viewer" }
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_Storage_FileSystem"] }
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.191"

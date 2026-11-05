@@ -1,0 +1,101 @@
+name: Rust migration parity
+
+on:
+  pull_request:
+    branches: [main, rewrite/rust]
+  push:
+    branches: [main, rewrite/rust]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      SEARCHCORD_DATA_DIR: ${{ github.workspace }}/.ci-data
+      SEARCHCORD_CREDENTIAL_FILE: ${{ github.workspace }}/.ci-secrets/credentials.vault
+      SEARCHCORD_CREDENTIAL_KEY_FILE: ${{ github.workspace }}/.ci-secrets/credentials.key
+      SEARCHCORD_PARITY_BACKEND: python
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements-parity.txt
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Install pinned browser and WebDriver
+        run: python crates/searchcord-parity/driver/install_webdriver.py
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo build --workspace --locked
+      - run: cargo test --workspace --locked
+      - name: Native viewer HTTP contracts
+        run: cargo test --locked -p searchcord-parity --test search_display
+        env:
+          SEARCHCORD_PARITY_BACKEND: rust
+      - name: Native collector and viewer browser
+        run: cargo test --locked -p searchcord-parity --test browser
+        env:
+          SEARCHCORD_PARITY_BACKEND: rust
+      - name: Static Linux viewer package and scratch image
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --locked --target x86_64-unknown-linux-gnu -p searchcord-viewer
+          target/x86_64-unknown-linux-gnu/release/searchcord-package-search .native-viewer
+          docker build -t searchcord-native-check .native-viewer
+          docker run --rm searchcord-native-check --help
+          trap 'docker rm -f searchcord-native-http >/dev/null' EXIT
+          docker run --rm -d --name searchcord-native-http -p 127.0.0.1:8001:8001 searchcord-native-check
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8001/ -o .native-viewer-index.html
+          cmp .native-viewer-index.html .native-viewer/static/search/index.html
+      - run: python -m unittest discover -s tests -t . -v
+      - run: node --test tests/test_collection_queue.mjs
+      - name: JavaScript syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem static -Recurse -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Build native applications
+        run: cargo build --release --locked -p searchcord-collector -p searchcord-viewer -p searchcord-snapshot
+      - name: Prepare native application package
+        shell: pwsh
+        run: |
+          $nativeRoot = Join-Path $PWD '.native-application'
+          New-Item -ItemType Directory -Path $nativeRoot | Out-Null
+          $binarySuffix = if ($IsWindows) { '.exe' } else { '' }
+          foreach ($binaryName in @('searchcord', 'searchcord-search', 'searchcord-snapshot', 'searchcord-package-search')) {
+            Copy-Item -LiteralPath "target/release/$binaryName$binarySuffix" -Destination $nativeRoot
+          }
+          Copy-Item -LiteralPath LICENSE -Destination $nativeRoot
+          Copy-Item -LiteralPath deploy/search/THIRD_PARTY_NOTICES.md -Destination $nativeRoot
+          Copy-Item -LiteralPath deploy/native/README.txt -Destination $nativeRoot
+          if ($IsWindows) {
+            Copy-Item -LiteralPath start.bat,start-search.bat -Destination $nativeRoot
+          }
+          $env:SEARCHCORD_NATIVE_COLLECTOR = Join-Path $nativeRoot "searchcord$binarySuffix"
+          cargo test --locked -p searchcord-collector --test startup
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -czf "searchcord-${{ runner.os }}-${{ runner.arch }}.tar.gz" -C $nativeRoot .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: searchcord-${{ runner.os }}-${{ runner.arch }}
+          path: searchcord-${{ runner.os }}-${{ runner.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 14

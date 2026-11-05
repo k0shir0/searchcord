@@ -1,0 +1,24 @@
+[package]
+name = "searchcord-parity"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+reqwest.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+sha2.workspace = true
+searchcord-archive = { path = "../searchcord-archive" }
+searchcord-collector = { path = "../searchcord-collector" }
+
+[dev-dependencies]
+tower.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+axum.workspace = true
+flate2.workspace = true
+searchcord-snapshot = { path = "../searchcord-snapshot" }
