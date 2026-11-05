@@ -507,16 +507,16 @@ impl MediaCollector {
         if data["status"] == "saved" && mode == "compact" {
             // This runs on the joined blocking worker, never on the HTTP loop.
             // Conversion failure leaves the verified original manifest intact.
-            if let Ok(Some(compact)) = crate::media_compact::optimize(&directory, &key, &data) {
-                if record(&directory, &key, &compact).is_ok() {
-                    let original = directory.join(format!("{key}.bin"));
-                    if !symlink(&original)
-                        && media::file_digest(&original).ok().as_deref() == data["sha256"].as_str()
-                    {
-                        let _ = fs::remove_file(original);
-                    }
-                    data = compact;
+            if let Ok(Some(compact)) = crate::media_compact::optimize(&directory, &key, &data)
+                && record(&directory, &key, &compact).is_ok()
+            {
+                let original = directory.join(format!("{key}.bin"));
+                if !symlink(&original)
+                    && media::file_digest(&original).ok().as_deref() == data["sha256"].as_str()
+                {
+                    let _ = fs::remove_file(original);
                 }
+                data = compact;
             }
         }
         Ok(data)

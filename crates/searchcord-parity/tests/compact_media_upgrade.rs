@@ -49,7 +49,7 @@ fn compact_python_manifests_survive_native_reads_export_and_cleanup() {
     fs::write(&manifest, data.to_string()).unwrap();
     fs::write(directory.join("unrelated.webp"), b"keep").unwrap();
     fs::write(directory.join(format!("{key}.not-a-digest.webp")), b"keep").unwrap();
-    assert_eq!(clear_media(&h.archive()).unwrap(), 2);
+    assert_eq!(clear_media(h.archive()).unwrap(), 2);
     assert!(!directory.join(&filename).exists());
     assert!(directory.join("unrelated.webp").exists());
 }
