@@ -20,6 +20,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub fn profile_images_enabled() -> bool {
+    std::env::var("SEARCHCORD_PROFILE_IMAGES")
+        .unwrap_or_else(|_| "original".into())
+        .eq_ignore_ascii_case("original")
+}
+pub fn media_kind(url: &str) -> &'static str {
+    match url::Url::parse(url).ok().as_ref().map(|url| url.path()) {
+        Some(path) if path.starts_with("/avatars/") => "avatar",
+        Some(path) if path.starts_with("/banners/") => "banner",
+        _ => "attachment",
+    }
+}
+
 fn quote(value: &str) -> String {
     let mut output = String::new();
     for byte in value.bytes() {
@@ -114,8 +127,24 @@ fn symlink(path: &Path) -> bool {
         }
     })
 }
+pub fn binary_path(directory: &Path, key: &str, data: &Value) -> std::io::Result<PathBuf> {
+    let fail = || std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid media filename");
+    let Some(name) = data.get("storage_file").filter(|value| !value.is_null()) else {
+        return Ok(directory.join(format!("{key}.bin")));
+    };
+    let digest = data["sha256"].as_str().ok_or_else(fail)?;
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        || name.as_str() != Some(&format!("{key}.{digest}.webp"))
+    {
+        return Err(fail());
+    }
+    Ok(directory.join(name.as_str().ok_or_else(fail)?))
+}
 fn file_valid(directory: &Path, key: &str, data: &Value, verify: bool) -> std::io::Result<bool> {
-    let binary = directory.join(format!("{key}.bin"));
+    let binary = binary_path(directory, key, data)?;
     if symlink(directory) || symlink(&binary) {
         return Ok(false);
     }
@@ -203,7 +232,7 @@ pub fn verified_file(path: &Path, key: &str) -> Result<MediaFile, ArchiveError> 
     .contains(&content_type);
     Ok(MediaFile {
         digest: data["sha256"].as_str().ok_or_else(fail)?.to_owned(),
-        path: directory.join(format!("{key}.bin")),
+        path: binary_path(&directory, key, &data).map_err(|_| fail())?,
         content_type: if inline {
             content_type.to_owned()
         } else {

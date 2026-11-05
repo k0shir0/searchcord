@@ -893,7 +893,8 @@ pub fn counted_search(
                     .collect();
             let mut message = serde_json::to_value(record)?;
             message.as_object_mut().unwrap().remove("image_urls");
-            message["avatar_url"] = json!(avatar);
+            message["avatar_url"] =
+                json!(avatar.map(|url| searchcord_archive::media::local_url(path.as_ref(), &url)));
             message["attachments"] = json!(attachments);
             messages.push(message);
         }

@@ -61,6 +61,9 @@ fn event(kind: &str, cid: &str, channel: &Value) -> Value {
     json!({"type":kind,"channel_id":cid,"channel":channel["name"],"guild":channel["guild_name"],"guild_id":channel["guild_id"]})
 }
 fn avatar(uid: &str, hash: &Value) -> Option<String> {
+    if !searchcord_archive::media::profile_images_enabled() {
+        return None;
+    }
     let hash = hash.as_str()?;
     let plain = hash.strip_prefix("a_").unwrap_or(hash);
     if plain.is_empty() || !plain.bytes().all(|b| b.is_ascii_alphanumeric()) {

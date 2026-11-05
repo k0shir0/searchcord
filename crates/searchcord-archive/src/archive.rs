@@ -152,7 +152,7 @@ fn checked_query(query: &Query) -> Result<Query, ArchiveError> {
         &mut query.author_id,
     ] {
         if let Some(raw) = value.as_ref().filter(|s| !s.is_empty()) {
-            let id = if raw.bytes().all(|b| b.is_ascii_digit()) {
+            let id = if raw.len() <= 19 && raw.bytes().all(|b| b.is_ascii_digit()) {
                 raw.parse::<i64>().ok().filter(|id| *id > 0)
             } else {
                 None

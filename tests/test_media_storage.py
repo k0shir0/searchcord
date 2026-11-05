@@ -33,6 +33,40 @@ def png(size=(2400, 1200), mode='RGB'):
 
 
 class MediaTest(unittest.TestCase):
+    def test_same_key_compact_publishers_and_cancelled_waiter_are_serialized(self):
+        async def scenario():
+            requested = asyncio.Event()
+            release = asyncio.Event()
+            count = 0
+
+            async def download(request):
+                nonlocal count
+                count += 1
+                requested.set()
+                await release.wait()
+                return httpx.Response(200, content=png((512, 256)), headers={'content-type': 'image/png'})
+
+            with patch.dict(os.environ, {'SEARCHCORD_MEDIA_MODE': 'compact'}):
+                async with httpx.AsyncClient(transport=httpx.MockTransport(download)) as client:
+                    first = asyncio.create_task(cache_media(self.path, ATTACHMENT, client=client))
+                    self.assertTrue(await asyncio.wait_for(requested.wait(), 5))
+                    second = asyncio.create_task(cache_media(self.path, ATTACHMENT, client=client))
+                    cancelled = asyncio.create_task(cache_media(self.path, ATTACHMENT, client=client))
+                    await asyncio.sleep(.05)
+                    self.assertEqual(count, 1)
+                    cancelled.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await cancelled
+                    release.set()
+                    a, b = await asyncio.wait_for(asyncio.gather(first, second), 5)
+                    self.assertEqual(a, b)
+                    self.assertIn('storage_file', a)
+                    self.assertEqual(count, 1)
+                    self.assertEqual(media_status(self.path, ATTACHMENT, verify=True)['status'], 'saved')
+                    self.assertFalse((self.directory / (media_key(ATTACHMENT) + '.bin')).exists())
+                    self.assertEqual((await cache_media(self.path, ATTACHMENT, client=client))['status'], 'saved')
+        asyncio.run(scenario())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

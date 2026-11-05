@@ -12,6 +12,7 @@ mod dpapi;
 pub mod http;
 pub mod invites;
 pub mod media_collection;
+mod media_compact;
 pub mod migrations;
 pub mod monitor;
 pub mod pacing;

@@ -92,6 +92,9 @@ pub fn user_id(value: &str) -> Result<&str, ArchiveError> {
     }
 }
 pub fn image_url(uid: &str, hash: Option<&str>, kind: &str, size: usize) -> Option<String> {
+    if !media::profile_images_enabled() {
+        return None;
+    }
     let hash = hash?;
     let body = hash.strip_prefix("a_").unwrap_or(hash);
     if body.is_empty() || !body.bytes().all(|b| b.is_ascii_alphanumeric()) {

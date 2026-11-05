@@ -268,6 +268,24 @@ fn media_candidates_preserve_order_last_signature_and_supported_profile_assets()
 }
 
 #[tokio::test]
+async fn concurrent_collectors_publish_the_same_object_once() {
+    let mut reply = Reply::bytes(b"shared archive object");
+    reply.body_delay = Duration::from_millis(200);
+    let fixture = Fixture::new(HashMap::from([(
+        "/attachments/20/40/object.png".into(),
+        reply,
+    )]));
+    // Independently constructed collectors must share ownership for this key.
+    let first = fixture.collector(Limits::default());
+    let second = fixture.collector(Limits::default());
+    let (a, b) = tokio::join!(first.cache_media(URL, None), second.cache_media(URL, None));
+    assert_eq!(a.unwrap(), b.unwrap());
+    assert_eq!(fixture.state.trace.lock().unwrap().len(), 1);
+    assert_eq!(media::status(&fixture.path, URL, true)["status"], "saved");
+    no_temporary(&fixture.path);
+}
+
+#[tokio::test]
 async fn native_cache_matches_python_manifest_digests_reuses_signature_and_repairs_damage() {
     let content: &[u8] = b"synthetic PNG bytes\0with no credentials";
     let fixture = Fixture::new(HashMap::from([(

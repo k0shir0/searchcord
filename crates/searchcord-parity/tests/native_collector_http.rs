@@ -175,6 +175,85 @@ fn message(id: i64, author: &str, content: &str) -> Value {
 }
 
 #[test]
+fn mutations_reject_foreign_origins_and_non_json_without_side_effects() {
+    let h = python();
+    runtime().block_on(async {
+        let (app, fixture, server) = application(h.archive(), vec![]).await;
+        let http = router(app.clone());
+        let before = request(&http, "GET", "/api/settings", Value::Null).await;
+        for (origin, kind, expected) in [
+            (Some("https://hostile.example"), "text/plain", 403),
+            (Some("null"), "application/json", 403),
+            (None, "text/plain", 415),
+            (None, "application/x-www-form-urlencoded", 415),
+        ] {
+            let mut builder = Request::builder()
+                .method("POST")
+                .uri("/api/settings")
+                .header("content-type", kind);
+            if let Some(origin) = origin {
+                builder = builder.header("origin", origin);
+            }
+            let response = http
+                .clone()
+                .oneshot(
+                    builder
+                        .body(Body::from(r#"{"token":"attacker-controlled"}"#))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status().as_u16(), expected);
+        }
+        for path in [
+            "/api/profile-backfill/start",
+            "/api/scrape/absent/resume",
+            "/api/messages?confirm=true",
+        ] {
+            let response = http
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(if path.contains("messages") {
+                            "DELETE"
+                        } else {
+                            "POST"
+                        })
+                        .uri(path)
+                        .header("origin", "https://hostile.example")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 403, "{path}");
+        }
+        let after = request(&http, "GET", "/api/settings", Value::Null).await;
+        assert_eq!(after["body"], before["body"]);
+        let legitimate = http
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/settings")
+                    .header("origin", "http://localhost:8000")
+                    .header("content-type", "application/json; charset=utf-8")
+                    .body(Body::from(
+                        r#"{"token":"synthetic-local-token","token_label":"Local frontend"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(legitimate.status(), 200);
+        assert!(fixture.requests.lock().unwrap().is_empty());
+        app.shutdown().await.unwrap();
+        app.writer.shutdown().await.unwrap();
+        server.abort();
+    });
+}
+
+#[test]
 fn validation_initial_state_methods_docs_and_unchanged_assets_match_python() {
     let mut h = python();
     let rt = runtime();

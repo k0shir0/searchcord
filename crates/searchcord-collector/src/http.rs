@@ -625,6 +625,18 @@ impl Model {
     }
 }
 async fn body(request: Request) -> Result<Model> {
+    let json_content = request
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
+    if !json_content {
+        return Err(http_error(
+            415,
+            "JSON requests require Content-Type: application/json",
+        ));
+    }
     let raw = to_bytes(request.into_body(), usize::MAX).await?;
     if raw.is_empty() {
         return Err(invalid(vec![
@@ -1416,6 +1428,11 @@ async fn dispatch<C: Clock>(State(app): State<App<C>>, request: Request) -> Resp
                 .insert(header::ACCESS_CONTROL_ALLOW_HEADERS, value.clone());
         }
         Ok(r)
+    } else if !matches!(method, Method::GET | Method::HEAD | Method::OPTIONS)
+        && headers.contains_key(header::ORIGIN)
+        && !origin.as_ref().is_some_and(|value| origin_allowed(value))
+    {
+        Err(http_error(403, "Disallowed request origin"))
     } else if ["/docs", "/redoc", "/docs/oauth2-redirect", "/openapi.json"].contains(&path.as_str())
         && (method == Method::GET || method == Method::HEAD)
     {

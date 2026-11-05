@@ -9,7 +9,7 @@ use std::{
     fs,
     io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock, Weak},
     time::{Duration, Instant},
 };
 
@@ -17,6 +17,23 @@ pub const MAX_BYTES: u64 = 25 * 1024 * 1024;
 pub const FILE_SECONDS: u64 = 15;
 pub const BATCH_SECONDS: u64 = 30;
 pub const PARALLEL_DOWNLOADS: usize = 4;
+
+type ObjectLocks = HashMap<(PathBuf, String), Weak<Mutex<()>>>;
+fn object_lock(path: &Path, key: &str) -> Arc<Mutex<()>> {
+    static LOCKS: OnceLock<Mutex<ObjectLocks>> = OnceLock::new();
+    let mut locks = LOCKS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap();
+    locks.retain(|_, lock| lock.strong_count() > 0);
+    let identity = (media::directory(path), key.to_owned());
+    if let Some(lock) = locks.get(&identity).and_then(Weak::upgrade) {
+        return lock;
+    }
+    let lock = Arc::new(Mutex::new(()));
+    locks.insert(identity, Arc::downgrade(&lock));
+    lock
+}
 
 #[derive(Clone, Debug)]
 pub struct Limits {
@@ -52,7 +69,7 @@ fn stopped() -> Box<dyn std::error::Error + Send + Sync> {
 fn cancelled(control: &Control, stop_on_pause: bool) -> bool {
     control.is_stopped() || (stop_on_pause && control.is_paused())
 }
-fn symlink(path: &Path) -> bool {
+pub(crate) fn symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| {
         #[cfg(windows)]
         {
@@ -160,6 +177,21 @@ fn timeout(error: &(dyn std::error::Error + 'static)) -> bool {
 }
 
 impl MediaCollector {
+    fn mode(&self) -> Result<String> {
+        let mode = std::env::var("SEARCHCORD_MEDIA_MODE")
+            .unwrap_or_else(|_| "original".into())
+            .to_ascii_lowercase();
+        if !["original", "compact", "none"].contains(&mode.as_str()) {
+            return Err("SEARCHCORD_MEDIA_MODE must be original, compact or none".into());
+        }
+        let profiles = std::env::var("SEARCHCORD_PROFILE_IMAGES")
+            .unwrap_or_else(|_| "original".into())
+            .to_ascii_lowercase();
+        if !["original", "shapes"].contains(&profiles.as_str()) {
+            return Err("SEARCHCORD_PROFILE_IMAGES must be original or shapes".into());
+        }
+        Ok(mode)
+    }
     pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         Ok(Self {
             path: crate::credentials::resolve(path.as_ref())?,
@@ -227,7 +259,13 @@ impl MediaCollector {
         control: Option<Control>,
         stop_on_pause: bool,
     ) -> Result<Vec<Value>> {
-        let urls = message_media_urls(messages);
+        if self.mode()? == "none" {
+            return Ok(vec![]);
+        }
+        let urls: Vec<_> = message_media_urls(messages)
+            .into_iter()
+            .filter(|url| media::media_kind(url) == "attachment" || media::profile_images_enabled())
+            .collect();
         if urls.is_empty() {
             return Ok(vec![]);
         }
@@ -300,6 +338,16 @@ impl MediaCollector {
         let Some(key) = media::media_key(url) else {
             return Ok(json!({"status":"unavailable","reason":"unsupported_host"}));
         };
+        let mode = self.mode()?;
+        if mode == "none"
+            || (media::media_kind(url) != "attachment" && !media::profile_images_enabled())
+        {
+            return Ok(json!({"status":"unavailable","reason":"disabled_by_policy"}));
+        }
+        // Distinct objects retain their parallelism. For the same archive/key,
+        // include cache checks, both publications and original retirement.
+        let object = object_lock(&self.path, &key);
+        let _publication = object.lock().unwrap();
         let directory = media::directory(&self.path);
         let existing = if symlink(&directory) {
             json!({"status":"unavailable","reason":"unsafe_path"})
@@ -456,6 +504,21 @@ impl MediaCollector {
             data["status"] = json!("unavailable");
             data["reason"] = json!("storage_error");
         }
+        if data["status"] == "saved" && mode == "compact" {
+            // This runs on the joined blocking worker, never on the HTTP loop.
+            // Conversion failure leaves the verified original manifest intact.
+            if let Ok(Some(compact)) = crate::media_compact::optimize(&directory, &key, &data) {
+                if record(&directory, &key, &compact).is_ok() {
+                    let original = directory.join(format!("{key}.bin"));
+                    if !symlink(&original)
+                        && media::file_digest(&original).ok().as_deref() == data["sha256"].as_str()
+                    {
+                        let _ = fs::remove_file(original);
+                    }
+                    data = compact;
+                }
+            }
+        }
         Ok(data)
     }
 }
@@ -525,15 +588,26 @@ pub fn clear_media(path: impl AsRef<Path>) -> Result<usize> {
     for entry in fs::read_dir(directory)? {
         let file = entry?.path();
         let name = file.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        let object = name
-            .strip_suffix(".bin")
-            .or_else(|| name.strip_suffix(".json"))
-            .is_some_and(|key| {
-                key.len() == 64
-                    && key
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            });
+        let hex = |key: &str| {
+            key.len() == 64
+                && key
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        };
+        let compact = name
+            .strip_suffix(".webp")
+            .and_then(|name| name.split_once('.'))
+            .is_some_and(|(key, digest)| hex(key) && hex(digest));
+        let object = compact
+            || name
+                .strip_suffix(".bin")
+                .or_else(|| name.strip_suffix(".json"))
+                .is_some_and(|key| {
+                    key.len() == 64
+                        && key
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                });
         let temporary = name
             .strip_prefix(".searchcord-media-")
             .and_then(|s| s.strip_suffix(".tmp"))

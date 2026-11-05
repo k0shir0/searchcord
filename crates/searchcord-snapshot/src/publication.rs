@@ -156,9 +156,14 @@ pub fn export_media_with_hook(
                 report.unavailable += 1;
                 return Ok(());
             }
-            let path = directory.join(format!("{key}.bin"));
+            let source_path = media::binary_path(&source_directory, &key, &data)?;
+            let path = directory.join(
+                source_path
+                    .file_name()
+                    .ok_or_else(|| SnapshotError("Invalid media filename".into()))?,
+            );
             {
-                let mut original = fs::File::open(source_directory.join(format!("{key}.bin")))?;
+                let mut original = fs::File::open(&source_path)?;
                 let mut output = fs::OpenOptions::new()
                     .write(true)
                     .create_new(true)
