@@ -41,31 +41,6 @@ Open <http://127.0.0.1:8000>. On Windows, run `start.bat` after building.
 A first upgrade of a large archive may take several minutes. The browser opens
 when the database is ready.
 
-The native application does not require Python. Windows launchers use the binary
-beside the launcher, then `target\release`, and support paths with spaces. They
-keep the archive in the launcher's `data` folder unless `SEARCHCORD_DATA_DIR`
-is set. Direct binary launches resolve relative archive paths beside the binary;
-use an absolute `--data-dir` or `--db` to select an existing archive explicitly.
-The collector supports `SEARCHCORD_HOST`, `SEARCHCORD_PORT` and
-`SEARCHCORD_NO_BROWSER=1`, or `--host`, `--port` and `--no-browser`.
-
-Both startup commands show a white terminal banner with large mint Searchcord
-lettering. Wider windows use a larger seven-row block font with clearer letter
-shapes. In supported interactive terminals it stays at the top, while startup
-and runtime logs scroll below it. The banner fits the terminal's starting width
-and height; narrow or short windows use a smaller layout. Scrolling returns to
-normal on exit. Redirected output, `TERM=dumb` and `NO_COLOR` use a plain ASCII
-header without terminal controls. Server worker processes keep ordinary log
-output so they do not redraw or reset their shared console. The collector logs
-its save policy, request/retry intervals,
-mandatory breaks and live polling interval once at startup. Saving happens after
-each fetched page. Scrape requests wait a random 0.5–1.5 seconds after the previous
-scrape response, with a random 60–90-second break after every 100 successful responses.
-
-The collector opens the operating system's default browser after its health
-check succeeds. No browser executable paths are required. If launching fails,
-the app keeps running and prints its URL for manual opening.
-
 ## Use SearchCord
 
 1. Open the settings gear, name your Discord token and select **save & use token**.
