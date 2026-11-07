@@ -164,7 +164,13 @@ impl Fixture {
         self.state.requests.lock().unwrap().clone()
     }
     async fn done(&self) -> searchcord_collector::profiles::BackfillState {
-        tokio::time::timeout(Duration::from_secs(20), async {
+        self.done_within(Duration::from_secs(20)).await
+    }
+    async fn done_within(
+        &self,
+        timeout: Duration,
+    ) -> searchcord_collector::profiles::BackfillState {
+        tokio::time::timeout(timeout, async {
             loop {
                 let state = self.profiles.state();
                 if !state.running {
@@ -174,7 +180,13 @@ impl Fixture {
             }
         })
         .await
-        .expect("backfill finishes")
+        .unwrap_or_else(|_| {
+            let state = self.profiles.state();
+            panic!(
+                "backfill did not finish: saved {}, failed {}, status {}",
+                state.saved, state.failed, state.status
+            )
+        })
     }
 }
 fn payload(uid: &str, name: &str) -> Value {
@@ -576,7 +588,9 @@ async fn backfill_is_stopped_on_startup_exclusive_bounded_and_refreshes_only_sta
         409
     );
     block.release.notify_one();
-    let done = f.done().await;
+    // This fixture crosses the batch boundary with 102 loopback requests and
+    // durable saves. Budget for the full workload on hosted Windows disks.
+    let done = f.done_within(Duration::from_secs(120)).await;
     assert_eq!(
         (done.saved, done.failed, done.status.as_str()),
         (102, 0, "Complete.")
