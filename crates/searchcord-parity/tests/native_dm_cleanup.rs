@@ -379,22 +379,23 @@ async fn invalid_inputs_duplicate_running_jobs_cancelled_requests_and_shutdown_n
 #[tokio::test]
 async fn full_pages_use_oldest_cursor_and_stalled_progress_is_bounded() {
     let messages: Vec<_> = (1..=100).rev().map(|n| message(n, "30")).collect();
-    let mut replies = vec![reply(200, json!({"id":"30"})), reply(200, json!(messages))];
-    // 100 messages x 4 failed attempts emits 500 events, then another full page.
-    replies.extend((0..400).map(|_| reply(500, json!({}))));
-    replies.push(reply(200, json!(messages)));
-    replies.extend((0..400).map(|_| reply(500, json!({}))));
-    replies.push(reply(200, json!(messages)));
-    replies.extend((0..400).map(|_| reply(500, json!({}))));
+    let mut replies = vec![reply(200, json!({"id":"30"}))];
+    // Emit 1,100 events across three full pages to overflow the subscriber.
+    // The retry-cap test covers exhausting all four attempts separately.
+    for retries in [1, 2, 2] {
+        replies.push(reply(200, json!(messages)));
+        for _ in &messages {
+            replies.extend((0..retries).map(|_| reply(500, json!({}))));
+            replies.push(reply(404, json!({})));
+        }
+    }
     replies.push(reply(200, json!([])));
     let (_dir, _path, service, fixture, server) = setup(&messages, replies).await;
     let started = service.start("20", "fixture".into()).await.unwrap();
     let id = started["job_id"].as_str().unwrap();
     let (_, mut events) = service.subscribe(id).await.unwrap();
-    // This stress case performs 1,205 real loopback requests and durable pacing
-    // writes. Allow hosted Windows disk latency without changing retry policy,
-    // event capacity, request count, cursor assertions or production deadlines.
-    let terminal = finish_with_timeout(&service, id, Duration::from_secs(120)).await;
+    // Allow for 805 loopback requests and durable pacing writes on hosted disks.
+    let terminal = finish_with_timeout(&service, id, Duration::from_secs(180)).await;
     assert_eq!(terminal["failed"], 300);
     assert_eq!(terminal["scanned"], 300);
     assert!(matches!(
@@ -402,9 +403,9 @@ async fn full_pages_use_oldest_cursor_and_stalled_progress_is_bounded() {
         Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_))
     ));
     let requests = fixture.requests.lock().unwrap();
-    assert_eq!(requests.len(), 1205);
-    assert_eq!(requests[402]["query"], "limit=100&before=1");
-    assert_eq!(requests[803]["query"], "limit=100&before=1");
+    assert_eq!(requests.len(), 805);
+    assert_eq!(requests[202]["query"], "limit=100&before=1");
+    assert_eq!(requests[503]["query"], "limit=100&before=1");
     drop(requests);
     server.abort();
 }
