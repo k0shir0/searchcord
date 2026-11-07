@@ -181,27 +181,24 @@ or backup. Test upgrades on a separate copy first.
 
 ## Release timeline
 
-Major development milestones in the current `main` history. Dates use
-America/Chicago and reflect commits, not deployment dates. As of 2026-10-09,
-no versioned [GitHub Releases](https://github.com/k0shir0/searchcord/releases)
-have been published.
+Major milestones by the date they reached `main` (America/Chicago).
 
 | Date | Update |
 | --- | --- |
-| 2026-11-01 | Native collector, search viewer and archive tools, using existing archives and the same browser interface. |
-| 2026-10-09 | Durable paused job recovery, observed message revisions, local attachments and protected saved credentials. |
-| 2026-10-09 | Invite queues, readable server/thread scans and reload-recoverable scrape pause/resume, with enforced request pacing and breaks. |
-| 2026-10-07 | Portable Windows startup, terminal banner and saved-token removal. |
-| 2026-10-02 | Faster cursor-based search and standalone viewer packaging with Docker support. |
-| 2026-09-30 | Compressed search archives that exclude saved tokens. |
-| 2026-09-29 | Immediate profile collection while scraping and stoppable, retryable profile backfill. |
-| 2026-09-28 | Separate read-only viewer, archived profile cards and more reliable scraping. |
-| 2026-09-26 | Multiple saved accounts, confirmed archive cleanup and expanded server/contributor rankings. |
-| 2026-09-25 | Reduced archive storage and compressed recovery backups. |
-| 2026-09-24 | Unified scraping tools and activity charts. |
-| 2026-09-23 | New search layout, filters, resumable scraping and DM message cleanup. |
-| 2026-07-23 | Unified web app with live monitoring and ChatML export. |
-| 2025-09-20 | Initial scraper and viewer. |
+| 2026-11-05 | The collector, search viewer and archive tools moved to Rust. Existing archives and the browser interface carry forward. Live monitoring now recovers paused after a restart. [#27](https://github.com/k0shir0/searchcord/pull/27) |
+| 2026-11-05 | Added compact image storage, geometric avatars and tools to shrink an existing media cache. [#8](https://github.com/k0shir0/searchcord/pull/8) |
+| 2026-10-11 | Collection queues stay tied to the selected account, and scrape progress reflects messages saved to the archive. [#4](https://github.com/k0shir0/searchcord/pull/4) [#5](https://github.com/k0shir0/searchcord/pull/5) |
+| 2026-10-09 | Added invite queues, automatic channel and thread discovery, and pause and resume across reloads or restarts. The archive keeps observed edits and deletions, caches media locally and protects saved tokens in an encrypted vault. [Collection](https://github.com/k0shir0/searchcord/commit/9b497d1) [Archive](https://github.com/k0shir0/searchcord/commit/1c9363c) |
+| 2026-10-07 | Added portable Windows launchers and a way to remove all saved tokens. [#2](https://github.com/k0shir0/searchcord/pull/2) |
+| 2026-10-02 | Search pages load faster on large archives. The read-only viewer can run as a standalone Docker service. [#1](https://github.com/k0shir0/searchcord/pull/1) |
+| 2026-09-30 | Added compact search snapshots that can be shared without saved credentials. [Commit](https://github.com/k0shir0/searchcord/commit/e5a7935) |
+| 2026-09-28 | Added a separate read-only viewer, saved profile cards and collection of missing profile details. [Viewer](https://github.com/k0shir0/searchcord/commit/844f0cb) [Profiles](https://github.com/k0shir0/searchcord/commit/cf4dea7) |
+| 2026-09-26 | Added multiple saved Discord accounts, archive cleanup with confirmation, and server and contributor rankings. [Accounts](https://github.com/k0shir0/searchcord/commit/c32e670) [Rankings](https://github.com/k0shir0/searchcord/commit/4db997b) |
+| 2026-09-25 | Reduced archive disk usage and added compressed recovery backups. [Commit](https://github.com/k0shir0/searchcord/commit/bb9f4bd) |
+| 2026-09-24 | Brought collection tools into one workspace and expanded interactive activity charts. [Commit](https://github.com/k0shir0/searchcord/commit/2695a19) |
+| 2026-09-23 | Introduced the current search layout and filters. [Commit](https://github.com/k0shir0/searchcord/commit/7e89725) |
+| 2026-07-23 | Replaced the original scripts with a web app for search, collection, live monitoring, DM cleanup and ChatML export. [Commit](https://github.com/k0shir0/searchcord/commit/80df94c) |
+| 2025-09-20 | First Discord scraper and archive search scripts. [Scraper](https://github.com/k0shir0/searchcord/commit/2c4f19a) [Search](https://github.com/k0shir0/searchcord/commit/4aab66b) |
 
 ## License
 
