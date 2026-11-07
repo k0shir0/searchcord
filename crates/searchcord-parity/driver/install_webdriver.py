@@ -6,7 +6,7 @@ import tempfile
 from urllib.request import urlopen
 from zipfile import ZipFile
 
-VERSION = '154.0.8037.57'
+VERSION = '157.0.8103.38'
 system = platform.system()
 target = {'Linux': 'linux64', 'Windows': 'win64',
           'Darwin': 'mac-arm64' if platform.machine() == 'arm64' else 'mac-x64'}[system]
