@@ -68,16 +68,6 @@ account and resume them when ready; no upstream action restarts automatically.
 Request pacing and mandatory breaks are shared across scrape jobs and cannot
 be bypassed by pause/resume or starting another job.
 
-Search results load one page at a time. Collection retries temporary failures
-and keeps saved messages when stopped. Re-fetched IDs update searchable content
-and preserve observed revisions; confirmed deletions retain an archive tombstone.
-
-Browse uses message-ID cursors to avoid counting every matching message. It shows
-the current page and whether more results are available, rather than an exact
-match total. Existing counted page links still work. Reloaded or shared cursor
-links preserve their page; when earlier cursors are unavailable, **first page**
-returns to the beginning. Queries accept up to 200 characters.
-
 ## Search only
 
 Run the separate frontend in `static/search` with an existing SearchCord archive:
