@@ -312,10 +312,6 @@ fn validation() {
             vec![("guild_id", "name")],
             "Choose a filter suggestion or enter a valid Discord ID.",
         ),
-        (
-            vec![("author_id", "999999999999999999999999999999")],
-            "Choose a filter suggestion or enter a valid Discord ID.",
-        ),
         (vec![("date_from", "2026-99-01")], "Enter a valid UTC date."),
         (
             vec![("date_from", "2026-09-04"), ("date_to", "2026-09-01")],
@@ -329,6 +325,15 @@ fn validation() {
         let response = h.get("/api/search", &params);
         assert_eq!(response.status, 400);
         assert_eq!(response.json(), json!({"detail":detail}));
+    }
+    for key in ["guild_id", "channel_id", "author_id"] {
+        let response = h.get("/api/search", &[(key, "9".repeat(4301))]);
+        assert_eq!(response.status, 400, "{key}");
+        assert_eq!(
+            response.json(),
+            json!({"detail":"Choose a filter suggestion or enter a valid Discord ID."}),
+            "{key}"
+        );
     }
     for (key, value) in [
         ("limit", "101".into()),

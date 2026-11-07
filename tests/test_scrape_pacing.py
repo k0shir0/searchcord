@@ -95,6 +95,10 @@ class ScrapePacingTest(ScrapeCase):
 
     async def test_counter_cooldowns_and_break_deadline_survive_restart_and_job_changes(self):
         ids=await self.blocked_jobs()
+        wall, monotonic = 1_700_000_000, 1000
+        self.patches.enter_context(patch.object(app, 'time', SimpleNamespace(
+            time=lambda: wall, monotonic=lambda: monotonic)))
+        self.owner._clock = lambda: monotonic
         app.scrape_confirmed_requests=99
         self.replies=[httpx.Response(200,json=[],headers={
             'X-RateLimit-Remaining':'0','X-RateLimit-Reset-After':'30'})]
@@ -102,17 +106,21 @@ class ScrapePacingTest(ScrapeCase):
             await app.discord('GET','/channels/20/messages','synthetic',scrape_job_id=ids[0])
         self.assertEqual(draw.call_args_list[-1].args,(60,90))
         saved=(await load_jobs(self.path,'pacing'))[0][2]
-        self.assertGreater(saved['scrape_break_until'],time.time()+88)
+        self.assertEqual(saved['scrape_break_until'], wall + 90)
+        self.assertEqual(saved['discord_ready_at'], wall + 30)
         self.assertEqual(app.scrape_confirmed_requests,0)
         await self.owner.suspend()
         self.owner.reset()
+        # Simulate downtime and a new monotonic clock origin after restarting.
+        wall += 5
+        monotonic = 100
         await app._recover_collection_jobs()
-        self.assertGreater(app.scrape_break_until,app.time.monotonic()+88)
-        self.assertGreater(app.discord_ready_at,app.time.monotonic()+28)
+        self.assertEqual(app.scrape_break_until, monotonic + 85)
+        self.assertEqual(app.discord_ready_at, monotonic + 25)
         self.assertEqual(app.scrape_confirmed_requests,0)
         for job_id in ids: await self.owner.stop(job_id)
         job_id=await self.owner.start([{**CHANNEL,'id':'22'}])
-        self.assertGreater(self.owner.snapshot(job_id)['break_seconds'],88)
+        self.assertEqual(self.owner.snapshot(job_id)['break_seconds'], 85)
 
     async def test_nonzero_counter_survives_restart(self):
         ids=await self.blocked_jobs()
