@@ -13,10 +13,10 @@ import sys
 import threading
 import time
 
-REPO = Path(__file__).resolve().parents[3]
+DRIVER = Path(__file__).resolve().parent
 ROOT = Path(sys.argv[1]).resolve()
-sys.path.insert(0, str(REPO))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(DRIVER.parent / 'reference'))
+sys.path.insert(0, str(DRIVER))
 sys.dont_write_bytecode = True
 
 # No inherited archive/credential paths or user-site imports. Rust also sets these.

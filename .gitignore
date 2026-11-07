@@ -15,7 +15,6 @@
 !/.github/workflows/rust-parity.yml
 # Research, plans, handoffs, and benchmark evidence stay private unless the
 # repository owner explicitly authorizes their publication.
-!/requirements-parity.txt
 !/Cargo.toml
 !/Cargo.lock
 !/rust-toolchain.toml
@@ -44,38 +43,39 @@
 !/crates/searchcord-parity/driver/
 !/crates/searchcord-parity/driver/*.py
 !/tests/
-!/tests/__init__.py
-!/tests/durable_fixture.py
-!/tests/test_archive_storage.py
-!/tests/test_collection_access.py
 !/tests/test_collection_queue.mjs
-!/tests/test_durable_scrape.py
-!/tests/test_scrape_pacing.py
-!/tests/test_search_display.py
 
-# Application, archive tools, dependencies, and launchers
-!/app.py
-!/cli.py
-!/channel_access.py
-!/invite_api.py
-!/profile_api.py
-!/profile_store.py
-!/storage.py
-!/credential_store.py
-!/collection_state.py
-!/durable_scrape.py
-!/media_store.py
-!/media_optimize.py
-!/tests/test_media_storage.py
-!/chat_export.py
-!/search_app.py
-!/archive_reader.py
-!/snapshot_codec.py
-!/search_snapshot.py
-!/requirements.txt
-!/start.bat
-!/start-search.bat
-!/run-python.bat
+# Python reference used by parity checks
+!/crates/searchcord-parity/reference/
+!/crates/searchcord-parity/reference/app.py
+!/crates/searchcord-parity/reference/cli.py
+!/crates/searchcord-parity/reference/channel_access.py
+!/crates/searchcord-parity/reference/invite_api.py
+!/crates/searchcord-parity/reference/profile_api.py
+!/crates/searchcord-parity/reference/profile_store.py
+!/crates/searchcord-parity/reference/storage.py
+!/crates/searchcord-parity/reference/credential_store.py
+!/crates/searchcord-parity/reference/collection_state.py
+!/crates/searchcord-parity/reference/durable_scrape.py
+!/crates/searchcord-parity/reference/media_store.py
+!/crates/searchcord-parity/reference/media_optimize.py
+!/crates/searchcord-parity/reference/chat_export.py
+!/crates/searchcord-parity/reference/search_app.py
+!/crates/searchcord-parity/reference/archive_reader.py
+!/crates/searchcord-parity/reference/snapshot_codec.py
+!/crates/searchcord-parity/reference/search_snapshot.py
+!/crates/searchcord-parity/reference/requirements.txt
+!/crates/searchcord-parity/reference/requirements-parity.txt
+!/crates/searchcord-parity/reference/run-python.bat
+!/crates/searchcord-parity/reference/tests/
+!/crates/searchcord-parity/reference/tests/__init__.py
+!/crates/searchcord-parity/reference/tests/durable_fixture.py
+!/crates/searchcord-parity/reference/tests/test_archive_storage.py
+!/crates/searchcord-parity/reference/tests/test_collection_access.py
+!/crates/searchcord-parity/reference/tests/test_durable_scrape.py
+!/crates/searchcord-parity/reference/tests/test_scrape_pacing.py
+!/crates/searchcord-parity/reference/tests/test_search_display.py
+!/crates/searchcord-parity/reference/tests/test_media_storage.py
 
 # Production browser assets
 !/static/
@@ -108,6 +108,12 @@
 !/deploy/
 !/deploy/native/
 !/deploy/native/README.txt
+!/deploy/native/BUILD.md
+!/deploy/native/package.ps1
+!/deploy/native/update.ps1
+!/deploy/native/Update Searchcord.bat
+!/deploy/native/start.bat
+!/deploy/native/start-search.bat
 !/deploy/search/
 !/deploy/search/Dockerfile
 !/deploy/search/Dockerfile.dockerignore

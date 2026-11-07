@@ -1,7 +1,8 @@
 Searchcord read-only viewer
 
-Run ./searchcord-search --db /absolute/path/to/archive.db, or start-search.bat
-with the same arguments on Windows. No Python runtime or Discord token is needed.
+Run ./searchcord-search --db /absolute/path/to/archive.db, or use Start Searchcord
+Search.bat with the same arguments from the Windows application ZIP. No Python
+runtime or Discord token is needed.
 The viewer opens http://127.0.0.1:8001. Pass --host or --port to change the binding.
 Without --db or --data-dir it reads data/searchcord.db beside the executable.
 

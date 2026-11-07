@@ -169,12 +169,12 @@ fn existing_windows_launchers_find_native_binaries_with_spaces_without_python() 
     for (launcher, source, binary) in [
         (
             "start.bat",
-            include_str!("../../../start.bat"),
+            include_str!("../../../deploy/native/start.bat"),
             "searchcord.exe",
         ),
         (
             "start-search.bat",
-            include_str!("../../../start-search.bat"),
+            include_str!("../../../deploy/native/start-search.bat"),
             "searchcord-search.exe",
         ),
     ] {

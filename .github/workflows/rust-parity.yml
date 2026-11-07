@@ -12,12 +12,12 @@ on:
       - 'crates/**'
       - 'deploy/**'
       - 'static/**'
-      - 'tests/**'
-      - '*.bat'
-      - '*.py'
-      - 'requirements*.txt'
       - 'LICENSE'
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Publish from main with these release notes. Leave blank to run checks only.'
+        type: string
 
 permissions:
   contents: read
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - run: python -m pip install -r requirements-parity.txt
+      - run: python -m pip install -r crates/searchcord-parity/reference/requirements-parity.txt
       - name: Install pinned Rust toolchain
         run: rustup show
       - name: Install pinned browser and WebDriver
@@ -85,27 +85,52 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
-          $nativeRoot = Join-Path $PWD '.native-application'
-          New-Item -ItemType Directory -Path $nativeRoot | Out-Null
+          ./deploy/native/package.ps1 -OutputDirectory native-packages -Architecture '${{ runner.arch }}'
           $binarySuffix = if ($IsWindows) { '.exe' } else { '' }
-          foreach ($binaryName in @('searchcord', 'searchcord-search', 'searchcord-snapshot', 'searchcord-package-search')) {
-            Copy-Item -LiteralPath "target/release/$binaryName$binarySuffix" -Destination $nativeRoot
-          }
-          Copy-Item -LiteralPath LICENSE -Destination $nativeRoot
-          Copy-Item -LiteralPath deploy/search/THIRD_PARTY_NOTICES.md -Destination $nativeRoot
-          Copy-Item -LiteralPath deploy/native/README.txt -Destination $nativeRoot
-          if ($IsWindows) {
-            Copy-Item -LiteralPath start.bat,start-search.bat -Destination $nativeRoot
-          }
-          $env:SEARCHCORD_NATIVE_COLLECTOR = Join-Path $nativeRoot "searchcord$binarySuffix"
+          $env:SEARCHCORD_NATIVE_COLLECTOR = Join-Path $PWD "target/release/searchcord$binarySuffix"
           cargo test --locked -p searchcord-collector --test startup
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          tar -czf "searchcord-${{ runner.os }}-${{ runner.arch }}.tar.gz" -C $nativeRoot .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: github.event_name == 'workflow_dispatch'
         with:
           name: searchcord-${{ runner.os }}-${{ runner.arch }}
-          path: searchcord-${{ runner.os }}-${{ runner.arch }}.tar.gz
+          path: native-packages/searchcord-*
           if-no-files-found: error
           retention-days: 14
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_notes != ''
+    needs: parity
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency: publish-searchcord-release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: searchcord-*
+          path: packages
+          merge-multiple: true
+      - name: Publish the verified packages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          shopt -s nullglob
+          windows=(packages/searchcord-Windows-X64.zip)
+          linux=(packages/searchcord-Linux-*.tar.gz)
+          macos=(packages/searchcord-macOS-*.tar.gz)
+          [[ ${#linux[@]} == 1 && ${#macos[@]} == 1 && -n "${RELEASE_NOTES//[[:space:]]/}" ]]
+          version=$(unzip -p "${windows[0]}" .searchcord-version | tr -d '\r')
+          [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag="v$version"
+          refs=$(git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "refs/tags/$tag" "refs/tags/$tag^{}")
+          if [[ -n $refs && $(printf '%s\n' "$refs" | tail -1 | cut -f1) != "$GITHUB_SHA" ]]; then
+            echo "$tag already points to a different commit."
+            exit 1
+          fi
+          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$tag" "${windows[@]}" "${linux[@]}" "${macos[@]}" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Searchcord $version" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" --latest

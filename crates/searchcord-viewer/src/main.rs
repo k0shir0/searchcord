@@ -11,6 +11,11 @@ fn application_path(path: PathBuf) -> PathBuf {
     };
     if path.is_absolute() {
         path
+    } else if let Some(root) = std::env::var_os("SEARCHCORD_LAUNCHER_DIR")
+        .map(PathBuf::from)
+        .filter(|root| root.is_absolute())
+    {
+        root.join(path)
     } else {
         std::env::current_exe()
             .ok()
@@ -45,6 +50,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             arg = name.into();
         }
         match arg.to_str().unwrap_or("") {
+            "--version" | "-V" => {
+                println!("searchcord-search {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "--help" | "-h" => {
                 println!(
                     "Usage: searchcord-search [--db FILE | --data-dir DIR] [--snapshot] [--host 127.0.0.1] [--port 8001]"
