@@ -331,7 +331,7 @@ async fn native_saves_are_readable_by_python_and_python_saves_skip_native_collec
     let python = tokio::task::spawn_blocking(move || {
         let script = "import sys,json,sqlite3,asyncio;sys.path.insert(0,sys.argv[1]);from profile_store import read_profile;from profile_api import save_profile;import aiosqlite\nwith sqlite3.connect(sys.argv[2]) as db: print(json.dumps(read_profile(db,'30'),ensure_ascii=False))\nasync def write():\n async with aiosqlite.connect(sys.argv[2]) as db:\n  payload={'user':{'id':'30','username':'python'},'python_unknown':{'kept':True}}\n  await save_profile(db,'30',payload['user'],payload,'2026-01-01T00:00:00+00:00');await db.commit()\nasyncio.run(write())";
         std::process::Command::new(std::env::var_os("SEARCHCORD_PARITY_PYTHON").unwrap_or("python".into()))
-            .args(["-I","-X","utf8","-c",script]).arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .args(["-I","-X","utf8","-c",script]).arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("reference"))
             .arg(path).env("PYTHONDONTWRITEBYTECODE","1").output().unwrap()
     }).await.unwrap();
     assert!(

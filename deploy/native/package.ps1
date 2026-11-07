@@ -38,8 +38,8 @@ try {
     if ($IsWindows) {
         Copy-Item -LiteralPath "$PSScriptRoot/update.ps1" -Destination $program
         Copy-Item -LiteralPath "$PSScriptRoot/Update Searchcord.bat" -Destination $staging
-        Copy-Item -LiteralPath "$source/start.bat" -Destination "$staging/Start Searchcord.bat"
-        Copy-Item -LiteralPath "$source/start-search.bat" -Destination "$staging/Start Searchcord Search.bat"
+        Copy-Item -LiteralPath "$PSScriptRoot/start.bat" -Destination "$staging/Start Searchcord.bat"
+        Copy-Item -LiteralPath "$PSScriptRoot/start-search.bat" -Destination "$staging/Start Searchcord Search.bat"
         [IO.File]::WriteAllText((Join-Path $staging '.searchcord-version'), "$version`r`n")
         [IO.Compression.ZipFile]::CreateFromDirectory($staging, $archive)
     } else {

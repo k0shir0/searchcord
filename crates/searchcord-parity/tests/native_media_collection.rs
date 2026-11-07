@@ -226,16 +226,16 @@ else:
 print(json.dumps(result,ensure_ascii=False))
 "#;
     let interpreter = std::env::var_os("SEARCHCORD_PARITY_PYTHON").unwrap_or("python".into());
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
+    let reference = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("reference")
         .canonicalize()
         .unwrap();
     let output = Command::new(interpreter)
         .args(["-I", "-X", "utf8", "-c", script])
-        .arg(&root)
+        .arg(&reference)
         .arg(operation)
         .arg(request.to_string())
-        .current_dir(&root)
+        .current_dir(&reference)
         .output()
         .unwrap();
     assert!(

@@ -169,7 +169,7 @@ print(json.dumps(out))"#;
         .arg("-I")
         .arg("-c")
         .arg(script)
-        .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+        .current_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("reference"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

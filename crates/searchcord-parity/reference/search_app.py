@@ -13,7 +13,7 @@ from profile_store import search_label
 from cli import local_url, start_terminal, terminal_lifespan
 from media_store import media_router
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def create_app(path=None, immutable=None):

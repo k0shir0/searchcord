@@ -8,9 +8,10 @@ cargo build --release --locked -p searchcord-collector -p searchcord-viewer -p s
 pwsh -File deploy/native/package.ps1
 ```
 
-The package appears in `dist`. On Windows, `start.bat` and `start-search.bat`
-also find a build under `target/release`. See the [operating guide](README.txt)
-for direct launch, archive location and migration instructions.
+The package appears in `dist`. On Windows, `deploy\native\start.bat` and
+`deploy\native\start-search.bat` also find a build under `target/release`.
+See the [operating guide](README.txt) for direct launch, archive location and
+migration instructions.
 
 ## Publish a release
 
