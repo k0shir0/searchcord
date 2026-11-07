@@ -4,7 +4,44 @@
     <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
   </picture>
 </p>
+## Get started
 
+1. Download the package for your system from [GitHub Releases](https://github.com/k0shir0/searchcord/releases/latest).
+2. On Windows, extract the ZIP to a folder and open **Start Searchcord**. Your browser opens when the archive is ready.
+3. To update, close Searchcord and open **Update Searchcord** in the same folder. Your archive, media and saved accounts stay in place.
+
+If you already use Searchcord on Windows, close it and extract the first release
+into your existing Searchcord folder. Open **Start Searchcord** from there.
+
+See the [operating guide](deploy/native/README.txt) for Linux, macOS, and
+existing archives in a custom location. [Build from source](deploy/native/BUILD.md)
+if you prefer.
+
+## Use Searchcord
+
+Collection requires a Discord token. Read the [use warning in the license](LICENSE)
+before collecting data.
+
+1. Open **Settings**, name your Discord token and select **save & use token**.
+2. In **Scrape**, select **connect Discord**, queue channels or direct messages and select **start scraping**. Leave the message limit blank to collect full history.
+3. In **Browse**, search messages or filter by server, channel, author or date. Click an author to see their saved profile.
+4. In **Stats**, explore activity and open the matching messages.
+
+You can pause a scrape and resume from the last saved page. After restarting
+Searchcord, select the original saved account to resume a paused job.
+
+## Search only
+
+On Windows, open **Start Searchcord Search** and visit <http://127.0.0.1:8001>.
+You can search an existing archive without connecting a Discord account.
+
+See the [viewer guide](deploy/search/RUNNING.txt) for custom archives and hosting.
+
+## Your data
+
+The default archive is in the **data** folder. Saved tokens are encrypted and
+stored separately. Keep archives private and share only data you are entitled
+to share.
 <p align="center">Archive Discord messages. Search them locally. Share a separate, read-only viewer.</p>
 
 <p align="center">
@@ -187,7 +224,8 @@ Major milestones by the date they reached `main` (America/Chicago).
 | --- | --- |
 | 2026-11-05 | The collector, search viewer and archive tools moved to Rust. Existing archives and the browser interface carry forward. Live monitoring now recovers paused after a restart. [#27](https://github.com/k0shir0/searchcord/pull/27) |
 | 2026-11-05 | Added compact image storage, geometric avatars and tools to shrink an existing media cache. [#8](https://github.com/k0shir0/searchcord/pull/8) |
-| 2026-10-11 | Collection queues stay tied to the selected account, and scrape progress reflects messages saved to the archive. [#4](https://github.com/k0shir0/searchcord/pull/4) [#5](https://github.com/k0shir0/searchcord/pull/5) |
+| 2026-10-11 | Collection queues stay tied to the selected account when switching tokens. [#4](https://github.com/k0shir0/searchcord/pull/4) |
+| 2026-10-10 | Scrape progress reflects messages saved to the archive, and stopping preserves the saved progress. [#5](https://github.com/k0shir0/searchcord/pull/5) |
 | 2026-10-09 | Added invite queues, automatic channel and thread discovery, and pause and resume across reloads or restarts. The archive keeps observed edits and deletions, caches media locally and protects saved tokens in an encrypted vault. [Collection](https://github.com/k0shir0/searchcord/commit/9b497d1) [Archive](https://github.com/k0shir0/searchcord/commit/1c9363c) |
 | 2026-10-07 | Added portable Windows launchers and a way to remove all saved tokens. [#2](https://github.com/k0shir0/searchcord/pull/2) |
 | 2026-10-02 | Search pages load faster on large archives. The read-only viewer can run as a standalone Docker service. [#1](https://github.com/k0shir0/searchcord/pull/1) |

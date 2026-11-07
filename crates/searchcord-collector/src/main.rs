@@ -11,6 +11,11 @@ use std::{io::Write, path::PathBuf, sync::Arc, time::Duration};
 fn application_path(path: PathBuf) -> Result<PathBuf> {
     let path = if path.is_absolute() || path.to_string_lossy().starts_with('~') {
         path
+    } else if let Some(root) = std::env::var_os("SEARCHCORD_LAUNCHER_DIR")
+        .map(PathBuf::from)
+        .filter(|root| root.is_absolute())
+    {
+        root.join(path)
     } else {
         std::env::current_exe()?
             .parent()
@@ -101,6 +106,10 @@ async fn run() -> Result<()> {
     let mut browser = std::env::var("SEARCHCORD_NO_BROWSER").ok().as_deref() != Some("1");
     while let Some(arg) = args.next() {
         match arg.to_str().ok_or("Arguments must be valid Unicode")? {
+            "--version" | "-V" => {
+                println!("searchcord {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
             "--help" | "-h" => {
                 println!(
                     "Usage: searchcord [--data-dir DIR | --db FILE] [--host 127.0.0.1] [--port 8000] [--no-browser]\nSEARCHCORD_DATA_DIR, SEARCHCORD_HOST, SEARCHCORD_PORT and the external credential path variables are supported. Relative archive paths resolve beside the executable."

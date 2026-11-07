@@ -108,6 +108,10 @@
 !/deploy/
 !/deploy/native/
 !/deploy/native/README.txt
+!/deploy/native/BUILD.md
+!/deploy/native/package.ps1
+!/deploy/native/update.ps1
+!/deploy/native/Update Searchcord.bat
 !/deploy/search/
 !/deploy/search/Dockerfile
 !/deploy/search/Dockerfile.dockerignore
