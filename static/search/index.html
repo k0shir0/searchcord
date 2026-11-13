@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <meta name="description" content="Search your local Discord archive.">
   <title>searchcord</title>
@@ -18,66 +18,46 @@
   <header class="masthead"><h1>search<span>cord</span></h1></header>
   <main>
     <section class="search-surface query-block" aria-labelledby="searchTitle">
-          <div class="bauhaus-geometry" aria-hidden="true">
-            <div class="geometry-ornaments">
-              <span class="ornament-rule ornament-rule-a"></span>
-              <span class="ornament-rule ornament-rule-b"></span>
-              <span class="ornament-rule ornament-rule-c"></span>
-              <span class="ornament-rule ornament-rule-d"></span>
-              <span class="ornament-rule ornament-rule-e"></span>
-              <span class="ornament-rule ornament-rule-f"></span>
-              <span class="ornament-rule ornament-rule-g"></span>
-              <span class="ornament-rule ornament-rule-h"></span>
-              <span class="ornament-rule ornament-rule-i"></span>
-              <span class="ornament-rule ornament-rule-j"></span>
-            </div>
-            <div class="geometry-forms geometry-forms-backdrop">
-              <span class="geometry-backdrop-disk"></span>
-              <span class="geometry-backdrop-square"></span>
-            </div>
-            <div class="geometry-forms geometry-forms-right">
-              <span class="geometry-ring"></span><span class="geometry-square"></span>
-              <span class="geometry-bar"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
-            </div>
-            <div class="geometry-forms geometry-forms-left">
-              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
-            </div>
-            <div class="geometry-forms geometry-forms-center">
-              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
-            </div>
-          </div>
-      <div class="query-copy"><h2 id="searchTitle">What are you looking for?</h2></div>
+      <div class="query-copy"><h2 id="searchTitle">Search your archive</h2></div>
       <form id="searchForm" role="search" autocomplete="off">
         <label class="sr-only" for="searchInput">Search messages</label>
         <div class="query-copy"><div class="query-form">
-          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="try “release notes”" aria-describedby="searchError" aria-controls="filterTray" aria-expanded="false" list="profileOptions">
-          <button type="submit">search</button>
+          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="Search messages" aria-keyshortcuts="/" aria-describedby="searchError" list="profileOptions">
+          <button type="submit">Search</button>
         </div><datalist id="profileOptions"></datalist></div>
-        <div id="filterTray" class="filter-tray" inert>
+          <div class="search-actions">
+            <button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters</button>
+            <span class="search-shortcut"><kbd>/</kbd> Search</span>
+          </div>
+        <div id="filterTray" class="filter-tray" hidden>
           <div class="filter-form">
-            <label>server<input id="guild" list="guildOptions" placeholder="server name" data-kind="server" data-param="guild_id"><datalist id="guildOptions"></datalist></label>
-            <label>channel<input id="channel" list="channelOptions" placeholder="channel name" data-kind="channel" data-param="channel_id"><datalist id="channelOptions"></datalist></label>
-            <label>author<input id="author" list="authorOptions" placeholder="user name" data-kind="author" data-param="author_id"><datalist id="authorOptions"></datalist></label>
-            <label>from<input id="dateFrom" type="date" name="date_from" title="From date (UTC)"></label>
-            <label>to<input id="dateTo" type="date" name="date_to" title="To date (UTC, inclusive)"></label>
-            <button id="clearFilters" type="button">clear filters</button>
+            <label>Server<input id="guild" list="guildOptions" placeholder="server name" data-kind="server" data-param="guild_id"><datalist id="guildOptions"></datalist></label>
+            <label>Channel<input id="channel" list="channelOptions" placeholder="channel name" data-kind="channel" data-param="channel_id"><datalist id="channelOptions"></datalist></label>
+            <label>Author<input id="author" list="authorOptions" placeholder="user name" data-kind="author" data-param="author_id"><datalist id="authorOptions"></datalist></label>
+            <label>From<input id="dateFrom" type="date" name="date_from" title="From date (UTC)"></label>
+            <label>To<input id="dateTo" type="date" name="date_to" title="To date (UTC, inclusive)"></label>
+            <button id="clearFilters" type="button">Clear filters</button>
           </div>
           <span id="suggestionStatus" role="status"></span>
         </div>
       </form>
     </section>
     <p id="searchError" class="error" role="alert" hidden></p>
-    <div class="index-block" aria-label="Archive totals"><div class="index-stat"><span class="index-number" id="messageTotal">…</span><span class="index-caption">messages indexed</span></div><div class="index-stat"><span class="index-number" id="serverTotal">…</span><span class="index-caption">indexed servers</span></div></div>
+    <div class="index-block" aria-label="Archive totals"><div class="index-stat"><span class="index-number" id="messageTotal">…</span><span class="index-caption">Messages indexed</span></div><div class="index-stat"><span class="index-number" id="serverTotal">…</span><span class="index-caption">Servers indexed</span></div></div>
     <p id="archiveError" class="error" role="alert" hidden></p>
     <section id="profileSection" aria-label="Archived profile" hidden>
       <div class="profile-navigation"><button id="closeProfile" type="button">back to search</button></div>
       <div id="profileHost"></div>
     </section>
     <section id="results" class="results" aria-labelledby="resultsTitle" hidden>
-      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">results</h2><button id="profileSearchToggle" class="profile-message-search" type="button" aria-label="Search this user's messages" aria-controls="profileMessageForm" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button><p class="sr-only" id="resultStatus" role="status" aria-live="polite"></p>
+      <div class="results-heading"><h2 id="resultsTitle" tabindex="-1">Results</h2><button id="profileSearchToggle" class="profile-message-search" type="button" aria-label="Search this user's messages" aria-controls="profileMessageForm" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg></button><p class="search-status" id="resultStatus" role="status" aria-live="polite"></p>
         <form id="profileMessageForm" class="profile-message-form" aria-label="Profile messages" hidden><label class="sr-only" for="profileMessageQuery">Search this user's messages</label><input id="profileMessageQuery" type="search" enterkeyhint="search" placeholder="Search messages, then press Enter" maxlength="200"></form>
       </div>
-      <div id="resultBody" aria-busy="false"><div id="messages" class="result-list"></div><div id="emptyState" class="empty-state" hidden><h3>No messages found.</h3><p>Try a shorter phrase or remove a filter.</p><button id="editSearch" type="button">Edit search <span aria-hidden="true">↑</span></button></div></div>
+      <div id="resultBody" aria-busy="false">
+        <div class="result-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div id="messages" class="result-list"></div>
+        <div id="emptyState" class="empty-state" hidden><h3>No messages found</h3><p>Try a shorter phrase or remove a filter.</p><button id="editSearch" type="button">Edit search</button></div>
+      </div>
       <nav id="pagination" class="pagination" aria-label="Result pages" hidden><button id="previousPage" class="page-control" type="button">previous</button><span id="pageNumber" class="page-readout page-current"></span><button id="nextPage" class="page-control" type="button">next</button></nav>
     </section>
   </main>

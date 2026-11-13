@@ -46,11 +46,13 @@ function createCollectionQueue({startBatch, changed}) {
 
   function add(items) {
     const ids = new Set(sources.map(source => source.id));
+    const additions = [];
     let added = 0;
     items.forEach(source => {
       const item = copy(source);
-      if (!ids.has(item.id)) { ids.add(item.id); sources.push(item); added++; }
+      if (!ids.has(item.id)) { ids.add(item.id); additions.push(item); added++; }
     });
+    if (added) sources = [...sources, ...additions];
     return added;
   }
 
@@ -71,9 +73,18 @@ function createCollectionQueue({startBatch, changed}) {
       changed();
     },
     clear() {
+      const previous = sources;
       suspend();
       sources = active ? [...active] : [];
+      const cleared = sources;
+      const clearedAt = suspension;
       changed();
+      return () => {
+        if (!view().canEdit || sources !== cleared || suspension !== clearedAt) return false;
+        sources = previous;
+        changed();
+        return true;
+      };
     },
     stop() { suspend(); changed(); },
     async changeAccount(change, {removed = false} = {}) {

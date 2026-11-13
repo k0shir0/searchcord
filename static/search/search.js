@@ -20,9 +20,8 @@ const profileView = new SearchcordProfile($('#profileHost'), {
 });
 
 function tray(open) {
-  $('.search-surface').classList.toggle('is-expanded', open);
-  $('#filterTray').inert = !open;
-  searchInput.setAttribute('aria-expanded', String(open));
+  $('#filterTray').hidden = !open;
+  $('#filterToggle').setAttribute('aria-expanded', String(open));
 }
 function error(message = '') {
   $('#searchError').textContent = message;
@@ -84,12 +83,10 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-function messageAvatar(authorId, avatarUrl) {
-  let hash = 0;
-  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  const avatar = element('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
+function messageAvatar(authorId, avatarUrl, authorName) {
+  const avatar = element('div', 'message-avatar');
   avatar.setAttribute('aria-hidden', 'true');
-  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
+  const fallback = () => { avatar.textContent = String(authorName || authorId).slice(0, 1).toUpperCase(); };
   fallback();
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -128,7 +125,7 @@ function render(messages, query) {
       });
       body.append(attachments);
     }
-    row.append(messageAvatar(message.author_id, message.avatar_url), body);
+    row.append(messageAvatar(message.author_id, message.avatar_url, message.author_name), body);
     fragment.append(row);
   }
   $('#messages').replaceChildren(fragment);
@@ -155,7 +152,7 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
     page = targetPage;
     render(data.messages, params.get('q') || '');
     $('#resultStatus').textContent = data.partial ? 'More history remains. Continue searching older messages.' :
-      (data.messages.length ? 'Results loaded.' : 'No messages match these filters.');
+      (data.messages.length ? `${number.format(data.messages.length)} messages on this page` : 'No messages match these filters');
     $('#emptyState').hidden = data.partial || data.messages.length > 0;
     $('#nextPage').textContent = data.partial ? 'Search older' : 'Next';
     $('#pageNumber').textContent = `Page ${page}`;
@@ -169,6 +166,7 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
       history.pushState({cursors, page}, '', `?${address}`);
     }
     if (scroll) {
+      $('#resultsTitle').focus({preventScroll: true});
       $('#results').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
     }
   } catch (exception) {
@@ -206,15 +204,13 @@ async function submitSearch(scroll = false) {
   } catch (exception) { error(exception.message); }
 }
 form.addEventListener('submit', event => { event.preventDefault(); submitSearch(true); });
-searchInput.addEventListener('focus', () => tray(true));
-searchInput.addEventListener('click', () => tray(true));
-document.addEventListener('pointerdown', event => {if (!form.contains(event.target)) tray(false);});
-document.addEventListener('focusin', event => {if (!form.contains(event.target)) tray(false);});
+$('#filterToggle').addEventListener('click', () => tray($('#filterTray').hidden));
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !$('#filterTray').inert) {
-    searchInput.focus(); tray(false);
+  if (event.key === 'Escape' && !$('#filterTray').hidden && form.contains(event.target)) {
+    tray(false);
+    $('#filterToggle').focus();
   }
-  if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.target.matches('input,textarea,[contenteditable]')) {
+  if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.target.closest('input,textarea,select,[contenteditable]')) {
     event.preventDefault(); focusSearch();
   }
 });
@@ -301,6 +297,7 @@ function restore() {
   if (!url.has('search') && !url.has('q')) {
     request?.abort(); generation++;
     $('#results').hidden = true;
+    $('#resultBody').setAttribute('aria-busy','false');
     return;
   }
   const cursor = url.get('before');
