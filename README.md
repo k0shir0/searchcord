@@ -33,12 +33,14 @@ Collection requires a Discord token. Read the [use warning in the license](LICEN
 before collecting data.
 
 1. Open **Settings**, name your Discord token and select **save & use token**.
-2. In **Scrape**, select **connect Discord**, queue channels or direct messages and select **start scraping**. Leave the message limit blank to collect full history.
-3. In **Browse**, search messages or filter by server, channel, author or date. Click an author to see their saved profile.
+2. In **Collection**, select **connect Discord**, queue channels or direct messages and select **start scraping**. Leave the message limit blank to collect full history. If you clear the queue, use **Undo** to restore it before making another queue change.
+3. In **Browse**, search messages or use **Filters** to narrow by server, channel, author or date. Click an author to see their saved profile.
 4. In **Stats**, explore activity and open the matching messages.
 
 You can pause a scrape and resume from the last saved page. After restarting
 Searchcord, select the original saved account to resume a paused job.
+
+Use **/** to focus message search or **Ctrl+K** (**⌘K** on macOS) to open the command menu.
 
 ## Search only
 

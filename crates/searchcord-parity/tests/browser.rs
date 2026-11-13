@@ -238,11 +238,12 @@ fn unchanged_viewer_search_pagination_profiles_filters_and_privacy_work_in_brows
     );
     browser.click("#previousPage");
     browser.wait("return document.querySelector('#pageNumber').textContent==='Page 1'");
-    browser.click("#searchInput");
+    browser.click("#filterToggle");
+    browser.wait("return !document.querySelector('#filterTray').hidden");
     browser.js("const input=document.querySelector('#author'); input.value='30'; input.dispatchEvent(new Event('change',{bubbles:true})); return true;");
     browser.wait("return new URL(location.href).searchParams.get('author_id')==='30' && document.querySelector('#resultBody').getAttribute('aria-busy')==='false'");
-    browser.click("#resultsTitle");
-    browser.wait("return document.querySelector('#filterTray').inert");
+    browser.click("#filterToggle");
+    browser.wait("return document.querySelector('#filterTray').hidden");
     browser.click("#messages .message-author");
     browser.wait("return !document.querySelector('#profileSection').hidden && document.querySelector('#profileHost').textContent.includes('Fixture Author')");
     assert_eq!(
