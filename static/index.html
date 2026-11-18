@@ -2,7 +2,7 @@
 <html lang="en" data-theme="blue-purple">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover.0">
   <title>searchcord</title>
   <meta name="description" content="Search and explore your local Discord archive.">
   <link rel="stylesheet" href="style.css">
@@ -12,13 +12,26 @@
   <link rel="stylesheet" href="profile-view.css">
 </head>
 <body>
+<a class="skip-link" href="#searchInput">Skip to search</a>
 
 <header class="topline app-masthead"><h1><span>search</span><span class="wordmark-accent">cord</span></h1>
+  <button class="command-trigger" id="openCommands" type="button" aria-haspopup="dialog" aria-keyshortcuts="Control+k Meta+k">Go to <kbd id="commandHint">Ctrl K</kbd></button>
   <button class="settings-trigger" id="menuBtn" aria-label="Open settings" title="Settings" aria-controls="settingsPanel" aria-expanded="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4l.7 2.5 2 1.2 2.5-.7 2 3.5-1.8 1.8v2.4l1.8 1.8-2 3.5-2.5-.7-2 1.2L14 22h-4l-.7-2.5-2-1.2-2.5.7-2-3.5 1.8-1.8v-2.4L2.8 8.5l2-3.5 2.5.7 2-1.2Z"/><circle cx="12" cy="12" r="3"/></svg>
     <span class="sr-only">Settings</span>
   </button>
 </header>
+<dialog id="commandMenu" class="command-menu" aria-labelledby="commandLabel">
+  <div class="command-heading"><label id="commandLabel" for="commandQuery">Go to</label><form method="dialog"><button>Close</button></form></div>
+  <input id="commandQuery" type="search" placeholder="Filter actions" autocomplete="off" autofocus>
+  <ul>
+    <li><button type="button" data-command="search">Search messages</button></li>
+    <li><button type="button" data-command="scrape">Collection</button></li>
+    <li><button type="button" data-command="stats">Archive statistics</button></li>
+    <li><button type="button" data-command="settings">Settings</button></li>
+  </ul>
+  <p id="commandEmpty" role="status" hidden>No matching actions</p>
+</dialog>
 <!-- ── Settings overlay + panel ───────────────────────── -->
 <div class="overlay" id="overlay"></div>
 <aside class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-label="Settings" inert>
@@ -54,54 +67,32 @@
   </div>
 </aside>
 
+<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">Browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">Collection</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">Stats</button></nav>
+
 <div id="pageStage" class="page-stage">
 <p id="archiveStatus" class="archive-error" role="status" hidden></p>
       <section class="composition" id="homeOverview" aria-label="Search overview">
         <div class="query-block" id="queryBlock">
-          <div class="bauhaus-geometry" aria-hidden="true">
-            <div class="geometry-ornaments">
-              <span class="ornament-rule ornament-rule-a"></span>
-              <span class="ornament-rule ornament-rule-b"></span>
-              <span class="ornament-rule ornament-rule-c"></span>
-              <span class="ornament-rule ornament-rule-d"></span>
-              <span class="ornament-rule ornament-rule-e"></span>
-              <span class="ornament-rule ornament-rule-f"></span>
-              <span class="ornament-rule ornament-rule-g"></span>
-              <span class="ornament-rule ornament-rule-h"></span>
-              <span class="ornament-rule ornament-rule-i"></span>
-              <span class="ornament-rule ornament-rule-j"></span>
-            </div>
-            <div class="geometry-forms geometry-forms-backdrop">
-              <span class="geometry-backdrop-disk"></span>
-              <span class="geometry-backdrop-square"></span>
-            </div>
-            <div class="geometry-forms geometry-forms-right">
-              <span class="geometry-ring"></span><span class="geometry-square"></span>
-              <span class="geometry-bar"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
-            </div>
-            <div class="geometry-forms geometry-forms-left">
-              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
-            </div>
-            <div class="geometry-forms geometry-forms-center">
-              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
-            </div>
-          </div>
           <div class="query-copy">
-            <h2>What are you looking for?</h2>
+            <h2>Search your archive</h2>
             <form class="query-form" id="queryForm">
               <label for="searchInput">Search messages</label>
-              <input id="searchInput" type="search" placeholder="try “release notes”" aria-controls="filterTray" aria-expanded="false">
-              <button id="searchBtn" type="submit">search</button>
+              <input id="searchInput" type="search" placeholder="Search messages" aria-keyshortcuts="/">
+              <button id="searchBtn" type="submit">Search</button>
             </form>
           </div>
-          <div class="filter-tray" id="filterTray" inert>
+          <div class="search-actions">
+            <button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters</button>
+            <span class="search-shortcut"><kbd>/</kbd> Search</span>
+          </div>
+          <div class="filter-tray" id="filterTray" hidden>
             <form class="filter-form" id="filterForm">
-              <label>server<input id="fGuild" name="server" type="text" list="dl-guilds" autocomplete="off" placeholder="server name"></label>
-              <label>channel<input id="fChannel" name="channel" type="text" list="dl-channels" autocomplete="off" placeholder="channel name"></label>
-              <label>author<input id="fUser" name="author" type="text" list="dl-users" autocomplete="off" placeholder="user name"></label>
-              <label>from<input id="fDateFrom" name="from" type="date" title="From date (UTC)"></label>
-              <label>to<input id="fDateTo" name="to" type="date" title="To date (UTC, inclusive)"></label>
-              <button type="reset">clear filters</button>
+              <label>Server<input id="fGuild" name="server" type="text" list="dl-guilds" autocomplete="off" placeholder="server name"></label>
+              <label>Channel<input id="fChannel" name="channel" type="text" list="dl-channels" autocomplete="off" placeholder="channel name"></label>
+              <label>Author<input id="fUser" name="author" type="text" list="dl-users" autocomplete="off" placeholder="user name"></label>
+              <label>From<input id="fDateFrom" name="from" type="date" title="From date (UTC)"></label>
+              <label>To<input id="fDateTo" name="to" type="date" title="To date (UTC, inclusive)"></label>
+              <button type="reset">Clear filters</button>
               <datalist id="dl-guilds"></datalist>
               <datalist id="dl-channels"></datalist>
               <datalist id="dl-users"></datalist>
@@ -109,19 +100,19 @@
           </div>
         </div>
         <div class="index-block" aria-label="Archive totals">
-          <div class="index-stat"><span class="index-number" id="homeMessages">…</span><span class="index-caption">messages indexed</span></div>
-          <div class="index-stat"><span class="index-number" id="homeServers">…</span><span class="index-caption">indexed servers</span></div>
+          <div class="index-stat"><span class="index-number" id="homeMessages">…</span><span class="index-caption">Messages indexed</span></div>
+          <div class="index-stat"><span class="index-number" id="homeServers">…</span><span class="index-caption">Servers indexed</span></div>
         </div>
       </section>
 
-<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">scrape</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">stats</button></nav>
+
 
 <!-- ── Main ──────────────────────────────────────────── -->
 <main class="main">
 
   <section class="view active" id="view-browse" aria-label="Browse archive">
     <section id="resultsSection" aria-labelledby="results-title" hidden>
-      <div class="section-head"><h2 id="results-title">results</h2><p id="resultsStatus" role="status"></p></div>
+      <div class="section-head"><h2 id="results-title" tabindex="-1">Results</h2><p id="resultsStatus" role="status"></p></div>
       <div class="result-list" id="searchResults"></div>
       <nav class="pagination" id="pagination" aria-label="Results pages" hidden></nav>
     </section>
@@ -152,7 +143,8 @@
         <div class="panel-heading feed-heading"><h4>Incoming messages</h4><button class="btn-ghost" id="clearFeed">clear feed</button></div><div class="live-feed" id="liveFeed" role="log" aria-label="Live messages" aria-live="off"><p class="live-feed-empty">New messages appear here while monitoring.</p></div>
       </section>
     </div>
-    <section class="queue-bar" id="queueBar" aria-label="Collection queue"><div class="qb-left"><h3 class="qb-label">collection queue</h3><span class="qb-count" id="queueCount">0</span></div><div class="qb-chips" id="queueChips"></div>
+    <section class="queue-bar" id="queueBar" aria-label="Collection queue"><div class="qb-left"><h3 class="qb-label">Collection queue</h3><span class="qb-count" id="queueCount">0</span></div><div class="qb-chips" id="queueChips"></div>
+      <div class="queue-undo" id="queueUndo" hidden><p role="status" id="queueUndoStatus"></p><button type="button" class="btn-ghost" id="undoClearQueue">Undo</button></div>
       <div class="queue-controls"><label class="qb-limit">Messages per channel<input type="number" id="scrapeLimit" placeholder="all history" min="0" step="100"></label><label class="profile-choice"><input type="checkbox" id="harvestProfiles"> fetch expanded profiles</label><div class="qb-right"><button class="btn-ghost" id="clearQueue">clear queue</button><button class="btn-mint" id="startScrape" disabled>start scraping</button></div></div><p class="queue-hint">When selected, each new user's extended profile is saved before the next message page. Stopping preserves saved work and the resume cursor.</p>
       <section class="queue-progress" id="queueProgress" aria-label="Scrape progress" hidden><div class="queue-progress-head"><div><h4 id="queueProgressTitle">Starting scrape…</h4><p id="queueProgressSummary" role="status">Waiting for the first channel.</p></div><div class="queue-progress-actions"><button class="btn-ghost" id="pauseQueueScrape" disabled>pause scraping</button><button class="btn-ghost" id="stopQueueScrape" disabled>stop scraping</button><button class="btn-ghost" id="dismissQueueProgress" hidden>dismiss</button></div></div><progress id="queueProgressBar" max="1" value="0" aria-label="Channels completed"></progress><div class="queue-progress-rows" id="queueProgressRows"></div></section>
     </section><div class="scrape-pill" id="scrapePill"><span class="pulse-dot"></span><span id="scrapeStatus">scraping…</span><button class="btn-ghost" id="showScrapeProgress">view progress</button></div>

@@ -21,6 +21,21 @@ async function fixture() {
   return {queue, starts};
 }
 
+test('undo restores an idle queue once and cannot overwrite later queue changes', async () => {
+  const {queue} = await fixture();
+  queue.toggle(source('20'));
+  queue.toggle(source('21'));
+  const undo = queue.clear();
+  assert.deepEqual(ids(queue.view().sources), []);
+  assert.equal(undo(), true);
+  assert.deepEqual(ids(queue.view().sources), ['20', '21']);
+  assert.equal(undo(), false);
+  const stale = queue.clear();
+  queue.toggle(source('30'));
+  assert.equal(stale(), false);
+  assert.deepEqual(ids(queue.view().sources), ['30']);
+});
+
 test('manual/scanned acceptance deduplicates stable IDs, preserves names and allows manual bots', async () => {
   const {queue, starts} = await fixture();
   queue.toggle({...source('24'), name: 'RoBOT-commands'});

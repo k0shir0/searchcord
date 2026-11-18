@@ -1,6 +1,6 @@
 .profile-card { display:grid; grid-template-columns:minmax(290px,.9fr) minmax(0,1.1fr); border:1px solid var(--rule); background:var(--panel); color:var(--ink); }
 .profile-identity { position:relative; min-width:0; border-right:1px solid var(--rule); }
-.profile-banner { height:165px; overflow:hidden; background:var(--accent-soft); background-image:linear-gradient(90deg,transparent 49.7%,var(--rule) 50%,transparent 50.3%); border-bottom:1px solid var(--rule); }
+.profile-banner { height:165px; overflow:hidden; background:var(--accent-soft); border-bottom:1px solid var(--rule); }
 .profile-banner img { width:100%;height:100%;object-fit:cover; }
 .profile-portrait { position:relative; display:grid; place-items:center; margin:-64px 0 0 28px; width:120px;height:120px;border:8px solid var(--panel);border-radius:50%; background:var(--signal);color:var(--paper);font-size:48px;font-weight:700;overflow:hidden; }
 .profile-portrait img { width:100%;height:100%;object-fit:cover; }

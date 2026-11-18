@@ -29,6 +29,7 @@ const _charts = {};
 // ── Boot ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initNav();
+  initCommands();
   initSettings();
   initQueue();
   restoreScrape();
@@ -98,7 +99,7 @@ async function boot() {
 
 function initNav() {
   document.querySelectorAll('.tab').forEach(t =>
-    t.addEventListener('click', () => switchView(t.dataset.view))
+    t.addEventListener('click', () => navigateView(t.dataset.view))
   );
   window.addEventListener('hashchange', () => switchView(location.hash.slice(1), false));
   $('connectDiscord').addEventListener('click', connectDiscord);
@@ -113,6 +114,67 @@ function initNav() {
     });
   });
   $('showScrapeProgress').addEventListener('click', () => $('modalBg').classList.add('visible'));
+}
+
+function navigateView(name) {
+  if (activeView !== name) {
+    history.pushState(null, '', `${location.pathname}${location.search}#${name}`);
+  }
+  return switchView(name, false);
+}
+
+function initCommands() {
+  const menu = $('commandMenu');
+  const input = $('commandQuery');
+  const buttons = [...menu.querySelectorAll('[data-command]')];
+  const filter = () => {
+    const query = input.value.trim().toLowerCase();
+    for (const button of buttons) button.parentElement.hidden = !button.textContent.toLowerCase().includes(query);
+    $('commandEmpty').hidden = buttons.some(button => !button.parentElement.hidden);
+  };
+  const open = () => {
+    input.value = '';
+    filter();
+    menu.showModal();
+  };
+  const focusSearch = async () => {
+    await navigateView('browse');
+    $('searchInput').focus();
+  };
+  $('openCommands').addEventListener('click', open);
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) $('commandHint').textContent = '⌘ K';
+  input.addEventListener('input', filter);
+  menu.addEventListener('keydown', event => {
+    const choices = [input, ...buttons.filter(button => !button.parentElement.hidden)];
+    if (event.key === 'Enter' && event.target === input) choices[1]?.click();
+    if (!['ArrowUp', 'ArrowDown'].includes(event.key) || !choices.includes(event.target)) return;
+    event.preventDefault();
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    choices.at((choices.indexOf(event.target) + step) % choices.length).focus();
+  });
+  for (const button of buttons) button.addEventListener('click', () => {
+    menu.close();
+    const action = button.dataset.command;
+    if (action === 'search') focusSearch();
+    else if (action === 'settings') openSettings();
+    else {
+      navigateView(action);
+      document.querySelector(`.surface-tab[data-view="${action}"]`).focus();
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || $('settingsPanel').classList.contains('open') ||
+        $('modalBg').classList.contains('visible') || $('exportModalBg').classList.contains('visible')) return;
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (menu.open) menu.close();
+      else open();
+    } else if (event.key === '/' && !menu.open && !event.ctrlKey && !event.metaKey && !event.altKey &&
+               !event.target.closest('input, textarea, select, [contenteditable]')) {
+      event.preventDefault();
+      focusSearch();
+    }
+  });
 }
 
 let activeView = 'browse';
@@ -817,8 +879,33 @@ function toggleQueue(ch, guild) {
 }
 
 function initQueue() {
+  let undoClear;
+  let undoTimeout;
+  const undo = $('queueUndo');
+  const undoButton = $('undoClearQueue');
+  const undoStatus = $('queueUndoStatus');
   $('clearQueue').addEventListener('click', () => {
-    collectionQueue.clear();
+    const count = collectionQueue.view().sources.length;
+    undoClear = collectionQueue.clear();
+    undo.hidden = false;
+    undoButton.hidden = false;
+    undoStatus.textContent = `Removed ${n(count)} from the queue`;
+    undoButton.focus();
+    clearTimeout(undoTimeout);
+    undoTimeout = setTimeout(() => {
+      undoClear = null;
+      if (document.activeElement === undoButton) $('collectionSearch').focus();
+      undo.hidden = true;
+    }, 12000);
+  });
+  undoButton.addEventListener('click', () => {
+    const restored = undoClear?.();
+    clearTimeout(undoTimeout);
+    undoClear = null;
+    undoStatus.textContent = restored ? 'Queue restored' : 'The queue changed. Undo is unavailable.';
+    undoButton.hidden = true;
+    undoTimeout = setTimeout(() => { undo.hidden = true; }, 4000);
+    (restored ? $('clearQueue') : $('collectionSearch')).focus();
   });
   $('startScrape').addEventListener('click', startScraping);
   $('stopQueueScrape').addEventListener('click', stopQueueScrape);
@@ -863,7 +950,8 @@ function renderQueue() {
     chip.innerHTML =
       `<span>#</span><span>${esc(ch.name)}</span>` +
       `<span class="qb-chip-server">${esc(ch.guild_name)}</span>` +
-      `<button class="qb-chip-x" data-id="${ch.id}" ${canEdit ? '' : 'disabled'}>remove</button>`;
+      `<button class="qb-chip-x" data-id="${ch.id}" ${canEdit ? '' : 'disabled'}>Remove</button>`;
+    chip.querySelector('.qb-chip-x').setAttribute('aria-label', `Remove ${ch.name} from queue`);
     chip.querySelector('.qb-chip-x').addEventListener('click', () => {
       collectionQueue.remove(ch.id);
     });
@@ -1184,24 +1272,19 @@ let submittedSearch = new URLSearchParams();
 let searchCursors = [null];
 
 function setFilterTrayExpanded(expanded) {
-  $('queryBlock').classList.toggle('is-expanded', expanded);
-  $('searchInput').setAttribute('aria-expanded', String(expanded));
-  $('filterTray').inert = !expanded;
+  $('filterToggle').setAttribute('aria-expanded', String(expanded));
+  $('filterTray').hidden = !expanded;
 }
 
 function initSearch() {
   $('queryForm').addEventListener('submit', e => { e.preventDefault(); doSearch(1, true); });
   $('filterForm').addEventListener('submit', e => { e.preventDefault(); doSearch(1, true); });
-  $('searchInput').addEventListener('focus', () => setFilterTrayExpanded(true));
-  $('searchInput').addEventListener('click', () => setFilterTrayExpanded(true));
+  $('filterToggle').addEventListener('click', () => setFilterTrayExpanded($('filterTray').hidden));
   $('queryBlock').addEventListener('keydown', e => {
-    if (e.key === 'Escape') { $('searchInput').focus(); setFilterTrayExpanded(false); }
-  });
-  document.addEventListener('pointerdown', e => {
-    if (!$('queryBlock').contains(e.target)) setFilterTrayExpanded(false);
-  });
-  $('queryBlock').addEventListener('focusout', e => {
-    if (e.relatedTarget && !$('queryBlock').contains(e.relatedTarget)) setFilterTrayExpanded(false);
+    if (e.key === 'Escape' && !$('filterTray').hidden) {
+      setFilterTrayExpanded(false);
+      $('filterToggle').focus();
+    }
   });
   $('filterForm').addEventListener('reset', () => {
     queueMicrotask(() => {
@@ -1345,8 +1428,8 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   $('resultsSection').hidden = false;
   $('resultsStatus').textContent = 'Searching…';
   $('searchResults').setAttribute('aria-busy', 'true');
-  $('searchResults').innerHTML = spinnerHTML();
-  await switchView('browse');
+  $('searchResults').innerHTML = '<div class="result-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
+  await navigateView('browse');
   if (request !== searchRequest) return;
   if (activeView !== 'browse') { $('searchResults').removeAttribute('aria-busy'); return; }
   const url = new URLSearchParams(params); url.delete('limit'); url.set('search', '1');
@@ -1363,7 +1446,10 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
       }
     }
     renderResults(data, params.get('q') || '');
-    if (shouldScroll && activeView === 'browse') $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+    if (shouldScroll && activeView === 'browse') {
+      $('results-title').focus({preventScroll: true});
+      $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+    }
   } catch (error) {
     if (error.name === 'AbortError' || request !== searchRequest) return;
     $('resultsStatus').textContent = `Search failed: ${error.message}`;
@@ -1373,12 +1459,10 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   }
 }
 
-function messageAvatar(authorId, avatarUrl) {
-  let hash = 0;
-  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  const avatar = ce('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
+function messageAvatar(authorId, avatarUrl, authorName) {
+  const avatar = ce('div', 'message-avatar');
   avatar.setAttribute('aria-hidden', 'true');
-  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
+  const fallback = () => { avatar.textContent = String(authorName || authorId).slice(0, 1).toUpperCase(); };
   fallback();
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -1418,7 +1502,7 @@ function renderResults(data, query) {
       });
       content.appendChild(attachments);
     }
-    row.append(messageAvatar(msg.author_id, msg.avatar_url), content); results.appendChild(row);
+    row.append(messageAvatar(msg.author_id, msg.avatar_url, msg.author_name), content); results.appendChild(row);
   });
   renderPagination(data.page, data.pages, data.has_more);
 }
@@ -1435,7 +1519,7 @@ function renderPagination(page, pages, hasMore) {
     button.addEventListener('click', () => doSearch(target, true, true));
     if (label === 'next') {
       const readout = ce('div', 'page-readout');
-      readout.innerHTML = `<span class="page-current">page ${n(page)}</span><span class="page-rule" aria-hidden="true"></span><span>${pages === null ? (hasMore ? 'next page available' : 'last page') : `${n(pages)} pages`}</span>`;
+      readout.textContent = pages === null ? `Page ${n(page)}` : `Page ${n(page)} of ${n(pages)}`;
       pagination.appendChild(readout);
     }
     pagination.appendChild(button);
