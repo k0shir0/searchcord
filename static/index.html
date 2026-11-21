@@ -145,7 +145,17 @@
     </div>
     <section class="queue-bar" id="queueBar" aria-label="Collection queue"><div class="qb-left"><h3 class="qb-label">Collection queue</h3><span class="qb-count" id="queueCount">0</span></div><div class="qb-chips" id="queueChips"></div>
       <div class="queue-undo" id="queueUndo" hidden><p role="status" id="queueUndoStatus"></p><button type="button" class="btn-ghost" id="undoClearQueue">Undo</button></div>
-      <div class="queue-controls"><label class="qb-limit">Messages per channel<input type="number" id="scrapeLimit" placeholder="all history" min="0" step="100"></label><label class="profile-choice"><input type="checkbox" id="harvestProfiles"> fetch expanded profiles</label><div class="qb-right"><button class="btn-ghost" id="clearQueue">clear queue</button><button class="btn-mint" id="startScrape" disabled>start scraping</button></div></div><p class="queue-hint">When selected, each new user's extended profile is saved before the next message page. Stopping preserves saved work and the resume cursor.</p>
+      <div class="queue-controls">
+        <label class="qb-limit">Messages per channel<input type="number" id="scrapeLimit" placeholder="all history" min="0" step="100"></label>
+        <label class="profile-choice"><input type="checkbox" id="harvestProfiles"> fetch expanded profiles</label>
+        <button class="btn-ghost fast-scrape" id="fastScrape" type="button" aria-pressed="false" aria-describedby="fastScrapeHint" title="Shorten scrape waits by 70%">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 10-13h-7l1-7Z"/></svg>
+          Fast scrape
+        </button>
+        <span class="sr-only" id="fastScrapeHint">Shortens the wait between requests and the break after 100 successful requests by 70%. Discord rate limits still apply.</span>
+        <div class="qb-right"><button class="btn-ghost" id="clearQueue">clear queue</button><button class="btn-mint" id="startScrape" disabled>start scraping</button></div>
+      </div>
+      <p class="queue-hint">When selected, each new user's extended profile is saved before the next message page. Stopping preserves saved work and the resume cursor.</p>
       <section class="queue-progress" id="queueProgress" aria-label="Scrape progress" hidden><div class="queue-progress-head"><div><h4 id="queueProgressTitle">Starting scrape…</h4><p id="queueProgressSummary" role="status">Waiting for the first channel.</p></div><div class="queue-progress-actions"><button class="btn-ghost" id="pauseQueueScrape" disabled>pause scraping</button><button class="btn-ghost" id="stopQueueScrape" disabled>stop scraping</button><button class="btn-ghost" id="dismissQueueProgress" hidden>dismiss</button></div></div><progress id="queueProgressBar" max="1" value="0" aria-label="Channels completed"></progress><div class="queue-progress-rows" id="queueProgressRows"></div></section>
     </section><div class="scrape-pill" id="scrapePill"><span class="pulse-dot"></span><span id="scrapeStatus">scraping…</span><button class="btn-ghost" id="showScrapeProgress">view progress</button></div>
   </section>

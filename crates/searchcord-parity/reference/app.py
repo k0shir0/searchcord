@@ -401,12 +401,13 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
         "Content-Type": "application/json",
     }
     url = f"{DISCORD_API}{path}"
+    scale = 0.3 if scrape_job_id and scrapes.fast_pacing(scrape_job_id) else 1.0
     # One process-wide gate makes concurrent scrape, profile, live-monitor and
     # DM jobs respect a shared global 429 instead of retrying into it together.
     for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
         # Draw once per attempt, including retries. Waiting never holds the
         # request lock, so a paused job cannot block unrelated Discord work.
-        interval = random.uniform(SCRAPE_INTERVAL_MIN_SECONDS, SCRAPE_INTERVAL_MAX_SECONDS) if scrape_job_id else 0
+        interval = random.uniform(SCRAPE_INTERVAL_MIN_SECONDS, SCRAPE_INTERVAL_MAX_SECONDS) * scale if scrape_job_id else 0
         while True:
             if scrape_job_id:
                 await scrapes.checkpoint(scrape_job_id)
@@ -439,7 +440,7 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                         if scrape_confirmed_requests == SCRAPE_BREAK_REQUESTS:
                             scrape_confirmed_requests = 0
                             scrape_break_until = time.monotonic() + random.uniform(
-                                SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_MAX_SECONDS)
+                                SCRAPE_BREAK_SECONDS, SCRAPE_BREAK_MAX_SECONDS) * scale
                     # Publish cooldowns before releasing the shared gate.
                     if r.status_code == 429:
                         discord_ready_at = max(discord_ready_at, time.monotonic() + _retry_after(r))
@@ -536,6 +537,7 @@ class ScrapeRequest(BaseModel):
     channels: list
     limit: int = Field(default=0, ge=0)  # 0 = all; >0 = at most N per channel
     harvest_profiles: bool = False
+    fast_pacing: bool = False
 
 
 def _validated_channels(channels):
@@ -562,7 +564,7 @@ def _validated_channels(channels):
 @app.post("/api/scrape/start")
 async def start_scrape(req: ScrapeRequest):
     channels = _validated_channels(req.channels)
-    return {"job_id": await scrapes.start(channels, req.limit, req.harvest_profiles)}
+    return {"job_id": await scrapes.start(channels, req.limit, req.harvest_profiles, req.fast_pacing)}
 
 
 @app.get("/api/scrape/active")

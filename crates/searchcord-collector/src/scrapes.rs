@@ -129,6 +129,7 @@ fn project(state: &Value, event: Option<&Value>, changes: &Value) -> Value {
 }
 struct Job {
     id: String,
+    fast_pacing: bool,
     state: Arc<Mutex<Value>>,
     control: Control,
     events: broadcast::Sender<Value>,
@@ -190,6 +191,7 @@ impl<C: Clock> Scrapes<C> {
         }
         Arc::new(Job {
             id,
+            fast_pacing: state["fast_pacing"] == true,
             state: Arc::new(Mutex::new(state)),
             control,
             events: broadcast::channel(1000).0,
@@ -327,6 +329,7 @@ impl<C: Clock> Scrapes<C> {
         let control = job.control.clone();
         Options {
             scrape: true,
+            fast_pacing: job.fast_pacing,
             control,
             on_wait: Some(Arc::new(move |event| match event {
                 WaitEvent::Paused => {
@@ -389,10 +392,22 @@ impl<C: Clock> Scrapes<C> {
         credential_id: String,
         token: String,
     ) -> Result<String> {
+        self.start_with_pacing(channels, limit, harvest, false, credential_id, token)
+            .await
+    }
+    pub async fn start_with_pacing(
+        &self,
+        channels: Value,
+        limit: u64,
+        harvest: bool,
+        fast_pacing: bool,
+        credential_id: String,
+        token: String,
+    ) -> Result<String> {
         let owner = self.clone();
         tokio::spawn(async move {
             owner
-                .start_inner(channels, limit, harvest, credential_id, token)
+                .start_inner(channels, limit, harvest, fast_pacing, credential_id, token)
                 .await
         })
         .await?
@@ -402,6 +417,7 @@ impl<C: Clock> Scrapes<C> {
         channels: Value,
         limit: u64,
         harvest: bool,
+        fast_pacing: bool,
         credential_id: String,
         token: String,
     ) -> Result<String> {
@@ -425,7 +441,7 @@ impl<C: Clock> Scrapes<C> {
             }
         }
         let id = new_id()?;
-        let state = json!({"running":true,"cancelled":false,"pause_requested":false,"paused":false,"channels":channels,"limit":limit,"harvest_profiles":harvest,"index":0,"total_messages":0,"completed":0,"rows":vec![json!({});channels.len()],"last_event":null,"next_index":0,"channel_state":null,"failed_channels":0,"credential_id":credential_id,"profile_auth_failed":false});
+        let state = json!({"running":true,"cancelled":false,"pause_requested":false,"paused":false,"channels":channels,"limit":limit,"harvest_profiles":harvest,"fast_pacing":fast_pacing,"index":0,"total_messages":0,"completed":0,"rows":vec![json!({});channels.len()],"last_event":null,"next_index":0,"channel_state":null,"failed_channels":0,"credential_id":credential_id,"profile_auth_failed":false});
         let job = Self::job(id.clone(), state, false);
         self.transition(job.clone(), None, json!({})).await?;
         jobs.push(job.clone());

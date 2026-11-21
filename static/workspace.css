@@ -102,6 +102,10 @@ button:disabled { cursor: default; opacity: .45; }
 .qb-limit input { width: 170px; height: 42px; background: var(--input-fill); color: var(--input-ink); border: 1px solid var(--ice); border-radius: 0; padding: 10px; }
 .profile-choice { display: flex; align-items: center; gap: 10px; min-height: 42px; font-size: 12px; }
 .profile-choice input { width: 18px; height: 18px; accent-color: var(--cool-accent); }
+.fast-scrape { display: inline-flex; align-items: center; gap: 8px; }
+.fast-scrape svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.fast-scrape[aria-pressed="true"] { background: var(--cool-accent-soft); border-color: var(--cool-accent); color: var(--cool-accent); }
+.fast-scrape[aria-pressed="true"] svg { fill: currentColor; }
 .qb-right { margin-left: auto; display: flex; flex-wrap: wrap; gap: 12px; }
 .queue-hint, .queue-empty { color: var(--ink-soft); font-size: 12px; line-height: 1.6; }
 .queue-hint { margin-top: 18px; }

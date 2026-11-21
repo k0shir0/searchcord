@@ -908,6 +908,10 @@ function initQueue() {
     (restored ? $('clearQueue') : $('collectionSearch')).focus();
   });
   $('startScrape').addEventListener('click', startScraping);
+  $('fastScrape').addEventListener('click', e => {
+    const button = e.currentTarget;
+    button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'));
+  });
   $('stopQueueScrape').addEventListener('click', stopQueueScrape);
   $('pauseQueueScrape').addEventListener('click', toggleScrapePause);
   $('dismissQueueProgress').addEventListener('click', () => {
@@ -976,6 +980,7 @@ async function executeScrape(channels) {
   try {
     resp = await api('/api/scrape/start', { method: 'POST', body: {
       channels, limit, harvest_profiles: $('harvestProfiles').checked,
+      fast_pacing: $('fastScrape').getAttribute('aria-pressed') === 'true',
     } });
   } catch (error) {
     finishScrape(`Could not start: ${error.message}`, 'Scrape could not start', false);

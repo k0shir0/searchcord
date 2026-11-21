@@ -210,7 +210,7 @@ class Scrapes:
             raise HTTPException(409, "Select the account used to start this job before resuming")
         return token
 
-    async def start(self, channels, limit=0, harvest_profiles=False):
+    async def start(self, channels, limit=0, harvest_profiles=False, fast_pacing=False):
         self._available()
         credential_id, _ = await self._credentials()
         self._available()
@@ -223,6 +223,7 @@ class Scrapes:
         job = _Job(str(uuid.uuid4()), {
             "running": True, "cancelled": False, "pause_requested": False, "paused": False,
             "channels": deepcopy(channels), "limit": limit, "harvest_profiles": harvest_profiles,
+            "fast_pacing": fast_pacing,
             "index": 0, "total_messages": 0, "completed": 0, "rows": [{} for _ in channels],
             "last_event": None, "next_index": 0, "channel_state": None,
             "failed_channels": 0, "credential_id": credential_id, "profile_auth_failed": False})
@@ -321,6 +322,10 @@ class Scrapes:
             if job.expiry:
                 job.expiry.cancel()
         self._jobs.clear()
+
+    def fast_pacing(self, job_id):
+        job = self._jobs.get(job_id)
+        return bool(job and job.state.get("fast_pacing"))
 
     def request_allowed(self, job_id):
         job = self._job(job_id)

@@ -160,6 +160,7 @@ pub enum WaitEvent {
 #[derive(Clone)]
 pub struct Options {
     pub scrape: bool,
+    pub fast_pacing: bool,
     pub retry_rate_limits: bool,
     pub control: Control,
     pub on_wait: Option<Arc<dyn Fn(WaitEvent) + Send + Sync>>,
@@ -168,6 +169,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             scrape: false,
+            fast_pacing: false,
             retry_rate_limits: true,
             control: Control::default(),
             on_wait: None,
@@ -355,9 +357,10 @@ impl<C: Clock> Gate<C> {
         Fut: Future<Output = Result<Response>> + Send + 'static,
     {
         let mut receiver = options.control.0.subscribe();
+        let scale = if options.fast_pacing { 0.3 } else { 1.0 };
         for attempt in 0..=5 {
             let interval = if options.scrape {
-                self.draw(0.5, 1.5)?
+                self.draw(0.5, 1.5)? * scale
             } else {
                 0.0
             };
@@ -417,7 +420,7 @@ impl<C: Clock> Gate<C> {
                             if guard.confirmed == 100 {
                                 guard.confirmed = 0;
                                 let seconds = match gate.draw(60.0, 90.0) {
-                                    Ok(seconds) => seconds,
+                                    Ok(seconds) => seconds * scale,
                                     Err(error) => {
                                         // Keep the full break and persist the
                                         // accepted attempt if entropy fails.
