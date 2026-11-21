@@ -490,6 +490,7 @@ async function changeSavedAccount(change, options) {
   setTokenControlsBusy(true);
   S.guild = null;
   S.guilds = [];
+  S.guildLoad?.controller?.abort();
   S.guildLoad = null;
   S.channelViewRevision++;
   $('scanStatus').textContent = '';
@@ -589,6 +590,8 @@ function renderGuilds() {
     const icon = ce('div', 'server-icon');
     if (g.icon) {
       const img = new Image();
+      img.loading = 'lazy';
+      img.decoding = 'async';
       img.src = g.icon;
       img.alt = g.name;
       img.onerror = () => { img.remove(); icon.textContent = initial(g.name); };
@@ -630,9 +633,11 @@ async function selectGuild(guild, includeThreads = false) {
   $('cpHead').textContent = guild.name;
   $('cpBody').innerHTML = spinnerHTML();
 
-  if (S.guildLoad?.id !== guild.id || S.guildLoad.revision !== revision || (includeThreads && !S.guildLoad.includeThreads)) {
-    const load = {id: guild.id, revision, includeThreads};
-    load.promise = api(`/api/guilds/${encodeURIComponent(guild.id)}/channels${includeThreads ? '?include_threads=true' : ''}`)
+  if (S.guildLoad?.id !== guild.id || S.guildLoad.revision !== revision || S.guildLoad.includeThreads !== includeThreads) {
+    S.guildLoad?.controller?.abort();
+    const controller = includeThreads ? null : new AbortController();
+    const load = {id: guild.id, revision, includeThreads, controller};
+    load.promise = api(`/api/guilds/${encodeURIComponent(guild.id)}/channels${includeThreads ? '?include_threads=true' : ''}`, {signal: controller?.signal})
       .finally(() => { if (S.guildLoad === load) S.guildLoad = null; });
     S.guildLoad = load;
   }
@@ -643,6 +648,7 @@ async function selectGuild(guild, includeThreads = false) {
     renderChannels(channels, guild);
     return channels;
   } catch (error) {
+    if (error.name === 'AbortError') return null;
     if (S.guild?.id === guild.id && S.accountRevision === revision && S.channelViewRevision === viewRevision) {
       $('cpBody').replaceChildren();
       const message = ce('div', 'error-msg'); message.textContent = `Could not check channels: ${error.message}`;
@@ -1568,26 +1574,35 @@ function messageAvatar(authorId, avatarUrl, authorName) {
   return avatar;
 }
 
+const resultDate = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+
 function renderResults(data, query) {
   const results = $('searchResults');
-  results.replaceChildren();
   $('resultsStatus').textContent = data.total === null
     ? (data.partial ? `${n(data.messages.length)} matches in the checked history. More history remains; search older.` : data.messages.length ? `${n(data.messages.length)} messages on this page` : 'No messages match these filters')
     : data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
-  if (!data.messages.length) results.innerHTML = data.partial ? '<p class="no-results">No matches in this part of the archive. More history remains; search older.</p>' : '<p class="no-results">No results found. Try another query or clear the filters.</p>';
+  const fragment = document.createDocumentFragment();
+  const regex = query ? new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
+  if (!data.messages.length) {
+    const empty = ce('p', 'no-results');
+    empty.textContent = data.partial ? 'No matches in this part of the archive. More history remains; search older.' : 'No results found. Try another query or clear the filters.';
+    fragment.appendChild(empty);
+  }
   data.messages.forEach(msg => {
     const row = ce('article', 'result-row');
     const content = ce('div', 'message-body');
     const heading = ce('div', 'message-heading');
     const author = ce('button', 'message-author profile-author'); author.type = 'button'; author.dataset.profileId = msg.author_id; author.textContent = msg.author_name || msg.author_id;
     const time = ce('time', 'message-time'); time.dateTime = msg.timestamp;
-    time.textContent = new Date(msg.timestamp).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});
+    const timestamp = new Date(msg.timestamp);
+    time.textContent = Number.isNaN(timestamp.valueOf()) ? 'Invalid Date' : resultDate.format(timestamp);
     const location = ce('span', 'message-location');
     location.textContent = `${msg.guild_name || 'Direct messages'} · #${msg.channel_name}`;
     const id = ce('span', 'message-id'); id.textContent = `id: ${msg.author_id}`;
     heading.append(author, time, location, id);
     const text = ce('p', 'result-copy');
-    text.innerHTML = msg.content ? (query ? highlight(msg.content, query) : esc(msg.content)) : '(no text content)';
+    if (msg.content && regex) text.innerHTML = highlight(msg.content, regex);
+    else text.textContent = msg.content || '(no text content)';
     content.append(heading, text);
     if (msg.attachment_files?.length || msg.attachments?.length) {
       const attachments = ce('div', 'rc-attachments');
@@ -1598,8 +1613,9 @@ function renderResults(data, query) {
       });
       content.appendChild(attachments);
     }
-    row.append(messageAvatar(msg.author_id, msg.avatar_url, msg.author_name), content); results.appendChild(row);
+    row.append(messageAvatar(msg.author_id, msg.avatar_url, msg.author_name), content); fragment.appendChild(row);
   });
+  results.replaceChildren(fragment);
   renderPagination(data.page, data.pages, data.has_more);
 }
 
@@ -1930,13 +1946,11 @@ function spinnerHTML()   { return '<div class="spinner-wrap"><div class="spinner
 // Match on the raw text, then escape each piece — highlighting escaped HTML
 // instead would let a query like "amp" or "lt" match inside an entity and
 // tear it apart on screen.
-function highlight(raw, query) {
-  const safe = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(safe, 'gi');
+function highlight(raw, regex) {
   let out = '';
   let last = 0;
-  for (const m of raw.matchAll(re)) {
-    if (m[0] === '') break;  // guard against a zero-width match looping
+  let m;
+  while ((m = regex.exec(raw))) {
     out += esc(raw.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`;
     last = m.index + m[0].length;
   }

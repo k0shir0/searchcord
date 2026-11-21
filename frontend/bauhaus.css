@@ -123,7 +123,7 @@ a { color: inherit; }
 .filter-form button:hover { background: var(--ink); color: var(--paper); }
 .results-status { color: var(--ink-soft); font-size: 12px; padding: 16px 0 2px; }
 .result-list { border-bottom: 1px solid var(--ink); }
-.result-row { align-items: start; border-bottom: 1px solid var(--rule); display: grid; gap: 12px; grid-template-columns: 32px minmax(0, 1fr); padding: 12px 0; }
+.result-row { align-items: start; border-bottom: 1px solid var(--rule); display: grid; gap: 12px; grid-template-columns: 32px minmax(0, 1fr); padding: 12px 0; content-visibility: auto; contain-intrinsic-block-size: auto 48px; }
 .result-row:last-child { border-bottom: 0; }
 .result-row:hover { background: var(--paper-deep); }
 .result-row[hidden] { display: none; }

@@ -383,7 +383,7 @@ async fn dispatch(State(archive): State<Archive>, mut req: Request) -> Response 
                 .insert(header::VARY, "Accept-Encoding".parse().unwrap());
         }
         let output = if gzip && bytes.len() >= 1024 {
-            let source = bytes.to_vec();
+            let source = bytes.clone();
             match tokio::task::spawn_blocking(move || {
                 let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(5));
                 e.write_all(&source)?;
@@ -398,12 +398,12 @@ async fn dispatch(State(archive): State<Archive>, mut req: Request) -> Response 
                     parts
                         .headers
                         .insert(header::VARY, "Accept-Encoding".parse().unwrap());
-                    compressed
+                    compressed.into()
                 }
-                _ => bytes.to_vec(),
+                _ => bytes,
             }
         } else {
-            bytes.to_vec()
+            bytes
         };
         parts.headers.insert(
             header::CONTENT_LENGTH,

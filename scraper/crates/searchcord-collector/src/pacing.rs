@@ -161,6 +161,7 @@ pub enum WaitEvent {
 pub struct Options {
     pub scrape: bool,
     pub fast_pacing: bool,
+    pub channel_discovery: bool,
     pub retry_rate_limits: bool,
     pub control: Control,
     pub on_wait: Option<Arc<dyn Fn(WaitEvent) + Send + Sync>>,
@@ -170,6 +171,7 @@ impl Default for Options {
         Self {
             scrape: false,
             fast_pacing: false,
+            channel_discovery: false,
             retry_rate_limits: true,
             control: Control::default(),
             on_wait: None,
@@ -376,7 +378,10 @@ impl<C: Clock> Gate<C> {
                 if *receiver.borrow() != Status::Running {
                     continue;
                 }
-                let mut ready = (guard.last_discord_request + 0.025).max(guard.ready_at);
+                let mut ready = guard.ready_at;
+                if !options.channel_discovery {
+                    ready = ready.max(guard.last_discord_request + 0.025);
+                }
                 if options.scrape {
                     ready = ready
                         .max(guard.last_scrape_request + interval)
@@ -413,6 +418,7 @@ impl<C: Clock> Gate<C> {
                         response = future => response,
                     };
                     let now = gate.clock.now();
+                    let previous_ready = guard.ready_at;
                     let mut draw_error = None;
                     if options.scrape {
                         guard.last_scrape_request = now;
@@ -445,16 +451,24 @@ impl<C: Clock> Gate<C> {
                             guard.ready_at = guard.ready_at.max(now + seconds.max(0.0));
                         }
                     }
-                    let wall = gate.clock.wall();
-                    gate.break_deadline
-                        .store(guard.break_until.to_bits(), Ordering::Release);
-                    if let Err(error) =
-                        persist(gate.path.clone(), guard.checkpoint(now, wall), wall).await
+                    // Discovery has no scrape progress to checkpoint. Save any
+                    // new upstream cooldown so it also survives a restart.
+                    if options.scrape
+                        || !options.channel_discovery
+                        || guard.ready_at > previous_ready
+                        || guard.persistence_error.is_some()
                     {
-                        guard.persistence_error = Some(error.to_string());
-                        return Err(error);
+                        let wall = gate.clock.wall();
+                        gate.break_deadline
+                            .store(guard.break_until.to_bits(), Ordering::Release);
+                        if let Err(error) =
+                            persist(gate.path.clone(), guard.checkpoint(now, wall), wall).await
+                        {
+                            guard.persistence_error = Some(error.to_string());
+                            return Err(error);
+                        }
+                        guard.persistence_error = None;
                     }
-                    guard.persistence_error = None;
                     if let Some(error) = draw_error {
                         result = Err(error);
                     }

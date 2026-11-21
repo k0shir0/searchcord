@@ -208,34 +208,34 @@ fn packed_ids(
             decoder.messages as i64
         };
         let block_rows = decoder.block_rows as i64;
-        let blocks = ids(
-            db,
+        let mut block_query = db.prepare(
             "SELECT rowid FROM message_short_fts WHERE message_short_fts MATCH ? AND rowid BETWEEN ? AND ? ORDER BY rowid DESC",
-            &[
-                SqlValue::Text(short_token(&short)),
-                SqlValue::Integer((first - 1).div_euclid(block_rows) + 1),
-                SqlValue::Integer((last - 1).div_euclid(block_rows) + 1),
-            ],
         )?;
-        let mut result = vec![];
-        let condition = conditions
-            .iter()
-            .cloned()
-            .chain([
-                "m.rowid BETWEEN ? AND ?".into(),
-                "record_content(m.rowid) LIKE ? ESCAPE '!'".into(),
-            ])
-            .collect::<Vec<_>>()
-            .join(" AND ");
-        for block in blocks {
-            let mut params = parameters.clone();
-            params.extend([
+        let mut blocks = block_query.query(params![
+            short_token(&short),
+            (first - 1).div_euclid(block_rows) + 1,
+            (last - 1).div_euclid(block_rows) + 1,
+        ])?;
+        conditions.push("m.rowid BETWEEN ? AND ?".into());
+        conditions.push("record_content(m.rowid) LIKE ? ESCAPE '!'".into());
+        let mut matches = db.prepare(&format!(
+            "SELECT m.rowid FROM message_index m WHERE {} ORDER BY m.rowid DESC LIMIT ?",
+            conditions.join(" AND "),
+        ))?;
+        let mut result = Vec::with_capacity(take);
+        let literal = SqlValue::Text(literal);
+        while let Some(row) = blocks.next()? {
+            let block: i64 = row.get(0)?;
+            let bounds = [
                 SqlValue::Integer((block - 1) * block_rows + 1),
                 SqlValue::Integer(block * block_rows),
-                SqlValue::Text(literal.clone()),
-                SqlValue::Integer((take - result.len()) as i64),
-            ]);
-            result.extend(ids(db,&format!("SELECT m.rowid FROM message_index m WHERE {condition} ORDER BY m.rowid DESC LIMIT ?"),&params)?);
+            ];
+            let limit = SqlValue::Integer((take - result.len()) as i64);
+            let params = parameters.iter().chain(&bounds).chain([&literal, &limit]);
+            let mut rows = matches.query(params_from_iter(params))?;
+            while let Some(row) = rows.next()? {
+                result.push(row.get(0)?);
+            }
             if result.len() == take {
                 break;
             }
@@ -304,11 +304,11 @@ pub fn packed_search(
                 parameters.push(SqlValue::Integer(if low { boundary + 1 } else { boundary }));
             }
         }
-        parameters.push(SqlValue::Integer(query.window as i64 + 1));
-        let window = ids(
+        parameters.push(SqlValue::Integer(query.window as i64 - 1));
+        let tail = ids(
             db,
             &format!(
-                "SELECT rowid FROM message_index WHERE {} ORDER BY rowid DESC LIMIT ?",
+                "SELECT rowid FROM message_index WHERE {} ORDER BY rowid DESC LIMIT 2 OFFSET ?",
                 if conditions.is_empty() {
                     "1".into()
                 } else {
@@ -317,20 +317,15 @@ pub fn packed_search(
             ),
             &parameters,
         )?;
-        if window.is_empty() {
-            vec![]
-        } else {
-            let floor: i64 = db.query_row(
-                "SELECT record_id(?)",
-                [window[query.window.min(window.len()) - 1]],
-                |r| r.get(0),
-            )?;
-            let ids = packed_ids(db, decoder, query, Some(floor), take)?;
-            if window.len() > query.window && ids.len() < take {
-                scan_cursor = Some(floor.to_string());
-            }
-            ids
+        let floor: Option<i64> = tail
+            .first()
+            .map(|rowid| db.query_row("SELECT record_id(?)", [rowid], |r| r.get(0)))
+            .transpose()?;
+        let result = packed_ids(db, decoder, query, floor.or(query.lower), take)?;
+        if let Some(floor) = floor.filter(|_| tail.len() == 2 && result.len() < take) {
+            scan_cursor = Some(floor.to_string());
         }
+        result
     } else {
         packed_ids(db, decoder, query, query.lower, take)?
     };
@@ -405,37 +400,41 @@ pub fn standard_search(db: &Connection, query: &Query) -> rusqlite::Result<Page>
     let mut scan_cursor = None;
     let candidates = if query.scan {
         let mut params = bound_params;
-        params.push(SqlValue::Integer(query.window as i64 + 1));
-        let window = ids(
+        params.push(SqlValue::Integer(query.window as i64 - 1));
+        let tail = ids(
             db,
-            &format!("SELECT id FROM messages WHERE {bound_condition} ORDER BY id DESC LIMIT ?"),
+            &format!(
+                "SELECT id FROM messages WHERE {bound_condition} ORDER BY id DESC LIMIT 2 OFFSET ?"
+            ),
             &params,
         )?;
-        if window.is_empty() {
-            vec![]
-        } else {
-            let floor = window[query.window.min(window.len()) - 1];
-            let mut params = parameters;
+        let mut params = parameters;
+        let range = if let Some(&floor) = tail.first() {
             params.push(SqlValue::Integer(floor));
-            let text = if q.is_empty() {
-                ""
-            } else {
-                params.push(SqlValue::Text(literal));
-                "AND content LIKE ? ESCAPE '!'"
-            };
-            params.push(SqlValue::Integer(take as i64));
-            let result = ids(
-                db,
-                &format!(
-                    "SELECT id FROM messages WHERE {condition} AND id>=? {text} ORDER BY id DESC LIMIT ?"
-                ),
-                &params,
-            )?;
-            if window.len() > query.window && result.len() < take {
-                scan_cursor = Some(floor.to_string());
-            }
-            result
+            "AND id>=?"
+        } else {
+            ""
+        };
+        let text = if q.is_empty() {
+            ""
+        } else {
+            params.push(SqlValue::Text(literal));
+            "AND content LIKE ? ESCAPE '!'"
+        };
+        params.push(SqlValue::Integer(take as i64));
+        let result = ids(
+            db,
+            &format!(
+                "SELECT id FROM messages WHERE {condition} {range} {text} ORDER BY id DESC LIMIT ?"
+            ),
+            &params,
+        )?;
+        if let [floor, _] = tail.as_slice()
+            && result.len() < take
+        {
+            scan_cursor = Some(floor.to_string());
         }
+        result
     } else if !q.is_empty() {
         let mut params = parameters.clone();
         params.push(SqlValue::Integer(query.window as i64 - 1));

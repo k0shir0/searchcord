@@ -6,7 +6,10 @@ use crate::{
 };
 use reqwest::Method;
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap, HashSet},
+};
 
 pub const READABLE: u64 = (1 << 10) | (1 << 16);
 pub const MANAGE_THREADS: u64 = 1 << 34;
@@ -71,62 +74,95 @@ fn bits(v: &Value) -> Result<u64> {
     });
     Ok(if negative { n.wrapping_neg() } else { n })
 }
+struct GuildPermissions<'a> {
+    uid: &'a str,
+    gid: &'a str,
+    base: u64,
+    member_roles: HashSet<&'a str>,
+}
+impl<'a> GuildPermissions<'a> {
+    fn new(guild: &'a Value, member: &'a Value) -> Result<Self> {
+        let uid = text(&member["user"], "id")?;
+        let gid = text(guild, "id")?;
+        let roles: HashMap<_, _> = array(&guild["roles"])?
+            .iter()
+            .map(|r| Ok((text(r, "id")?, bits(&r["permissions"])?)))
+            .collect::<Result<_>>()?;
+        let member_roles: HashSet<_> = array(&member["roles"])?
+            .iter()
+            .map(|r| {
+                r.as_str().ok_or_else(|| {
+                    invalid("Discord returned incomplete channel permissions. Try again.")
+                })
+            })
+            .collect::<Result<_>>()?;
+        let mut p = *roles.get(gid).ok_or_else(|| {
+            invalid("Discord returned incomplete channel permissions. Try again.")
+        })?;
+        for role in &member_roles {
+            p |= roles.get(role).ok_or_else(|| {
+                invalid("Discord returned incomplete channel permissions. Try again.")
+            })?;
+        }
+        if uid == text(guild, "owner_id")? || p & 8 != 0 {
+            p = u64::MAX;
+        }
+        Ok(Self {
+            uid,
+            gid,
+            base: p,
+            member_roles,
+        })
+    }
+
+    fn for_channel(&self, channel: &Value) -> Result<u64> {
+        let mut p = self.base;
+        if p == u64::MAX {
+            return Ok(p);
+        }
+        let overwrites = array(&channel["permission_overwrites"])?;
+        let apply = |p: u64, o: &Value| -> Result<u64> {
+            Ok((p & !bits(&o["deny"])?) | bits(&o["allow"])?)
+        };
+        if let Some(o) = overwrites
+            .iter()
+            .find(|o| o["id"] == self.gid && o["type"] == 0)
+        {
+            p = apply(p, o)?;
+        }
+        let (mut allow, mut deny) = (0, 0);
+        for o in overwrites {
+            if o["type"] == 0 && self.member_roles.contains(text(o, "id")?) {
+                allow |= bits(&o["allow"])?;
+                deny |= bits(&o["deny"])?;
+            }
+        }
+        p = (p & !deny) | allow;
+        if let Some(o) = overwrites
+            .iter()
+            .find(|o| o["id"] == self.uid && o["type"] == 1)
+        {
+            p = apply(p, o)?;
+        }
+        Ok(p)
+    }
+}
+
 pub fn permissions_for(
     guild: &Value,
     member: &Value,
     channel: &Value,
     channels: &HashMap<String, Value>,
 ) -> Result<u64> {
-    let uid = text(&member["user"], "id")?;
-    let gid = text(guild, "id")?;
-    let roles: HashMap<_, _> = array(&guild["roles"])?
-        .iter()
-        .map(|r| Ok((text(r, "id")?, bits(&r["permissions"])?)))
-        .collect::<Result<_>>()?;
-    let member_roles: HashSet<_> = array(&member["roles"])?
-        .iter()
-        .map(|r| {
-            r.as_str().ok_or_else(|| {
-                invalid("Discord returned incomplete channel permissions. Try again.")
-            })
-        })
-        .collect::<Result<_>>()?;
-    let mut p = *roles
-        .get(gid)
-        .ok_or_else(|| invalid("Discord returned incomplete channel permissions. Try again."))?;
-    for role in &member_roles {
-        p |= roles.get(role).ok_or_else(|| {
-            invalid("Discord returned incomplete channel permissions. Try again.")
-        })?;
-    }
-    if uid == text(guild, "owner_id")? || p & 8 != 0 {
-        return Ok(u64::MAX);
-    }
-    let channel = if THREADS.contains(&kind(channel)?) {
+    let permissions = GuildPermissions::new(guild, member)?;
+    let parent = if permissions.base != u64::MAX && THREADS.contains(&kind(channel)?) {
         channels
             .get(text(channel, "parent_id")?)
             .ok_or_else(|| invalid("Discord returned incomplete channel permissions. Try again."))?
     } else {
         channel
     };
-    let overwrites = array(&channel["permission_overwrites"])?;
-    let apply =
-        |p: u64, o: &Value| -> Result<u64> { Ok((p & !bits(&o["deny"])?) | bits(&o["allow"])?) };
-    if let Some(o) = overwrites.iter().find(|o| o["id"] == gid && o["type"] == 0) {
-        p = apply(p, o)?;
-    }
-    let (mut allow, mut deny) = (0, 0);
-    for o in overwrites {
-        if o["type"] == 0 && member_roles.contains(text(o, "id")?) {
-            allow |= bits(&o["allow"])?;
-            deny |= bits(&o["deny"])?;
-        }
-    }
-    p = (p & !deny) | allow;
-    if let Some(o) = overwrites.iter().find(|o| o["id"] == uid && o["type"] == 1) {
-        p = apply(p, o)?;
-    }
-    Ok(p)
+    permissions.for_channel(parent)
 }
 
 pub struct Discovery<C: Clock> {
@@ -145,7 +181,16 @@ impl<C: Clock> Discovery<C> {
     ) -> Result<Option<Value>> {
         let mut request = Request::new(Method::GET, path, token);
         request.params = params;
-        let response = self.client.request(request, Options::default()).await?;
+        let response = self
+            .client
+            .request(
+                request,
+                Options {
+                    channel_discovery: true,
+                    ..Options::default()
+                },
+            )
+            .await?;
         if optional && [403, 404].contains(&response.status) {
             if response.json().ok().is_some_and(|v| v["code"] == 40002) {
                 return Err(http_error(
@@ -293,28 +338,36 @@ impl<C: Clock> Discovery<C> {
                 "Discord returned incomplete channel permissions. Try again.",
             ));
         }
-        let by_id: HashMap<String, Value> = raw
+        let by_id: HashMap<_, _> = raw
             .iter()
-            .map(|c| Ok((text(c, "id")?.into(), c.clone())))
+            .map(|c| Ok((text(c, "id")?, c)))
             .collect::<Result<_>>()?;
-        let permitted: HashMap<_, _> = raw
-            .iter()
-            .map(|c| Ok((text(c, "id")?, permissions_for(&guild, &member, c, &by_id)?)))
-            .collect::<Result<_>>()?;
-        let parents: Vec<_> = raw
-            .iter()
-            .filter(|c| {
-                include_threads
-                    && [0, 5, 15, 16].contains(&c["type"].as_i64().unwrap_or(-1))
-                    && permitted
-                        .get(c["id"].as_str().unwrap_or(""))
-                        .is_some_and(|p| p & READABLE == READABLE)
-            })
-            .collect();
+        let permissions = GuildPermissions::new(&guild, &member)?;
+        let mut permitted = HashMap::new();
+        let mut parents = Vec::new();
         let mut candidates = BTreeMap::new();
         for c in raw {
-            if [0, 5, 10, 11, 12].contains(&kind(c)?) {
-                candidates.insert(text(c, "id")?.to_owned(), c.clone());
+            let id = text(c, "id")?;
+            let channel_type = kind(c)?;
+            if THREADS.contains(&channel_type) {
+                if include_threads {
+                    candidates.insert(id.to_owned(), Cow::Borrowed(c));
+                }
+                continue;
+            }
+            if ![0, 5, 15, 16].contains(&channel_type) {
+                continue;
+            }
+            let allowed = permissions.for_channel(c)?;
+            if allowed & READABLE != READABLE {
+                continue;
+            }
+            permitted.insert(id, allowed);
+            if include_threads {
+                parents.push(c);
+            }
+            if [0, 5].contains(&channel_type) {
+                candidates.insert(id.to_owned(), Cow::Borrowed(c));
             }
         }
         if !parents.is_empty()
@@ -331,7 +384,7 @@ impl<C: Clock> Discovery<C> {
                 .as_array()
                 .ok_or_else(|| invalid("Discord returned an invalid thread list."))?
             {
-                candidates.insert(text(t, "id")?.to_owned(), t.clone());
+                candidates.insert(text(t, "id")?.to_owned(), Cow::Owned(t.clone()));
             }
         }
         for parent in parents {
@@ -360,7 +413,7 @@ impl<C: Clock> Discovery<C> {
                         invalid("Discord returned incomplete archived threads. Try again.")
                     })?;
                     for t in batch {
-                        candidates.insert(text(t, "id")?.to_owned(), t.clone());
+                        candidates.insert(text(t, "id")?.to_owned(), Cow::Owned(t.clone()));
                     }
                     let more = page["has_more"].as_bool().ok_or_else(|| {
                         invalid("Discord returned incomplete archived threads. Try again.")
@@ -403,14 +456,15 @@ impl<C: Clock> Discovery<C> {
         });
         let mut result = Vec::new();
         for c in candidates {
-            if THREADS.contains(&kind(&c)?)
-                && c["parent_id"]
-                    .as_str()
-                    .is_none_or(|s| !by_id.contains_key(s))
+            let channel_type = kind(&c)?;
+            if let Some(parent) = c["parent_id"]
+                .as_str()
+                .filter(|_| THREADS.contains(&channel_type))
             {
-                continue;
-            }
-            if permissions_for(&guild, &member, &c, &by_id)? & READABLE != READABLE {
+                if !permitted.contains_key(parent) {
+                    continue;
+                }
+            } else if ![0, 5].contains(&channel_type) || !permitted.contains_key(text(&c, "id")?) {
                 continue;
             }
             let id = text(&c, "id")?;

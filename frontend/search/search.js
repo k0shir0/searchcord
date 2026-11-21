@@ -63,19 +63,18 @@ function parameters() {
   }
   return params;
 }
-function putText(parent, text, query) {
+function putText(parent, text, regex) {
   // Text nodes keep archived HTML inert. Highlight only the literal search phrase.
-  if (!query) { parent.textContent = text; return; }
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(escaped, 'gi');
+  if (!regex) { parent.textContent = text; return; }
   let last = 0;
-  for (const match of text.matchAll(regex)) {
-    parent.append(document.createTextNode(text.slice(last, match.index)));
+  let match;
+  while ((match = regex.exec(text))) {
+    if (match.index > last) parent.append(document.createTextNode(text.slice(last, match.index)));
     const mark = document.createElement('mark');
     mark.textContent = match[0]; parent.append(mark);
     last = match.index + match[0].length;
   }
-  parent.append(document.createTextNode(text.slice(last)));
+  if (last < text.length) parent.append(document.createTextNode(text.slice(last)));
 }
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -98,13 +97,14 @@ function messageAvatar(authorId, avatarUrl, authorName) {
 
 function render(messages, query) {
   const fragment = document.createDocumentFragment();
+  const highlight = query ? new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
   for (const message of messages) {
     const row = element('article', 'result-row');
     row.dataset.id = message.id;
     const body = element('div', 'message-body');
     const heading = element('div', 'message-heading');
     const author = element('button', 'message-author profile-author', message.author_name || message.author_id);
-    author.type='button';author.addEventListener('click',()=>openProfile(message.author_id));
+    author.type = 'button'; author.dataset.profileId = message.author_id;
     const timestamp = new Date(message.timestamp);
     const time = element('time', 'message-time', Number.isNaN(timestamp.valueOf()) ? 'Unknown date' : dateFormat.format(timestamp));
     if (!Number.isNaN(timestamp.valueOf())) time.dateTime = message.timestamp;
@@ -112,7 +112,7 @@ function render(messages, query) {
     const id = element('span', 'message-id', `id: ${message.author_id}`);
     heading.append(author, time, location, id);
     const text = element('p', 'result-copy');
-    putText(text, message.content || '(no text content)', query);
+    putText(text, message.content || '(no text content)', highlight);
     body.append(heading, text);
     if (message.attachment_files?.length || message.attachments?.length) {
       const attachments = element('div','rc-attachments');
@@ -131,6 +131,10 @@ function render(messages, query) {
   $('#messages').replaceChildren(fragment);
   $('#emptyState').hidden = messages.length > 0;
 }
+$('#messages').addEventListener('click', event => {
+  const author = event.target.closest('button[data-profile-id]');
+  if (author) openProfile(author.dataset.profileId);
+});
 async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} = {}) {
   request?.abort();
   request = new AbortController();

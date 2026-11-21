@@ -46,6 +46,10 @@ shorten Searchcord's waits between requests and the break after every 100
 successful requests by 70%. The collection queue shows a countdown in seconds
 during each mandatory break. Discord rate limits still apply.
 
+Selecting a server shows message channels the active account can view and read.
+Channel checks run without the collector's built-in pacing delay and honor
+Discord's rate limits.
+
 Use **/** to focus message search or **Ctrl+K** (**⌘K** on macOS) to open the command menu.
 
 ## Search only

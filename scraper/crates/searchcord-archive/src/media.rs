@@ -173,6 +173,9 @@ pub fn status(path: &Path, url: &str, verify: bool) -> Value {
     let Some(key) = media_key(url) else {
         return json!({"status":"unavailable","reason":"unsupported_host"});
     };
+    status_for_key(path, &key, verify)
+}
+fn status_for_key(path: &Path, key: &str, verify: bool) -> Value {
     let directory = directory(path);
     let manifest = directory.join(format!("{key}.json"));
     if symlink(&directory) || symlink(&manifest) {
@@ -181,19 +184,26 @@ pub fn status(path: &Path, url: &str, verify: bool) -> Value {
     let read = || -> Option<Value> {
         let data: Value = serde_json::from_slice(&fs::read(manifest).ok()?).ok()?;
         data.as_object()?;
-        if data["status"] == "saved" && !file_valid(&directory, &key, &data, verify).ok()? {
+        if data["status"] == "saved" && !file_valid(&directory, key, &data, verify).ok()? {
             return Some(json!({"status":"unavailable","reason":"damaged_file"}));
         }
         Some(data)
     };
     read().unwrap_or_else(|| json!({"status":"unavailable","reason":"not_collected"}))
 }
+pub(crate) fn resolve(path: &Path, url: &str) -> (Option<String>, Value) {
+    let Some(key) = media_key(url) else {
+        return (
+            None,
+            json!({"status":"unavailable","reason":"unsupported_host"}),
+        );
+    };
+    let status = status_for_key(path, &key, false);
+    let local = (status["status"] == "saved").then(|| format!("/api/media/{key}"));
+    (local, status)
+}
 pub fn local_url(path: &Path, url: &str) -> String {
-    if status(path, url, false)["status"] == "saved" {
-        format!("/api/media/{}", media_key(url).unwrap_or_default())
-    } else {
-        url.to_owned()
-    }
+    resolve(path, url).0.unwrap_or_else(|| url.to_owned())
 }
 pub struct MediaFile {
     pub digest: String,

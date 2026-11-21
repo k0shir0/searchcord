@@ -2,7 +2,11 @@ use crate::{Archive, ArchiveError, SearchOptions, media, search};
 use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{Connection, OptionalExtension, functions::FunctionFlags, params, params_from_iter};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, sync::OnceLock, time::Instant};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::OnceLock,
+    time::Instant,
+};
 use unicode_normalization::UnicodeNormalization;
 
 pub fn search_label(value: &str) -> String {
@@ -401,23 +405,32 @@ impl Archive {
         } else {
             "message_payloads"
         };
-        let has_payload = exists(db, payload_table)?;
-        let mut messages = vec![];
-        for record in page.records {
+        let mut load_payload = exists(db, payload_table)?
+            .then(|| {
+                db.prepare(&format!(
+                    "SELECT payload FROM {payload_table} WHERE message_id=?"
+                ))
+            })
+            .transpose()?;
+        let mut avatars = HashMap::new();
+        let mut messages = Vec::with_capacity(page.records.len());
+        for mut record in page.records {
             let uid = record.author_id.as_deref().unwrap_or("");
-            let avatar: Option<Option<String>> = db
-                .query_row(
-                    "SELECT avatar_hash FROM profiles WHERE user_id=?",
-                    [uid],
-                    |r| r.get(0),
-                )
-                .optional()?;
-            let avatar = if !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()) {
-                image_url(uid, avatar.flatten().as_deref(), "avatars", 64)
-            } else {
-                None
-            };
-            let urls = record.image_urls.clone().unwrap_or_default();
+            if !avatars.contains_key(uid) {
+                let hash: Option<Option<String>> = db
+                    .prepare_cached("SELECT avatar_hash FROM profiles WHERE user_id=?")?
+                    .query_row([uid], |r| r.get(0))
+                    .optional()?;
+                let avatar = if !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()) {
+                    image_url(uid, hash.flatten().as_deref(), "avatars", 64)
+                        .map(|url| media::local_url(&self.path, &url))
+                } else {
+                    None
+                };
+                avatars.insert(uid.to_owned(), avatar);
+            }
+            let avatar = json!(avatars[uid]);
+            let urls = record.image_urls.take().unwrap_or_default();
             let id = record.id.clone();
             let mut message = serde_json::to_value(record).map_err(|_| {
                 ArchiveError::new(
@@ -429,16 +442,15 @@ impl Archive {
                 .as_object_mut()
                 .expect("record object")
                 .remove("image_urls");
-            message["avatar_url"] =
-                json!(avatar.as_deref().map(|s| media::local_url(&self.path, s)));
+            message["avatar_url"] = avatar;
             message["attachments"] = json!(
                 splitlines(&urls)
                     .into_iter()
                     .enumerate()
                     .filter(|(_, url)| valid_asset_url(url))
                     .map(
-                        |(i, url)| if media::status(&self.path, url, false)["status"] == "saved" {
-                            media::local_url(&self.path, url)
+                        |(i, url)| if let Some(local) = media::resolve(&self.path, url).0 {
+                            local
                         } else if options.refresh_images {
                             format!("/api/images/{id}/{i}")
                         } else {
@@ -447,13 +459,8 @@ impl Archive {
                     )
                     .collect::<Vec<_>>()
             );
-            let raw: Option<String> = if has_payload {
-                db.query_row(
-                    &format!("SELECT payload FROM {payload_table} WHERE message_id=?"),
-                    [&id],
-                    |r| r.get(0),
-                )
-                .optional()?
+            let raw: Option<String> = if let Some(statement) = &mut load_payload {
+                statement.query_row([&id], |r| r.get(0)).optional()?
             } else {
                 None
             };
@@ -473,8 +480,16 @@ impl Archive {
             } else {
                 &payload["attachments"]
             };
-            message["attachment_files"]=json!(files.as_array().into_iter().flatten().filter_map(|attachment|{let url=attachment["url"].as_str()?;if !valid_asset_url(url){return None;}
-                Some(json!({"filename":fallback(&[&attachment["filename"],&json!("attachment")]),"url":media::local_url(&self.path,url),"media":media::status(&self.path,url,false)}))}).collect::<Vec<_>>());
+            message["attachment_files"] =
+                json!(files.as_array().into_iter().flatten().filter_map(|attachment| {
+                let url = attachment["url"].as_str().filter(|url| valid_asset_url(url))?;
+                let (local, status) = media::resolve(&self.path, url);
+                Some(json!({
+                    "filename": fallback(&[&attachment["filename"], &json!("attachment")]),
+                    "url": local.as_deref().unwrap_or(url),
+                    "media": status,
+                }))
+            }).collect::<Vec<_>>());
             messages.push(message);
         }
         Ok(

@@ -1,7 +1,7 @@
 //! Existing v101 zlib/JSON blocks and connection-local SQLite view functions.
 use flate2::read::ZlibDecoder;
 use rusqlite::{Connection, OptionalExtension, functions::FunctionFlags, types::Value as SqlValue};
-use serde_json::Value;
+use serde::Deserialize;
 use std::{
     collections::VecDeque,
     io::{self, Read},
@@ -25,7 +25,17 @@ pub const FIELDS: [&str; 10] = [
 ];
 const MAX_BLOCK_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
-type Block = Arc<Vec<Vec<Value>>>;
+#[derive(Deserialize)]
+struct PackedRow(
+    i64,            // Message ID
+    Option<String>, // Content
+    Option<String>, // Timestamp
+    Option<String>, // Image URLs
+    Option<i64>,    // Channel name reference
+    Option<i64>,    // Guild name reference
+    Option<i64>,    // Author name reference
+);
+type Block = Arc<Vec<PackedRow>>;
 fn invalid(message: &str) -> rusqlite::Error {
     rusqlite::Error::UserFunctionError(Box::new(io::Error::new(
         io::ErrorKind::InvalidData,
@@ -95,7 +105,7 @@ impl PackedDecoder {
         if bytes.len() as u64 > MAX_BLOCK_BYTES {
             return Err(invalid("Message block exceeds decoding limit"));
         }
-        let body: Vec<Vec<Value>> =
+        let body: Vec<PackedRow> =
             serde_json::from_slice(&bytes).map_err(|_| invalid("Invalid message block JSON"))?;
         let start = (number as usize - 1)
             .checked_mul(self.block_rows)
@@ -105,32 +115,24 @@ impl PackedDecoder {
             return Err(invalid("Invalid message block length"));
         }
         let mut previous = 0;
-        let mut footprint = body.capacity() * size_of::<Vec<Value>>();
+        let mut footprint = body.capacity() * size_of::<PackedRow>();
         for row in &body {
-            if row.len() != 7 {
-                return Err(invalid("Invalid message record shape"));
+            let id = row.0;
+            if id <= previous {
+                return Err(invalid("Invalid public message ID order"));
             }
-            let id = row[0]
-                .as_i64()
-                .filter(|v| *v > previous)
-                .ok_or_else(|| invalid("Invalid public message ID order"))?;
             if previous == 0 && id != first {
                 return Err(invalid("Message block boundary does not match"));
             }
             previous = id;
-            if row[1..4].iter().any(|v| !v.is_null() && !v.is_string())
-                || row[4..]
-                    .iter()
-                    .any(|v| !v.is_null() && v.as_i64().is_none_or(|n| n <= 0))
-            {
+            if [row.4, row.5, row.6].into_iter().flatten().any(|n| n <= 0) {
                 return Err(invalid("Invalid message record field"));
             }
-            footprint += row.capacity() * size_of::<Value>()
-                + row
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::len)
-                    .sum::<usize>();
+            footprint += [&row.1, &row.2, &row.3]
+                .into_iter()
+                .flatten()
+                .map(String::capacity)
+                .sum::<usize>();
         }
         let body = Arc::new(body);
         cache.bytes += footprint;
@@ -150,11 +152,17 @@ impl PackedDecoder {
         let row = block
             .get((rowid - 1) as usize % self.block_rows)
             .ok_or_else(|| invalid("Missing message row"))?;
-        let value = &row[index];
-        if index >= 4 && !value.is_null() {
-            let key = value
-                .as_i64()
-                .ok_or_else(|| invalid("Invalid record name reference"))?;
+        let key = match index {
+            0 => return Ok(SqlValue::Integer(row.0)),
+            1 => return Ok(row.1.clone().map_or(SqlValue::Null, SqlValue::Text)),
+            2 => return Ok(row.2.clone().map_or(SqlValue::Null, SqlValue::Text)),
+            3 => return Ok(row.3.clone().map_or(SqlValue::Null, SqlValue::Text)),
+            4 => row.4,
+            5 => row.5,
+            6 => row.6,
+            _ => unreachable!("registered record field"),
+        };
+        if let Some(key) = key {
             let mut cache = self
                 .cache
                 .lock()
@@ -180,15 +188,7 @@ impl PackedDecoder {
             }
             return Ok(SqlValue::Text(name));
         }
-        match value {
-            Value::Null => Ok(SqlValue::Null),
-            Value::String(s) => Ok(SqlValue::Text(s.clone())),
-            Value::Number(n) => n
-                .as_i64()
-                .map(SqlValue::Integer)
-                .ok_or_else(|| invalid("Invalid numeric record field")),
-            _ => Err(invalid("Invalid record field")),
-        }
+        Ok(SqlValue::Null)
     }
     pub fn row_before_id(&self, db: &Connection, value: i64) -> rusqlite::Result<i64> {
         let number: Option<i64> = db
@@ -200,7 +200,7 @@ impl PackedDecoder {
             .optional()?;
         let Some(number) = number else { return Ok(0) };
         let block = self.block(db, number)?;
-        let position = block.partition_point(|r| r[0].as_i64().is_some_and(|id| id < value));
+        let position = block.partition_point(|r| r.0 < value);
         Ok((number - 1) * self.block_rows as i64 + position as i64)
     }
 }
