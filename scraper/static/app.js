@@ -1066,7 +1066,25 @@ async function executeScrape(channels) {
   connectScrapeProgress(resp.job_id);
 }
 
+let scrapeBreakTimer;
+
+function setScrapeBreakCountdown(seconds = 0) {
+  clearTimeout(scrapeBreakTimer);
+  const countdown = $('scrapeBreakCountdown');
+  const deadline = performance.now() + seconds * 1000;
+  function tick() {
+    const remaining = deadline - performance.now();
+    countdown.hidden = !(remaining > 0);
+    if (countdown.hidden) return;
+    const secondsLeft = Math.ceil(remaining / 1000);
+    countdown.textContent = `Mandatory scrape break · ${n(secondsLeft)}s remaining`;
+    scrapeBreakTimer = setTimeout(tick, Math.ceil(remaining - (secondsLeft - 1) * 1000));
+  }
+  tick();
+}
+
 function prepareScrapeProgress(channels, limit) {
+  setScrapeBreakCountdown();
   S.scrapeRun = {index: -1, total: 0, completed: 0, channels};
   S.scrapePaused = false;
   $('queueProgress').hidden = false;
@@ -1101,6 +1119,7 @@ async function restoreScrape() {
     $('scrapeLimit').value = job.limit || '';
     $('harvestProfiles').setAttribute('aria-pressed', String(job.harvest_profiles === true));
     prepareScrapeProgress(collectionQueue.view().active, job.limit);
+    setScrapeBreakCountdown(job.break_seconds);
     connectScrapeProgress(job.job_id);
   } catch (error) {
     $('queueProgress').hidden = false;
@@ -1150,13 +1169,11 @@ function connectScrapeProgress(job_id) {
             : state.type === 'channel_start' ? 'scraping…' : 'waiting';
         });
         showScrapePaused(ev.paused);
+        setScrapeBreakCountdown(ev.break_seconds);
         if (ev.pause_requested && !ev.paused) {
           $('pauseQueueScrape').disabled = true;
           $('queueProgressTitle').textContent = 'Pausing scrape…';
           $('queueProgressSummary').textContent = 'Finishing the current request and saving its progress.';
-        } else if (!ev.paused && ev.break_seconds) {
-          $('queueProgressTitle').textContent = 'Mandatory scrape break';
-          $('queueProgressSummary').textContent = `100 successful requests completed. Mandatory break: up to ${n(ev.break_seconds)}s remaining.`;
         }
         break;
 
@@ -1166,19 +1183,15 @@ function connectScrapeProgress(job_id) {
 
       case 'resumed':
         showScrapePaused(false);
-        if (ev.break_seconds) {
-          $('queueProgressTitle').textContent = 'Mandatory scrape break';
-          $('queueProgressSummary').textContent = `100 successful requests completed. Mandatory break: up to ${n(ev.break_seconds)}s remaining.`;
-        }
+        setScrapeBreakCountdown(ev.break_seconds);
         break;
 
       case 'scrape_break':
-        $('queueProgressTitle').textContent = 'Mandatory scrape break';
-        $('queueProgressSummary').textContent = `100 successful requests completed. Mandatory break: up to ${n(ev.wait_seconds)}s remaining.`;
+        setScrapeBreakCountdown(ev.wait_seconds);
         break;
 
       case 'scrape_break_end':
-        $('queueProgressTitle').textContent = 'Scraping';
+        setScrapeBreakCountdown();
         break;
 
       case 'channel_start':
@@ -1275,6 +1288,7 @@ function connectScrapeProgress(job_id) {
 }
 
 function finishScrape(message, title = 'Scrape finished', success = true, refreshData = success) {
+  setScrapeBreakCountdown();
   S.activeJobId = null;
   S.activeJobKind = null;
   S.scrapePaused = false;

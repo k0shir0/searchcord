@@ -397,6 +397,9 @@ impl<C: Clock> Gate<C> {
                     continue;
                 }
                 guard.last_discord_request = now;
+                if options.scrape {
+                    options.emit(WaitEvent::BreakFinished);
+                }
                 let future = send();
                 let gate = self.clone();
                 let options = options.clone();
@@ -459,9 +462,6 @@ impl<C: Clock> Gate<C> {
                 })
                 .await??;
             };
-            if options.scrape {
-                options.emit(WaitEvent::BreakFinished);
-            }
             if response.status != 429 || !options.retry_rate_limits || attempt == 5 {
                 return Ok(response);
             }

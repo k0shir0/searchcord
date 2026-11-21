@@ -168,7 +168,18 @@
         <div class="qb-right"><button class="btn-ghost" id="clearQueue">clear queue</button><button class="btn-mint" id="startScrape" disabled>start scraping</button></div>
       </div>
       <p class="queue-hint"><span id="harvestProfilesHint">With extended profiles enabled, each new user's profile is saved before the next message page.</span> Stopping preserves saved work and the resume cursor.</p>
-      <section class="queue-progress" id="queueProgress" aria-label="Scrape progress" hidden><div class="queue-progress-head"><div><h4 id="queueProgressTitle">Starting scrape…</h4><p id="queueProgressSummary" role="status">Waiting for the first channel.</p></div><div class="queue-progress-actions"><button class="btn-ghost" id="pauseQueueScrape" disabled>pause scraping</button><button class="btn-ghost" id="stopQueueScrape" disabled>stop scraping</button><button class="btn-ghost" id="dismissQueueProgress" hidden>dismiss</button></div></div><progress id="queueProgressBar" max="1" value="0" aria-label="Channels completed"></progress><div class="queue-progress-rows" id="queueProgressRows"></div></section>
+      <section class="queue-progress" id="queueProgress" aria-label="Scrape progress" hidden>
+        <div class="queue-progress-head">
+          <div>
+            <h4 id="queueProgressTitle">Starting scrape…</h4>
+            <p id="queueProgressSummary" role="status">Waiting for the first channel.</p>
+            <p class="scrape-break-countdown" id="scrapeBreakCountdown" role="timer" hidden></p>
+          </div>
+          <div class="queue-progress-actions"><button class="btn-ghost" id="pauseQueueScrape" disabled>pause scraping</button><button class="btn-ghost" id="stopQueueScrape" disabled>stop scraping</button><button class="btn-ghost" id="dismissQueueProgress" hidden>dismiss</button></div>
+        </div>
+        <progress id="queueProgressBar" max="1" value="0" aria-label="Channels completed"></progress>
+        <div class="queue-progress-rows" id="queueProgressRows"></div>
+      </section>
     </section><div class="scrape-pill" id="scrapePill"><span class="pulse-dot"></span><span id="scrapeStatus">scraping…</span><button class="btn-ghost" id="showScrapeProgress">view progress</button></div>
   </section>
 

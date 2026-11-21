@@ -423,6 +423,8 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                 wait = ready_at - time.monotonic()
                 if wait <= 0:
                     last_discord_request = time.monotonic()
+                    if scrape_job_id:
+                        scrapes.break_finished(scrape_job_id)
                     try:
                         try:
                             r = await http_client.request(method, url, headers=headers, **kwargs)
@@ -460,8 +462,6 @@ async def discord(method: str, path: str, token: str, *, retry_rate_limits=True,
                 await scrapes.wait(scrape_job_id, min(0.25, wait))
             else:
                 await asyncio.sleep(min(0.25, wait))
-        if scrape_job_id:
-            scrapes.break_finished(scrape_job_id)
         if r.status_code == 429:
             if not retry_rate_limits or attempt == MAX_RATE_LIMIT_RETRIES:
                 return r

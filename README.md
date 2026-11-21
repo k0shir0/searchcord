@@ -43,7 +43,8 @@ Enable **Fetch extended profiles** in the collection queue to save each user's
 extended profile before fetching the next message page.
 Enable the **Fast scrape** bolt in the collection queue before starting a job to
 shorten Searchcord's waits between requests and the break after every 100
-successful requests by 70%. Discord rate limits still apply.
+successful requests by 70%. The collection queue shows a countdown in seconds
+during each mandatory break. Discord rate limits still apply.
 
 Use **/** to focus message search or **Ctrl+K** (**⌘K** on macOS) to open the command menu.
 
