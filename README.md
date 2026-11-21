@@ -58,6 +58,9 @@ The default archive is in the **data** folder. Saved tokens are encrypted and
 stored separately. Keep archives private and share only data you are entitled
 to share.
 
+Use **Settings → Remove a saved token** to delete one credential. If you remove
+the active token, Searchcord selects the first remaining token.
+
 ## Release timeline
 
 Major milestones by the date they reached `main` (America/Chicago).

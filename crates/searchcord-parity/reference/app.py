@@ -1637,28 +1637,51 @@ async def update_settings(s: SettingsIn):
 
 
 @app.delete("/api/settings/tokens")
-async def clear_tokens(confirm: bool = False):
+async def clear_tokens(confirm: bool = False, token_id: Optional[str] = None):
     if not confirm:
-        raise HTTPException(400, "Confirm removal of all saved tokens")
+        scope = "all saved tokens" if token_id is None else "the saved token"
+        raise HTTPException(400, f"Confirm removal of {scope}")
     if (scrapes.has_work
             or delete_jobs or live_monitors):
         raise HTTPException(409, "Stop scrapes, DM cleanup and live monitors before removing tokens")
     global credentials_clearing
     _require_credentials_available()
     credentials_clearing = True
+    tokens = []
+    active_id = None
     try:
         async with settings_lock:
             await shutdown_invite_jobs()
             await shutdown_profile_jobs()
             async with aiosqlite.connect(DB_PATH, timeout=5) as db:
-                await asyncio.to_thread(clear_credentials, DB_PATH)
-                await db.execute("DELETE FROM settings WHERE key IN ('token', 'saved_tokens', 'active_token_id')")
+                await db.execute("BEGIN IMMEDIATE")
+                if token_id is not None:
+                    settings = await _token_settings(db)
+                    saved = _saved_tokens(settings)
+                    tokens = [item for item in saved if item["id"] != token_id]
+                    if len(tokens) == len(saved):
+                        raise HTTPException(404, "Saved token not found")
+                    if tokens:
+                        active_id = settings.get("active_token_id")
+                        if not active_id or active_id == token_id:
+                            active_id = tokens[0]["id"]
+                if tokens:
+                    await db.executemany(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                        [("saved_tokens", json.dumps(credential_metadata(tokens))), ("active_token_id", active_id)],
+                    )
+                    await db.execute("DELETE FROM settings WHERE key='token'")
+                    await asyncio.to_thread(save_credentials, DB_PATH, tokens, active_id)
+                else:
+                    await db.execute("DELETE FROM settings WHERE key IN ('token', 'saved_tokens', 'active_token_id')")
+                    await asyncio.to_thread(clear_credentials, DB_PATH)
                 await db.commit()
     except (sqlite3.Error, CredentialError, OSError):
         raise HTTPException(503, "Could not remove saved tokens; retry when storage is available") from None
     finally:
         credentials_clearing = False
-    return {"ok": True, "tokens": [], "active_token_id": None, "token_set": False}
+    return {"ok": True, "tokens": credential_metadata(tokens),
+            "active_token_id": active_id, "token_set": bool(tokens)}
 
 
 @app.delete("/api/messages")

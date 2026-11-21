@@ -62,9 +62,6 @@ h1,h2,h3 {
 p {
   text-wrap:pretty;
 }
-button {
-  touch-action:manipulation;
-}
 .sr-only {
   position:absolute;
   width:1px;

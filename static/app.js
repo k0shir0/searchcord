@@ -263,7 +263,9 @@ function initSettings() {
   panel.addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
     if (e.key === 'Tab') {
-      const items = [...panel.querySelectorAll('button, input, select')].filter(el => !el.disabled);
+      const items = [...panel.querySelectorAll('button, input, select, summary')]
+        .filter(el => !el.disabled && el.getClientRects().length &&
+          (el.matches('summary') || !el.closest('details:not([open])')));
       const first = items[0], last = items.at(-1);
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
@@ -286,7 +288,6 @@ function initSettings() {
     const select = e.currentTarget;
     const selectedId = select.value;
     const revision = S.accountRevision + 1;
-    select.disabled = true;
     setTokenStatus('switching token…', '');
     try {
       await changeSavedAccount(async revision => {
@@ -308,7 +309,6 @@ function initSettings() {
     const tokenLabel = $('tokenName').value.trim();
     const revision = S.accountRevision + 1;
     setTokenStatus('saving token…', '');
-    $('saveToken').disabled = true;
     try {
       await changeSavedAccount(async revision => {
         const saved = await api('/api/settings', { method: 'POST', body: { token, token_label: tokenLabel } });
@@ -337,9 +337,6 @@ function initSettings() {
     }
     clear.classList.remove('pending-confirm');
     const revision = S.accountRevision + 1;
-    clear.disabled = true;
-    $('saveToken').disabled = true;
-    $('savedTokenSelect').disabled = true;
     try {
       await changeSavedAccount(async revision => {
         const saved = await api('/api/settings/tokens?confirm=true', {method: 'DELETE'});
@@ -359,6 +356,50 @@ function initSettings() {
       if (S.accountRevision !== revision) return;
       setTokenStatus(`Could not remove saved tokens: ${error.message}`, 'fail');
       await loadSavedTokens(revision);
+    }
+  });
+
+  $('savedTokenRemovalList').addEventListener('click', async e => {
+    const button = e.target.closest('button[data-token-id]');
+    if (!button || tokenControlsBusy) return;
+    const {tokenId, tokenLabel} = button.dataset;
+    if (!window.confirm(`Remove saved token “${tokenLabel}”?`)) return;
+    const activeId = $('savedTokenSelect').dataset.activeId;
+    const returnFocus = document.activeElement === button;
+    const remove = async () => {
+      const query = new URLSearchParams({confirm: 'true', token_id: tokenId});
+      return api(`/api/settings/tokens?${query}`, {method: 'DELETE'});
+    };
+    setTokenStatus('removing token…', '');
+    try {
+      if (tokenId === activeId) {
+        await changeSavedAccount(async revision => {
+          const saved = await remove();
+          renderSavedTokens(saved);
+          refreshInvites();
+          if (saved.active_token_id) {
+            await verifyActiveToken(revision);
+          } else {
+            $('dmBody').innerHTML = '<p class="placeholder-msg">Save a new token to load conversations.</p>';
+            $('connectionStatus').textContent = 'No token saved. Add a new token to connect.';
+            setTokenStatus('Saved token removed. Add a new token to connect.', 'ok');
+          }
+        }, {removed: true});
+      } else {
+        setTokenControlsBusy(true);
+        renderSavedTokens(await remove());
+        refreshInvites();
+        setTokenStatus('Saved token removed.', 'ok');
+      }
+    } catch (error) {
+      setTokenStatus(`Could not remove saved token: ${error.message}`, 'fail');
+    } finally {
+      setTokenControlsBusy(false);
+      const focused = document.activeElement;
+      if (returnFocus && !panel.inert && (focused === button || focused === document.body)) {
+        const removal = $('savedTokenRemoval');
+        (removal.hidden ? inp : removal.querySelector('summary')).focus();
+      }
     }
   });
 
@@ -384,32 +425,69 @@ function initSettings() {
   });
 }
 
+let tokenControlsBusy = false;
+let tokenLoad = 0;
+
+function setTokenControlsBusy(busy) {
+  tokenControlsBusy = busy;
+  const clear = $('clearTokens');
+  if (busy) {
+    ++tokenLoad;
+    clear.classList.remove('pending-confirm');
+    clear.textContent = 'remove all saved tokens';
+  }
+  const select = $('savedTokenSelect');
+  select.disabled = busy || !select.dataset.activeId;
+  $('saveToken').disabled = busy;
+  clear.disabled = busy;
+  $('savedTokenRemovalList').querySelectorAll('button').forEach(button => { button.disabled = busy; });
+}
+
 function renderSavedTokens(saved) {
   const select = $('savedTokenSelect');
+  const list = $('savedTokenRemovalList');
   select.replaceChildren();
+  list.replaceChildren();
   if (!saved.tokens.length) {
     select.add(new Option('no saved tokens', ''));
-    select.disabled = true;
   } else {
-    saved.tokens.forEach(token => select.add(new Option(token.label, token.id)));
-    select.disabled = !collectionQueue.view().canLoadSources;
+    for (const token of saved.tokens) {
+      select.add(new Option(token.label, token.id));
+      const row = ce('li');
+      const label = ce('span');
+      label.textContent = token.label;
+      const button = ce('button', 'btn-danger');
+      button.type = 'button';
+      button.textContent = 'Remove';
+      button.setAttribute('aria-label', `Remove saved token ${token.label}`);
+      button.dataset.tokenId = token.id;
+      button.dataset.tokenLabel = token.label;
+      button.disabled = tokenControlsBusy;
+      row.append(label, button);
+      list.append(row);
+    }
     select.value = saved.active_token_id;
   }
   select.dataset.activeId = saved.active_token_id || '';
+  select.disabled = tokenControlsBusy || !select.dataset.activeId;
+  $('savedTokenRemoval').hidden = !saved.tokens.length;
+  if (!saved.tokens.length) $('savedTokenRemoval').open = false;
 }
 
 async function loadSavedTokens(revision = S.accountRevision) {
-  if (!collectionQueue.view().canLoadSources || S.accountRevision !== revision) return;
+  if (tokenControlsBusy || !collectionQueue.view().canLoadSources || S.accountRevision !== revision) return;
+  const load = ++tokenLoad;
   try {
     const saved = await api('/api/settings');
-    if (S.accountRevision === revision) renderSavedTokens(saved);
+    if (tokenLoad === load && S.accountRevision === revision) renderSavedTokens(saved);
   } catch (error) {
-    if (S.accountRevision === revision) setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail');
+    if (tokenLoad === load && S.accountRevision === revision) setTokenStatus(`Could not load saved tokens: ${error.message}`, 'fail');
   }
 }
 
 async function changeSavedAccount(change, options) {
   const revision = ++S.accountRevision;
+  setTokenControlsBusy(true);
   S.guild = null;
   S.guilds = [];
   S.guildLoad = null;
@@ -423,12 +501,7 @@ async function changeSavedAccount(change, options) {
   try {
     return await collectionQueue.changeAccount(() => change(revision), options);
   } finally {
-    if (S.accountRevision === revision) {
-      $('saveToken').disabled = false;
-      $('savedTokenSelect').disabled = !$('savedTokenSelect').value;
-      $('clearTokens').disabled = false;
-      $('clearTokens').textContent = 'remove all saved tokens';
-    }
+    if (S.accountRevision === revision) setTokenControlsBusy(false);
   }
 }
 
@@ -461,6 +534,7 @@ function openSettings() {
   loadDbStats();
 }
 function closeSettings() {
+  $('savedTokenRemoval').open = false;
   $('clearTokens').classList.remove('pending-confirm');
   if (!$('clearTokens').disabled) $('clearTokens').textContent = 'remove all saved tokens';
   $('clearDb').classList.remove('pending-confirm');

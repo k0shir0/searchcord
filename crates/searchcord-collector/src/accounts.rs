@@ -6,7 +6,6 @@ use crate::{
     scrapes::new_id,
     writer::Writer,
 };
-use rusqlite::params;
 use serde_json::{Value, json};
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -120,40 +119,72 @@ impl Accounts {
             }
             selected.to_owned()
         };
-        let tokens = json!(tokens);
+        self.save(tokens.to_vec(), Some(active)).await
+    }
+    async fn save(&self, tokens: Vec<Value>, active: Option<String>) -> Result<Value> {
         let paths = self.vault_paths()?;
-        let id = active.clone();
         self.writer
             .write(move |store| {
                 let tx = store
                     .connection_mut()
                     .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-                Vault::platform(paths)
-                    .save(&tokens, &json!(id))
-                    .map_err(|_| {
-                        http_error(
-                            503,
-                            "Could not save credentials; the credential vault was kept",
-                        )
+                let public = metadata(&tokens);
+                let vault = Vault::platform(paths);
+                if let Some(id) = &active {
+                    tx.execute(
+                        "INSERT OR REPLACE INTO settings VALUES ('saved_tokens',?)",
+                        [public.to_string()],
+                    )?;
+                    tx.execute(
+                        "INSERT OR REPLACE INTO settings VALUES ('active_token_id',?)",
+                        [id],
+                    )?;
+                    tx.execute("DELETE FROM settings WHERE key='token'", [])?;
+                    vault.save(&json!(tokens), &json!(id)).map_err(|_| {
+                        http_error(503, "Could not save credentials; the credential vault was kept")
                     })?;
-                let public = metadata(tokens.as_array().unwrap());
-                tx.execute(
-                    "INSERT OR REPLACE INTO settings VALUES ('saved_tokens',?)",
-                    [public.to_string()],
-                )?;
-                tx.execute(
-                    "INSERT OR REPLACE INTO settings VALUES ('active_token_id',?)",
-                    [&id],
-                )?;
-                tx.execute("DELETE FROM settings WHERE key='token'", [])?;
+                } else {
+                    tx.execute(
+                        "DELETE FROM settings WHERE key IN ('token','saved_tokens','active_token_id')",
+                        [],
+                    )?;
+                    vault.clear()?;
+                }
                 tx.commit()?;
-                Ok(json!({"ok":true,"active_token_id":id,"tokens":public}))
+                Ok(json!({"ok":true,"active_token_id":active,"tokens":public}))
             })
             .await
     }
-    pub async fn clear(&self) -> Result<Value> {
-        let this = self.clone();
-        tokio::spawn(async move{let _guard=this.lock.lock().await;let paths=this.vault_paths()?;this.writer.write(move|store|{Vault::platform(paths).clear()?;store.connection().execute("DELETE FROM settings WHERE key IN ('token','saved_tokens','active_token_id')",params![])?;Ok(json!({"ok":true,"tokens":[],"active_token_id":null,"token_set":false}))}).await.map_err(|_|http_error(503,"Could not remove saved tokens; retry when storage is available"))}).await?
+    pub async fn remove(&self, id: Option<&str>) -> Result<Value> {
+        let _guard = self.lock.lock().await;
+        let mut tokens = Vec::new();
+        let mut active = None;
+        if let Some(id) = id {
+            let state = self.load().await?;
+            tokens = state["tokens"]
+                .as_array()
+                .ok_or("Invalid vault state")?
+                .clone();
+            let count = tokens.len();
+            tokens.retain(|token| token["id"] != id);
+            if tokens.len() == count {
+                return Err(http_error(404, "Saved token not found"));
+            }
+            active = state["active_token_id"]
+                .as_str()
+                .filter(|active| *active != id)
+                .or_else(|| tokens.first()?.get("id")?.as_str())
+                .map(str::to_owned);
+        }
+        let token_set = active.is_some();
+        let mut result = self.save(tokens, active).await.map_err(|_| {
+            http_error(
+                503,
+                "Could not remove saved tokens; retry when storage is available",
+            )
+        })?;
+        result["token_set"] = json!(token_set);
+        Ok(result)
     }
 }
 fn tokens_empty(settings: &Value) -> bool {
