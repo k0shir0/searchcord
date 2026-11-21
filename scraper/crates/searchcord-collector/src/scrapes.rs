@@ -259,6 +259,7 @@ impl<C: Clock> Scrapes<C> {
         ] {
             snapshot[k] = state[k].clone();
         }
+        snapshot["fast_pacing"] = json!(job.fast_pacing);
         snapshot["last_event"] = job
             .notice
             .lock()

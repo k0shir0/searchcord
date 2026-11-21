@@ -1124,6 +1124,7 @@ async function restoreScrape() {
     S.activeJobKind = 'scrape';
     $('scrapeLimit').value = job.limit || '';
     $('harvestProfiles').setAttribute('aria-pressed', String(job.harvest_profiles === true));
+    $('fastScrape').setAttribute('aria-pressed', String(job.fast_pacing === true));
     prepareScrapeProgress(collectionQueue.view().active, job.limit);
     setScrapeBreakCountdown(job.break_seconds);
     connectScrapeProgress(job.job_id);

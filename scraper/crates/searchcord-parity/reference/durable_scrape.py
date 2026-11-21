@@ -130,6 +130,7 @@ class Scrapes:
                 **deepcopy({key: job.state.get(key) for key in (
                     "running", "cancelled", "pause_requested", "paused", "channels",
                     "limit", "harvest_profiles", "index", "total_messages", "completed", "rows")}),
+                "fast_pacing": bool(job.state.get("fast_pacing")),
                 "recovered": job.recovered, "break_seconds": self._break_seconds(),
                 "last_event": deepcopy(job.notice or job.state.get("last_event"))}
 
