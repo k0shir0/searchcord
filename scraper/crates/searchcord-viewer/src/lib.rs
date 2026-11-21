@@ -74,35 +74,35 @@ pub fn javascript_type() -> &'static str {
 fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
     Some(match path {
         "/" | "/index.html" => (
-            include_bytes!("../../../static/search/index.html"),
+            include_bytes!("../../../../frontend/search/index.html"),
             "text/html; charset=utf-8",
         ),
         "/search.css" => (
-            include_bytes!("../../../static/search/search.css"),
+            include_bytes!("../../../../frontend/search/search.css"),
             "text/css; charset=utf-8",
         ),
         "/search.js" => (
-            include_bytes!("../../../static/search/search.js"),
+            include_bytes!("../../../../frontend/search/search.js"),
             javascript_type(),
         ),
         "/privacy.html" => (
-            include_bytes!("../../../static/search/privacy.html"),
+            include_bytes!("../../../../frontend/search/privacy.html"),
             "text/html; charset=utf-8",
         ),
         "/privacy.css" => (
-            include_bytes!("../../../static/search/privacy.css"),
+            include_bytes!("../../../../frontend/search/privacy.css"),
             "text/css; charset=utf-8",
         ),
         "/bauhaus.css" => (
-            include_bytes!("../../../static/bauhaus.css"),
+            include_bytes!("../../../../frontend/bauhaus.css"),
             "text/css; charset=utf-8",
         ),
         "/profile-view.css" => (
-            include_bytes!("../../../static/profile-view.css"),
+            include_bytes!("../../../../frontend/profile-view.css"),
             "text/css; charset=utf-8",
         ),
         "/profile-view.js" => (
-            include_bytes!("../../../static/profile-view.js"),
+            include_bytes!("../../../../frontend/profile-view.js"),
             javascript_type(),
         ),
         _ => return None,

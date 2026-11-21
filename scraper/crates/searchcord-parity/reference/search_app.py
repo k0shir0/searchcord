@@ -13,7 +13,8 @@ from profile_store import search_label
 from cli import local_url, start_terminal, terminal_lifespan
 from media_store import media_router
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
+FRONTEND = ROOT / "frontend"
 
 
 def create_app(path=None, immutable=None):
@@ -86,13 +87,13 @@ def create_app(path=None, immutable=None):
     @app.get('/{asset}', include_in_schema=False)
     def shared_asset(asset: str):
         if asset in ('bauhaus.css','profile-view.css','profile-view.js'):
-            return FileResponse(ROOT / 'static' / asset)
-        target = ROOT / 'static' / 'search' / asset
+            return FileResponse(FRONTEND / asset)
+        target = FRONTEND / 'search' / asset
         if asset in ('index.html','search.css','search.js','privacy.html','privacy.css'):
             return FileResponse(target)
         raise HTTPException(404, 'Not found')
 
-    app.mount("/", StaticFiles(directory=ROOT / "static" / "search", html=True), name="display")
+    app.mount("/", StaticFiles(directory=FRONTEND / "search", html=True), name="display")
     return app
 
 

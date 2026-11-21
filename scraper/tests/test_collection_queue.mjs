@@ -1,4 +1,4 @@
-// Native Node regression checks: node --test tests/test_collection_queue.mjs
+// Run from the repository root with node --test scraper/tests/test_collection_queue.mjs.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';

@@ -146,7 +146,7 @@ impl Harness {
             .prefix("searchcord-parity-")
             .tempdir()?;
         let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
+            .join("../../..")
             .canonicalize()?;
         let python = std::env::var_os("SEARCHCORD_PARITY_PYTHON").unwrap_or("python".into());
         let client = Client::builder()
@@ -159,7 +159,7 @@ impl Harness {
             .arg("-I")
             .args(["-X", "utf8"])
             .arg("-u")
-            .arg(repo.join("crates/searchcord-parity/driver/reference.py"))
+            .arg(repo.join("scraper/crates/searchcord-parity/driver/reference.py"))
             .arg(root.path())
             .current_dir(&repo)
             .env("SEARCHCORD_DATA_DIR", root.path().join("archive"))

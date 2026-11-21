@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$source = (Resolve-Path -LiteralPath "$PSScriptRoot/../..").Path
+$source = (Resolve-Path -LiteralPath "$PSScriptRoot/../../..").Path
 $suffix = if ($IsWindows) { '.exe' } else { '' }
 $platform = if ($IsWindows) { 'Windows' } elseif ($IsMacOS) { 'macOS' } else { 'Linux' }
 if ($IsWindows -and $Architecture -cne 'X64') {
@@ -33,13 +33,12 @@ try {
     foreach ($binary in @('searchcord', 'searchcord-search', 'searchcord-snapshot', 'searchcord-package-search')) {
         Copy-Item -LiteralPath (Join-Path $BinaryDirectory "$binary$suffix") -Destination $program
     }
-    Copy-Item -LiteralPath "$source/LICENSE", "$source/deploy/search/THIRD_PARTY_NOTICES.md" -Destination $program
+    Copy-Item -LiteralPath "$source/LICENSE", "$PSScriptRoot/../search/THIRD_PARTY_NOTICES.md" -Destination $program
     Copy-Item -LiteralPath "$PSScriptRoot/README.txt" -Destination $staging
     if ($IsWindows) {
         Copy-Item -LiteralPath "$PSScriptRoot/update.ps1" -Destination $program
         Copy-Item -LiteralPath "$PSScriptRoot/Update Searchcord.bat" -Destination $staging
-        Copy-Item -LiteralPath "$PSScriptRoot/start.bat" -Destination "$staging/Start Searchcord.bat"
-        Copy-Item -LiteralPath "$PSScriptRoot/start-search.bat" -Destination "$staging/Start Searchcord Search.bat"
+        Copy-Item -LiteralPath "$source/Start Searchcord.bat", "$source/Start Searchcord Search.bat" -Destination $staging
         [IO.File]::WriteAllText((Join-Path $staging '.searchcord-version'), "$version`r`n")
         [IO.Compression.ZipFile]::CreateFromDirectory($staging, $archive)
     } else {

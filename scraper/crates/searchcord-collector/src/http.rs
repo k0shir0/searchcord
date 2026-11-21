@@ -1303,11 +1303,11 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
             "text/css; charset=utf-8",
         ),
         "/bauhaus.css" => (
-            include_bytes!("../../../static/bauhaus.css"),
+            include_bytes!("../../../../frontend/bauhaus.css"),
             "text/css; charset=utf-8",
         ),
         "/profile-view.css" => (
-            include_bytes!("../../../static/profile-view.css"),
+            include_bytes!("../../../../frontend/profile-view.css"),
             "text/css; charset=utf-8",
         ),
         "/app.js" => (
@@ -1331,7 +1331,7 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
             searchcord_viewer::javascript_type(),
         ),
         "/profile-view.js" => (
-            include_bytes!("../../../static/profile-view.js"),
+            include_bytes!("../../../../frontend/profile-view.js"),
             searchcord_viewer::javascript_type(),
         ),
         "/vendor/chart.umd.min.js" => (
@@ -1351,23 +1351,23 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
             "image/png",
         ),
         "/search/" | "/search/index.html" => (
-            include_bytes!("../../../static/search/index.html"),
+            include_bytes!("../../../../frontend/search/index.html"),
             "text/html; charset=utf-8",
         ),
         "/search/search.css" => (
-            include_bytes!("../../../static/search/search.css"),
+            include_bytes!("../../../../frontend/search/search.css"),
             "text/css; charset=utf-8",
         ),
         "/search/search.js" => (
-            include_bytes!("../../../static/search/search.js"),
+            include_bytes!("../../../../frontend/search/search.js"),
             searchcord_viewer::javascript_type(),
         ),
         "/search/privacy.html" => (
-            include_bytes!("../../../static/search/privacy.html"),
+            include_bytes!("../../../../frontend/search/privacy.html"),
             "text/html; charset=utf-8",
         ),
         "/search/privacy.css" => (
-            include_bytes!("../../../static/search/privacy.css"),
+            include_bytes!("../../../../frontend/search/privacy.css"),
             "text/css; charset=utf-8",
         ),
         _ => return None,

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="static/brand/searchcord-logo-dark.png">
-    <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
+    <source media="(prefers-color-scheme: dark)" srcset="scraper/static/brand/searchcord-logo-dark.png">
+    <img src="scraper/static/brand/searchcord-logo.png" alt="SearchCord" width="660">
   </picture>
 </p>
 
@@ -23,8 +23,8 @@
 If you already use Searchcord on Windows, close it and extract the first release
 into your existing Searchcord folder. Open **Start Searchcord** from there.
 
-See the [operating guide](deploy/native/README.txt) for Linux, macOS, and
-existing archives in a custom location. [Build from source](deploy/native/BUILD.md)
+See the [operating guide](scraper/deploy/native/README.txt) for Linux, macOS, and
+existing archives in a custom location. [Build from source](scraper/deploy/native/BUILD.md)
 if you prefer.
 
 ## Use Searchcord
@@ -52,7 +52,13 @@ Use **/** to focus message search or **Ctrl+K** (**⌘K** on macOS) to open the 
 On Windows, open **Start Searchcord Search** and visit <http://127.0.0.1:8001>.
 You can search an existing archive without connecting a Discord account.
 
-See the [viewer guide](deploy/search/RUNNING.txt) for custom archives and hosting.
+See the [viewer guide](scraper/deploy/search/RUNNING.txt) for custom archives and hosting.
+
+## Repository layout
+
+- [frontend](frontend/) contains the read-only search pages and the web assets shared by both apps.
+- [scraper](scraper/) contains the Rust code, collector web app, and packaging tools.
+- The Windows launchers and Cargo workspace files are at the root. Build from the root before using the launchers in a source checkout.
 
 ## Your data
 

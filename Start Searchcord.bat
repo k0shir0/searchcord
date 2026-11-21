@@ -1,9 +1,6 @@
 @echo off
 setlocal DisableDelayedExpansion
 set "SEARCHCORD_ROOT=%~dp0"
-if not exist "%~dp0.searchcord-version" if not exist "%~dp0searchcord.exe" if exist "%~dp0..\..\Cargo.toml" (
-  for %%I in ("%~dp0..\..") do set "SEARCHCORD_ROOT=%%~fI\"
-)
 pushd "%SEARCHCORD_ROOT%" || exit /b 1
 if not defined SEARCHCORD_DATA_DIR set "SEARCHCORD_DATA_DIR=%SEARCHCORD_ROOT%data"
 set "SEARCHCORD_EXEC=%SEARCHCORD_ROOT%searchcord.exe"

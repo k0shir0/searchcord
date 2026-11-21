@@ -39,13 +39,12 @@ from profile_store import image_url as profile_image_url
 
 # Resolve paths against this file, not the process working directory, so the
 # app behaves the same however it was launched.
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = Path(__file__).resolve().parents[4]
 DATA_DIR = Path(os.environ.get("SEARCHCORD_DATA_DIR", "data")).expanduser()
 if not DATA_DIR.is_absolute():
     DATA_DIR = BASE_DIR / DATA_DIR
 DB_PATH = str(DATA_DIR / "searchcord.db")
-# Production web files belong in static/; design trials belong in static/trials/.
-STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR = BASE_DIR / "scraper" / "static"
 
 DISCORD_API = "https://discord.com/api/v10"
 
@@ -1760,7 +1759,9 @@ async def refresh_message(message_id: int):
 
 # ─── Static ──────────────────────────────────────────────────
 
-app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+static_files = StaticFiles(directory=STATIC_DIR, html=True)
+static_files.all_directories.append(str(BASE_DIR / "frontend"))
+app.mount("/", static_files, name="static")
 
 if __name__ == "__main__":
     import threading

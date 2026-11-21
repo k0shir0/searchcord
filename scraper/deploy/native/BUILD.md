@@ -5,11 +5,12 @@ root. Cargo uses the pinned Rust toolchain and lockfile.
 
 ```sh
 cargo build --release --locked -p searchcord-collector -p searchcord-viewer -p searchcord-snapshot
-pwsh -File deploy/native/package.ps1
+pwsh -File scraper/deploy/native/package.ps1
 ```
 
-The package appears in `dist`. On Windows, `deploy\native\start.bat` and
-`deploy\native\start-search.bat` also find a build under `target/release`.
+The package appears in `dist`. On Windows, `Start Searchcord.bat` and
+`Start Searchcord Search.bat` at the repository root find the build under
+`target/release`.
 See the [operating guide](README.txt) for direct launch, archive location and
 migration instructions.
 

@@ -44,7 +44,7 @@ pub fn build(destination: &Path, viewer: &Path) -> io::Result<PathBuf> {
         fs::write(path, bytes)?;
     }
     for (name, bytes) in [
-        ("LICENSE", include_bytes!("../../../LICENSE").as_slice()),
+        ("LICENSE", include_bytes!("../../../../LICENSE").as_slice()),
         (
             "README.txt",
             include_bytes!("../../../deploy/search/RUNNING.txt").as_slice(),
