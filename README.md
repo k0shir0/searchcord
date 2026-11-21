@@ -39,6 +39,8 @@ before collecting data.
 
 You can pause a scrape and resume from the last saved page. After restarting
 Searchcord, select the original saved account to resume a paused job.
+Enable **Fetch extended profiles** in the collection queue to save each user's
+extended profile before fetching the next message page.
 Enable the **Fast scrape** bolt in the collection queue before starting a job to
 shorten Searchcord's waits between requests and the break after every 100
 successful requests by 70%. Discord rate limits still apply.

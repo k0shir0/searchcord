@@ -982,10 +982,12 @@ function initQueue() {
     (restored ? $('clearQueue') : $('collectionSearch')).focus();
   });
   $('startScrape').addEventListener('click', startScraping);
-  $('fastScrape').addEventListener('click', e => {
-    const button = e.currentTarget;
-    button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'));
-  });
+  for (const id of ['harvestProfiles', 'fastScrape']) {
+    $(id).addEventListener('click', e => {
+      const button = e.currentTarget;
+      button.setAttribute('aria-pressed', String(button.getAttribute('aria-pressed') !== 'true'));
+    });
+  }
   $('stopQueueScrape').addEventListener('click', stopQueueScrape);
   $('pauseQueueScrape').addEventListener('click', toggleScrapePause);
   $('dismissQueueProgress').addEventListener('click', () => {
@@ -1014,6 +1016,7 @@ function renderQueue() {
   $('clearQueue').disabled = !canEdit;
   $('scrapeLimit').disabled = !!active;
   $('harvestProfiles').disabled = !!active;
+  $('fastScrape').disabled = !!active;
   $('startScrape').disabled = !canStart;
   if (sources.length === 0) {
     bar.classList.toggle('visible', !$('queueProgress').hidden);
@@ -1053,7 +1056,7 @@ async function executeScrape(channels) {
   let resp;
   try {
     resp = await api('/api/scrape/start', { method: 'POST', body: {
-      channels, limit, harvest_profiles: $('harvestProfiles').checked,
+      channels, limit, harvest_profiles: $('harvestProfiles').getAttribute('aria-pressed') === 'true',
       fast_pacing: $('fastScrape').getAttribute('aria-pressed') === 'true',
     } });
   } catch (error) {
@@ -1096,7 +1099,7 @@ async function restoreScrape() {
     if (!job) return;
     S.activeJobKind = 'scrape';
     $('scrapeLimit').value = job.limit || '';
-    $('harvestProfiles').checked = job.harvest_profiles;
+    $('harvestProfiles').setAttribute('aria-pressed', String(job.harvest_profiles === true));
     prepareScrapeProgress(collectionQueue.view().active, job.limit);
     connectScrapeProgress(job.job_id);
   } catch (error) {
