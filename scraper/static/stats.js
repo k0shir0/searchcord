@@ -89,7 +89,8 @@ async function loadServers(reset = false) {
       row.title = `Search messages in ${server.guild_name || server.guild_id}`;
       const share = data.total_messages ? 100 * server.count / data.total_messages : 0;
       const shareLabel = share > 0 && share < 0.1 ? '&lt;0.1%' : `${share.toFixed(1)}%`;
-      row.innerHTML = `<span class="lb-rank">${n(serverState.offset + index + 1)}</span><span class="lb-info"><span class="lb-name">${esc(server.guild_name || 'Unknown server')}</span><span class="lb-uid">${esc(server.guild_id)}</span></span><span class="lb-bar-wrap" aria-hidden="true"><span class="lb-bar" style="display:block;width:${Math.min(100, 100 * server.count / serverState.peak)}%"></span></span><span class="lb-count">${n(server.count)}<small>${shareLabel} of archive</small></span>`;
+      row.innerHTML = `<span class="lb-rank">${n(serverState.offset + index + 1)}</span><span class="lb-info"><span class="lb-name">${esc(server.guild_name || 'Unknown server')}</span><span class="lb-uid">${esc(server.guild_id)}</span></span><span class="lb-bar-wrap" aria-hidden="true"><span class="lb-bar"></span></span><span class="lb-count">${n(server.count)}<small>${shareLabel} of archive</small></span>`;
+      row.querySelector('.lb-bar').style.width = `${Math.min(100, 100 * server.count / serverState.peak)}%`;
       row.addEventListener('click', () => statsDrilldown({guild_id: server.guild_id}));
       $('serverLeaderboard').appendChild(row);
     });
@@ -127,7 +128,8 @@ async function loadContributors(reset = false) {
     data.users.forEach((user, index) => {
       const row = ce('button', 'lb-item'); row.type = 'button';
       row.title = `Search messages by ${user.author_name || user.author_id}`;
-      row.innerHTML = `<span class="lb-rank">${n(contributorState.offset + index + 1)}</span><span class="lb-info"><span class="lb-name">${esc(user.author_name || 'Unknown author')}</span><span class="lb-uid">${esc(user.author_id)}</span></span><span class="lb-bar-wrap" aria-hidden="true"><span class="lb-bar" style="display:block;width:${Math.min(100, 100 * user.count / contributorState.peak)}%"></span></span><span class="lb-count">${n(user.count)}</span>`;
+      row.innerHTML = `<span class="lb-rank">${n(contributorState.offset + index + 1)}</span><span class="lb-info"><span class="lb-name">${esc(user.author_name || 'Unknown author')}</span><span class="lb-uid">${esc(user.author_id)}</span></span><span class="lb-bar-wrap" aria-hidden="true"><span class="lb-bar"></span></span><span class="lb-count">${n(user.count)}</span>`;
+      row.querySelector('.lb-bar').style.width = `${Math.min(100, 100 * user.count / contributorState.peak)}%`;
       row.addEventListener('click', () => statsDrilldown({author_id: user.author_id}));
       $('leaderboard').appendChild(row);
     });

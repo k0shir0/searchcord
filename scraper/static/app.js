@@ -139,8 +139,13 @@ function initCommands() {
   };
   const focusSearch = async () => {
     await navigateView('browse');
+    setSearchControlsExpanded(true);
     $('searchInput').focus();
   };
+  document.querySelector('.skip-link').addEventListener('click', event => {
+    event.preventDefault();
+    focusSearch();
+  });
   $('openCommands').addEventListener('click', open);
   if (/Mac|iPhone|iPad/.test(navigator.platform)) $('commandHint').textContent = '⌘ K';
   input.addEventListener('input', filter);
@@ -178,6 +183,15 @@ function initCommands() {
 }
 
 let activeView = 'browse';
+function animatePanel(panel, offset = 14) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  panel.getAnimations().forEach(animation => animation.cancel());
+  panel.animate(
+    [{opacity: .2, transform: `translateY(${offset}px)`}, {opacity: 1, transform: 'none'}],
+    {duration: 280, easing: 'cubic-bezier(.22, .68, .16, 1)'}
+  );
+}
+
 async function switchView(name, updateUrl = true, animate = true) {
   const source = name === 'dms' ? 'dms' : null;
   if (name === 'dms' || name === 'live') name = 'scrape';
@@ -203,13 +217,15 @@ async function switchView(name, updateUrl = true, animate = true) {
     element.getAnimations().forEach(animation => animation.cancel())
   );
   apply();
-  if (changed && animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const entering = name === 'browse' ? $('homeOverview') : $(`view-${name}`);
-    entering.animate([{opacity:0,transform:'translateY(8px)'},{opacity:1,transform:'none'}], {duration:180,easing:'ease-out'});
+  if (changed && animate) {
+    if (name === 'browse') animatePanel($('homeOverview'));
+    animatePanel($(`view-${name}`));
   }
 }
 
 function switchSource(source) {
+  const panel = $(`source-${source}`);
+  const changed = panel.hidden;
   document.querySelectorAll('[data-source]').forEach(button => {
     const selected = button.dataset.source === source;
     button.setAttribute('aria-selected', String(selected));
@@ -218,6 +234,7 @@ function switchSource(source) {
   });
   if (source === 'dms') loadDms();
   filterCollection();
+  if (changed) animatePanel(panel, 8);
 }
 
 function filterCollection() {
@@ -1034,14 +1051,14 @@ function renderQueue() {
   chips.innerHTML = '';
   sources.forEach(ch => {
     const chip = ce('div', 'qb-chip');
-    chip.innerHTML =
-      `<span>#</span><span>${esc(ch.name)}</span>` +
-      `<span class="qb-chip-server">${esc(ch.guild_name)}</span>` +
-      `<button class="qb-chip-x" data-id="${ch.id}" ${canEdit ? '' : 'disabled'}>Remove</button>`;
-    chip.querySelector('.qb-chip-x').setAttribute('aria-label', `Remove ${ch.name} from queue`);
-    chip.querySelector('.qb-chip-x').addEventListener('click', () => {
-      collectionQueue.remove(ch.id);
-    });
+    const prefix = ce('span'); prefix.textContent = '#';
+    const name = ce('span'); name.textContent = ch.name;
+    const server = ce('span', 'qb-chip-server'); server.textContent = ch.guild_name;
+    const remove = ce('button', 'qb-chip-x');
+    remove.type = 'button'; remove.disabled = !canEdit; remove.textContent = 'Remove';
+    remove.setAttribute('aria-label', `Remove ${ch.name} from queue`);
+    remove.addEventListener('click', () => collectionQueue.remove(ch.id));
+    chip.append(prefix, name, server, remove);
     chips.appendChild(chip);
   });
 }
@@ -1379,14 +1396,34 @@ function setFilterTrayExpanded(expanded) {
   $('filterTray').hidden = !expanded;
 }
 
+function setSearchControlsExpanded(expanded) {
+  const toggle = $('searchBannerToggle');
+  $('searchControls').hidden = !expanded;
+  toggle.setAttribute('aria-expanded', String(expanded));
+  toggle.textContent = expanded ? 'Hide search' : 'Show search';
+  if (!expanded) setFilterTrayExpanded(false);
+}
+
 function initSearch() {
   $('queryForm').addEventListener('submit', e => { e.preventDefault(); doSearch(1, true); });
   $('filterForm').addEventListener('submit', e => { e.preventDefault(); doSearch(1, true); });
   $('filterToggle').addEventListener('click', () => setFilterTrayExpanded($('filterTray').hidden));
+  $('queryBlock').addEventListener('click', event => {
+    const toggle = $('searchBannerToggle');
+    if (event.target !== toggle && event.target.closest('button, input, label, select, textarea, a')) return;
+    const opening = $('searchControls').hidden;
+    setSearchControlsExpanded(opening);
+    (opening ? $('searchInput') : toggle).focus({preventScroll: true});
+  });
   $('queryBlock').addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !$('filterTray').hidden) {
+    if (e.key !== 'Escape' || $('searchControls').hidden) return;
+    e.preventDefault();
+    if (!$('filterTray').hidden) {
       setFilterTrayExpanded(false);
       $('filterToggle').focus();
+    } else {
+      setSearchControlsExpanded(false);
+      $('searchBannerToggle').focus();
     }
   });
   $('filterForm').addEventListener('reset', () => {
@@ -1602,8 +1639,7 @@ function renderResults(data, query) {
     const id = ce('span', 'message-id'); id.textContent = `id: ${msg.author_id}`;
     heading.append(author, time, location, id);
     const text = ce('p', 'result-copy');
-    if (msg.content && regex) text.innerHTML = highlight(msg.content, regex);
-    else text.textContent = msg.content || '(no text content)';
+    highlight(text, msg.content || '(no text content)', regex);
     content.append(heading, text);
     if (msg.attachment_files?.length || msg.attachments?.length) {
       const attachments = ce('div', 'rc-attachments');
@@ -1759,17 +1795,16 @@ function renderMonitorList() {
     list.innerHTML = '';
     data.channels.forEach(ch => {
       const item = ce('div', 'live-monitor-item');
-      item.dataset.cid = ch.channel_id;
-      item.innerHTML =
-        `<div class="lm-dot"></div>` +
-        `<div class="lm-info"><div class="lm-channel">#${esc(ch.channel_name)}</div>` +
-        `<div class="lm-guild">${esc(ch.guild_name)}</div></div>` +
-        `<button class="lm-stop" title="Stop monitoring" data-cid="${ch.channel_id}">stop</button>`;
-      item.querySelector('.lm-stop').addEventListener('click', () =>
-        stopLiveChannels([ch.channel_id])
-      );
+      const info = ce('div', 'lm-info');
+      const channel = ce('div', 'lm-channel'); channel.textContent = `#${ch.channel_name}`;
+      const guild = ce('div', 'lm-guild'); guild.textContent = ch.guild_name;
+      const stop = ce('button', 'lm-stop');
+      stop.type = 'button'; stop.title = 'Stop monitoring'; stop.textContent = 'stop';
+      stop.addEventListener('click', () => stopLiveChannels([ch.channel_id]));
+      info.append(channel, guild);
+      item.append(ce('div', 'lm-dot'), info, stop);
       if (ch.paused) {
-        item.querySelector('.lm-guild').textContent += ' · recovered, paused';
+        guild.textContent += ' · recovered, paused';
         const resume = ce('button', 'lm-stop'); resume.type = 'button'; resume.textContent = 'resume';
         resume.addEventListener('click', () => startLiveChannels([{id: ch.channel_id, name: ch.channel_name, guild_id: ch.guild_id, guild_name: ch.guild_name}]));
         item.appendChild(resume);
@@ -1944,18 +1979,16 @@ function n(x)            { return Number(x).toLocaleString(); }
 function initial(name)   { return (name || '?').replace(/^The\s+/i,'').charAt(0).toUpperCase(); }
 function spinnerHTML()   { return '<div class="spinner-wrap"><div class="spinner"></div></div>'; }
 
-// Match on the raw text, then escape each piece — highlighting escaped HTML
-// instead would let a query like "amp" or "lt" match inside an entity and
-// tear it apart on screen.
-function highlight(raw, regex) {
-  let out = '';
+function highlight(parent, raw, regex) {
+  if (!regex) { parent.textContent = raw; return; }
   let last = 0;
   let m;
   while ((m = regex.exec(raw))) {
-    out += esc(raw.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`;
+    parent.append(raw.slice(last, m.index));
+    const mark = ce('mark'); mark.textContent = m[0]; parent.append(mark);
     last = m.index + m[0].length;
   }
-  return out + esc(raw.slice(last));
+  parent.append(raw.slice(last));
 }
 
 async function api(url, opts = {}) {

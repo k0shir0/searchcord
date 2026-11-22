@@ -1377,21 +1377,6 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
         _ => return None,
     })
 }
-fn origin_allowed(value: &str) -> bool {
-    let Some(authority) = value
-        .strip_prefix("http://")
-        .or_else(|| value.strip_prefix("https://"))
-    else {
-        return false;
-    };
-    ["localhost", "127.0.0.1"].into_iter().any(|host| {
-        authority == host
-            || authority
-                .strip_prefix(host)
-                .and_then(|tail| tail.strip_prefix(':'))
-                .is_some_and(|port| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
-    })
-}
 async fn dispatch<C: Clock>(State(app): State<App<C>>, request: Request) -> Response {
     let path = percent_encoding::percent_decode_str(request.uri().path())
         .decode_utf8_lossy()
@@ -1399,58 +1384,50 @@ async fn dispatch<C: Clock>(State(app): State<App<C>>, request: Request) -> Resp
     let query = request.uri().query().unwrap_or("").to_owned();
     let method = request.method().clone();
     let headers = request.headers().clone();
-    let origin = headers
-        .get(header::ORIGIN)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
-    let preflight = method == Method::OPTIONS
-        && headers.contains_key(header::ACCESS_CONTROL_REQUEST_METHOD)
-        && origin.is_some();
-    let outcome = if preflight {
-        let allowed = origin.as_ref().is_some_and(|o| origin_allowed(o));
-        let mut r = (
-            if allowed {
-                StatusCode::OK
-            } else {
-                StatusCode::BAD_REQUEST
-            },
-            if allowed {
-                "OK"
-            } else {
-                "Disallowed CORS origin"
-            },
-        )
-            .into_response();
-        r.headers_mut().insert(
-            header::ACCESS_CONTROL_ALLOW_METHODS,
-            "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"
-                .parse()
-                .unwrap(),
-        );
-        r.headers_mut()
-            .insert(header::ACCESS_CONTROL_MAX_AGE, "600".parse().unwrap());
-        r.headers_mut()
-            .insert(header::VARY, "Origin".parse().unwrap());
-        if let Some(value) = headers.get(header::ACCESS_CONTROL_REQUEST_HEADERS) {
-            r.headers_mut()
-                .insert(header::ACCESS_CONTROL_ALLOW_HEADERS, value.clone());
-        }
-        Ok(r)
-    } else if !matches!(method, Method::GET | Method::HEAD | Method::OPTIONS)
-        && headers.contains_key(header::ORIGIN)
-        && !origin.as_ref().is_some_and(|value| origin_allowed(value))
-    {
+    let api_request = path.starts_with("/api/");
+    let authority = request
+        .uri()
+        .authority()
+        .cloned()
+        .or_else(|| headers.get(header::HOST)?.to_str().ok()?.parse().ok());
+    // An unrelated hostname must not acquire access to a loopback listener.
+    let invalid_host = request
+        .extensions()
+        .get::<std::net::SocketAddr>()
+        .is_some_and(|listener| {
+            listener.ip().is_loopback()
+                && !authority.as_ref().is_some_and(|authority| {
+                    let host = authority.host().trim_matches(['[', ']']);
+                    authority.port_u16().unwrap_or(80) == listener.port()
+                        && (host.eq_ignore_ascii_case("localhost")
+                            || host
+                                .parse::<std::net::IpAddr>()
+                                .is_ok_and(|ip| ip == listener.ip()))
+                })
+        });
+    let mismatched_origin = headers.get(header::ORIGIN).is_some_and(|value| {
+        let origin = value
+            .to_str()
+            .ok()
+            .and_then(|value| value.strip_prefix("http://"));
+        !authority
+            .as_ref()
+            .zip(origin)
+            .is_some_and(|(authority, origin)| origin.eq_ignore_ascii_case(authority.as_str()))
+    });
+    let cross_origin_site = headers
+        .get("sec-fetch-site")
+        .is_some_and(|value| value == "cross-site" || value == "same-site");
+    let outcome = if invalid_host {
+        Err(http_error(403, "Disallowed request host"))
+    } else if api_request && (mismatched_origin || cross_origin_site) {
         Err(http_error(403, "Disallowed request origin"))
     } else if ["/docs", "/redoc", "/docs/oauth2-redirect", "/openapi.json"].contains(&path.as_str())
         && (method == Method::GET || method == Method::HEAD)
     {
         Ok(match path.as_str() {
             "/openapi.json" => json_response(200, serde_json::from_str(OPENAPI).unwrap()),
-            "/docs" => ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], DOCS).into_response(),
-            "/redoc" => {
-                ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], REDOC).into_response()
-            }
-            _ => ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], OAUTH).into_response(),
+            _ => ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], DOCS).into_response(),
         })
     } else if api_method(&path)
         .is_some_and(|allowed| allowed.split(',').any(|m| m == method.as_str()))
@@ -1476,19 +1453,22 @@ async fn dispatch<C: Clock>(State(app): State<App<C>>, request: Request) -> Resp
         Err(http_error(404, "Not Found"))
     };
     let mut response = outcome.unwrap_or_else(error);
-    if let Some(origin) = origin.filter(|o| origin_allowed(o)) {
-        response
-            .headers_mut()
-            .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.parse().unwrap());
-        let vary = response
-            .headers()
-            .get(header::VARY)
-            .and_then(|v| v.to_str().ok())
-            .map(|s| format!("{s}, Origin"))
-            .unwrap_or("Origin".into());
-        response
-            .headers_mut()
-            .insert(header::VARY, vary.parse().unwrap());
+    let headers = response.headers_mut();
+    headers
+        .entry(header::CONTENT_SECURITY_POLICY)
+        .or_insert(axum::http::HeaderValue::from_static(searchcord_viewer::CSP));
+    headers.insert(
+        "x-content-type-options",
+        axum::http::HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        "cross-origin-resource-policy",
+        axum::http::HeaderValue::from_static("same-origin"),
+    );
+    if api_request {
+        headers
+            .entry(header::CACHE_CONTROL)
+            .or_insert(axum::http::HeaderValue::from_static("private, no-store"));
     }
     if method == Method::HEAD {
         let (parts, _) = response.into_parts();
@@ -1499,151 +1479,4 @@ async fn dispatch<C: Clock>(State(app): State<App<C>>, request: Request) -> Resp
 
 // Pinned reference framework output, with no runtime Python dependency.
 const OPENAPI: &str = r###"{"openapi":"3.1.0","info":{"title":"FastAPI","version":"0.1.0"},"paths":{"/api/token/validate":{"get":{"summary":"Validate Token","operationId":"validate_token_api_token_validate_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/guilds":{"get":{"summary":"Get Guilds","operationId":"get_guilds_api_guilds_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/guilds/{guild_id}/channels":{"get":{"summary":"Get Channels","operationId":"get_channels_api_guilds__guild_id__channels_get","parameters":[{"name":"guild_id","in":"path","required":true,"schema":{"type":"string","title":"Guild Id"}},{"name":"include_threads","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Include Threads"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/dms":{"get":{"summary":"Get Dms","operationId":"get_dms_api_dms_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/scrape/start":{"post":{"summary":"Start Scrape","operationId":"start_scrape_api_scrape_start_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ScrapeRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/scrape/active":{"get":{"summary":"Scrape Active","operationId":"scrape_active_api_scrape_active_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/scrape/{job_id}/pause":{"post":{"summary":"Pause Scrape","operationId":"pause_scrape_api_scrape__job_id__pause_post","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/scrape/{job_id}/resume":{"post":{"summary":"Resume Scrape","operationId":"resume_scrape_api_scrape__job_id__resume_post","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/scrape/{job_id}/stop":{"post":{"summary":"Stop Scrape","operationId":"stop_scrape_api_scrape__job_id__stop_post","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/scrape/progress/{job_id}":{"get":{"summary":"Scrape Progress","operationId":"scrape_progress_api_scrape_progress__job_id__get","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/profiles/{uid}":{"get":{"summary":"Profile","operationId":"profile_api_profiles__uid__get","parameters":[{"name":"uid","in":"path","required":true,"schema":{"type":"string","title":"Uid"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/profiles/{uid}/servers":{"get":{"summary":"Servers","operationId":"servers_api_profiles__uid__servers_get","parameters":[{"name":"uid","in":"path","required":true,"schema":{"type":"string","title":"Uid"}},{"name":"q","in":"query","required":false,"schema":{"type":"string","maxLength":100,"default":"","title":"Q"}},{"name":"offset","in":"query","required":false,"schema":{"type":"integer","minimum":0,"default":0,"title":"Offset"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer","maximum":100,"minimum":1,"default":30,"title":"Limit"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/profiles/{uid}/refresh":{"post":{"summary":"Fetch","operationId":"fetch_api_profiles__uid__refresh_post","parameters":[{"name":"uid","in":"path","required":true,"schema":{"type":"string","title":"Uid"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/profiles/{uid}/fetch":{"post":{"summary":"Fetch","operationId":"fetch_api_profiles__uid__fetch_post","parameters":[{"name":"uid","in":"path","required":true,"schema":{"type":"string","title":"Uid"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/profile-backfill":{"get":{"summary":"Progress","operationId":"progress_api_profile_backfill_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}},"post":{"summary":"Start","operationId":"start_api_profile_backfill_post","parameters":[{"name":"refresh_stale","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Refresh Stale"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/profile-backfill/stop":{"post":{"summary":"Stop","operationId":"stop_api_profile_backfill_stop_post","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/media/{key}":{"get":{"summary":"Media","operationId":"media_api_media__key__get","parameters":[{"name":"key","in":"path","required":true,"schema":{"type":"string","title":"Key"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/invites/start":{"post":{"summary":"Start","operationId":"start_api_invites_start_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/InviteRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/invites/status":{"get":{"summary":"Status","operationId":"status_api_invites_status_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/invites/{job_id}/stop":{"post":{"summary":"Stop","operationId":"stop_api_invites__job_id__stop_post","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/invites/{job_id}/resume":{"post":{"summary":"Resume","operationId":"resume_api_invites__job_id__resume_post","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/dm-clear/start":{"post":{"summary":"Start Dm Clear","operationId":"start_dm_clear_api_dm_clear_start_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/DmClearStartRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/dm-clear/{job_id}/stop":{"post":{"summary":"Stop Dm Clear","operationId":"stop_dm_clear_api_dm_clear__job_id__stop_post","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/dm-clear/progress/{job_id}":{"get":{"summary":"Dm Clear Progress","operationId":"dm_clear_progress_api_dm_clear_progress__job_id__get","parameters":[{"name":"job_id","in":"path","required":true,"schema":{"type":"string","title":"Job Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/live/start":{"post":{"summary":"Live Start","operationId":"live_start_api_live_start_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/LiveStartRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/live/stop":{"post":{"summary":"Live Stop","operationId":"live_stop_api_live_stop_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/LiveStopRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/live/status":{"get":{"summary":"Live Status","operationId":"live_status_api_live_status_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/live/events":{"get":{"summary":"Live Events","operationId":"live_events_api_live_events_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}}},"/api/export/participants":{"get":{"summary":"Export Participants","operationId":"export_participants_api_export_participants_get","parameters":[{"name":"channel_id","in":"query","required":true,"schema":{"type":"string","title":"Channel Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/export/chatml":{"post":{"summary":"Export Chatml","operationId":"export_chatml_api_export_chatml_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ChatMLExportRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/search":{"get":{"summary":"Search","operationId":"search_api_search_get","parameters":[{"name":"q","in":"query","required":false,"schema":{"anyOf":[{"type":"string","maxLength":200},{"type":"null"}],"title":"Q"}},{"name":"guild_id","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Guild Id"}},{"name":"channel_id","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Channel Id"}},{"name":"author_id","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Author Id"}},{"name":"date_from","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Date From"}},{"name":"date_to","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Date To"}},{"name":"page","in":"query","required":false,"schema":{"type":"integer","minimum":1,"default":1,"title":"Page"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer","maximum":100,"minimum":1,"default":50,"title":"Limit"}},{"name":"cursor","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Cursor"}},{"name":"scan","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Scan"}},{"name":"before","in":"query","required":false,"schema":{"anyOf":[{"type":"integer","maximum":9223372036854775807,"minimum":1},{"type":"null"}],"title":"Before"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/images/{message_id}/{image_index}":{"get":{"summary":"Open Image","description":"Redirect to a current attachment URL, refreshing expired signatures.","operationId":"open_image_api_images__message_id___image_index__get","parameters":[{"name":"message_id","in":"path","required":true,"schema":{"type":"integer","title":"Message Id"}},{"name":"image_index","in":"path","required":true,"schema":{"type":"integer","title":"Image Index"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/stats":{"get":{"summary":"Get Stats","operationId":"get_stats_api_stats_get","parameters":[{"name":"days","in":"query","required":false,"schema":{"type":"integer","maximum":3650,"minimum":0,"default":90,"title":"Days"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/stats/contributors":{"get":{"summary":"Contributors","description":"Bounded, deterministic leaderboard pages over the cached author counts.","operationId":"contributors_api_stats_contributors_get","parameters":[{"name":"offset","in":"query","required":false,"schema":{"type":"integer","minimum":0,"default":0,"title":"Offset"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer","maximum":100,"minimum":1,"default":50,"title":"Limit"}},{"name":"q","in":"query","required":false,"schema":{"type":"string","maxLength":100,"default":"","title":"Q"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/stats/servers":{"get":{"summary":"Ranked Servers","description":"Page through all archived servers using cached message counts.","operationId":"ranked_servers_api_stats_servers_get","parameters":[{"name":"offset","in":"query","required":false,"schema":{"type":"integer","minimum":0,"default":0,"title":"Offset"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer","maximum":100,"minimum":1,"default":50,"title":"Limit"}},{"name":"q","in":"query","required":false,"schema":{"type":"string","maxLength":100,"default":"","title":"Q"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/search/filters":{"get":{"summary":"Search Filters","operationId":"search_filters_api_search_filters_get","parameters":[{"name":"include_users","in":"query","required":false,"schema":{"type":"boolean","default":true,"title":"Include Users"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/search/authors":{"get":{"summary":"Search Authors","description":"Return a small prefix match set for the author text filter.","operationId":"search_authors_api_search_authors_get","parameters":[{"name":"q","in":"query","required":false,"schema":{"type":"string","default":"","title":"Q"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/settings":{"get":{"summary":"Get Settings","operationId":"get_settings_api_settings_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}}}},"post":{"summary":"Update Settings","operationId":"update_settings_api_settings_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SettingsIn"}}},"required":true},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/settings/tokens":{"delete":{"summary":"Clear Tokens","operationId":"clear_tokens_api_settings_tokens_delete","parameters":[{"name":"confirm","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Confirm"}},{"name":"token_id","in":"query","required":false,"schema":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Token Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/messages":{"delete":{"summary":"Clear Messages","operationId":"clear_messages_api_messages_delete","parameters":[{"name":"confirm","in":"query","required":false,"schema":{"type":"boolean","default":false,"title":"Confirm"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/messages/{message_id}/archive":{"get":{"summary":"Message Archive","operationId":"message_archive_api_messages__message_id__archive_get","parameters":[{"name":"message_id","in":"path","required":true,"schema":{"type":"integer","title":"Message Id"}},{"name":"after_revision","in":"query","required":false,"schema":{"type":"integer","minimum":0,"default":0,"title":"After Revision"}},{"name":"limit","in":"query","required":false,"schema":{"type":"integer","maximum":100,"minimum":1,"default":100,"title":"Limit"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/messages/{message_id}/refresh":{"post":{"summary":"Refresh Message","operationId":"refresh_message_api_messages__message_id__refresh_post","parameters":[{"name":"message_id","in":"path","required":true,"schema":{"type":"integer","title":"Message Id"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}}},"components":{"schemas":{"ChatMLExportRequest":{"properties":{"channel_id":{"type":"string","title":"Channel Id"},"target_id":{"type":"string","title":"Target Id"},"other_name":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Other Name"},"system_prompt":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"System Prompt"}},"type":"object","required":["channel_id","target_id"],"title":"ChatMLExportRequest"},"DmClearStartRequest":{"properties":{"channel_id":{"type":"string","pattern":"^[0-9]{1,19}$","title":"Channel Id"}},"type":"object","required":["channel_id"],"title":"DmClearStartRequest"},"HTTPValidationError":{"properties":{"detail":{"items":{"$ref":"#/components/schemas/ValidationError"},"type":"array","title":"Detail"}},"type":"object","title":"HTTPValidationError"},"InviteRequest":{"properties":{"invites":{"type":"string","maxLength":50000,"minLength":1,"title":"Invites"}},"type":"object","required":["invites"],"title":"InviteRequest"},"LiveStartRequest":{"properties":{"channels":{"items":{},"type":"array","title":"Channels"}},"type":"object","required":["channels"],"title":"LiveStartRequest"},"LiveStopRequest":{"properties":{"channel_ids":{"items":{},"type":"array","title":"Channel Ids","default":[]}},"type":"object","title":"LiveStopRequest"},"ScrapeRequest":{"properties":{"channels":{"items":{},"type":"array","title":"Channels"},"limit":{"type":"integer","minimum":0.0,"title":"Limit","default":0},"harvest_profiles":{"type":"boolean","title":"Harvest Profiles","default":false},"fast_pacing":{"type":"boolean","title":"Fast Pacing","default":false}},"type":"object","required":["channels"],"title":"ScrapeRequest"},"SettingsIn":{"properties":{"token":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Token"},"token_label":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Token Label"},"active_token_id":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Active Token Id"}},"type":"object","title":"SettingsIn"},"ValidationError":{"properties":{"loc":{"items":{"anyOf":[{"type":"string"},{"type":"integer"}]},"type":"array","title":"Location"},"msg":{"type":"string","title":"Message"},"type":{"type":"string","title":"Error Type"},"input":{"title":"Input"},"ctx":{"type":"object","title":"Context"}},"type":"object","required":["loc","msg","type"],"title":"ValidationError"}}}}"###;
-const DOCS: &str = r###"
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link type="text/css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
-    <link rel="shortcut icon" href="https://fastapi.tiangolo.com/img/favicon.png">
-    <title>FastAPI - Swagger UI</title>
-    </head>
-    <body>
-    <div id="swagger-ui">
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-    <!-- `SwaggerUIBundle` is now available on the page -->
-    <script>
-    const ui = SwaggerUIBundle({
-        url: '/openapi.json',
-    "dom_id": "#swagger-ui",
-"layout": "BaseLayout",
-"deepLinking": true,
-"showExtensions": true,
-"showCommonExtensions": true,
-oauth2RedirectUrl: window.location.origin + '/docs/oauth2-redirect',
-    presets: [
-        SwaggerUIBundle.presets.apis,
-        SwaggerUIBundle.SwaggerUIStandalonePreset
-        ],
-    })
-    </script>
-    </body>
-    </html>
-    "###;
-const REDOC: &str = concat!(
-    r###"
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <title>FastAPI - ReDoc</title>
-    <!-- needed for adaptive design -->
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-"###,
-    "    \n",
-    r###"    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet">
-"###,
-    "    \n",
-    r###"    <link rel="shortcut icon" href="https://fastapi.tiangolo.com/img/favicon.png">
-    <!--
-    ReDoc doesn't change outer page styles
-    -->
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-      }
-    </style>
-    </head>
-    <body>
-    <noscript>
-        ReDoc requires Javascript to function. Please enable it to browse the documentation.
-    </noscript>
-    <redoc spec-url="/openapi.json"></redoc>
-    <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"> </script>
-    </body>
-    </html>
-    "###
-);
-const OAUTH: &str = r###"
-    <!doctype html>
-    <html lang="en-US">
-    <head>
-        <title>Swagger UI: OAuth2 Redirect</title>
-    </head>
-    <body>
-    <script>
-        'use strict';
-        function run () {
-            var oauth2 = window.opener.swaggerUIRedirectOauth2;
-            var sentState = oauth2.state;
-            var redirectUrl = oauth2.redirectUrl;
-            var isValid, qp, arr;
-
-            if (/code|token|error/.test(window.location.hash)) {
-                qp = window.location.hash.substring(1).replace('?', '&');
-            } else {
-                qp = location.search.substring(1);
-            }
-
-            arr = qp.split("&");
-            arr.forEach(function (v,i,_arr) { _arr[i] = '"' + v.replace('=', '":"') + '"';});
-            qp = qp ? JSON.parse('{' + arr.join() + '}',
-                    function (key, value) {
-                        return key === "" ? value : decodeURIComponent(value);
-                    }
-            ) : {};
-
-            isValid = qp.state === sentState;
-
-            if ((
-              oauth2.auth.schema.get("flow") === "accessCode" ||
-              oauth2.auth.schema.get("flow") === "authorizationCode" ||
-              oauth2.auth.schema.get("flow") === "authorization_code"
-            ) && !oauth2.auth.code) {
-                if (!isValid) {
-                    oauth2.errCb({
-                        authId: oauth2.auth.name,
-                        source: "auth",
-                        level: "warning",
-                        message: "Authorization may be unsafe, passed state was changed in server. The passed state wasn't returned from auth server."
-                    });
-                }
-
-                if (qp.code) {
-                    delete oauth2.state;
-                    oauth2.auth.code = qp.code;
-                    oauth2.callback({auth: oauth2.auth, redirectUrl: redirectUrl});
-                } else {
-                    let oauthErrorMsg;
-                    if (qp.error) {
-                        oauthErrorMsg = "["+qp.error+"]: " +
-                            (qp.error_description ? qp.error_description+ ". " : "no accessCode received from the server. ") +
-                            (qp.error_uri ? "More info: "+qp.error_uri : "");
-                    }
-
-                    oauth2.errCb({
-                        authId: oauth2.auth.name,
-                        source: "auth",
-                        level: "error",
-                        message: oauthErrorMsg || "[Authorization failed]: no accessCode received from the server."
-                    });
-                }
-            } else {
-                oauth2.callback({auth: oauth2.auth, token: qp, isValid: isValid, redirectUrl: redirectUrl});
-            }
-            window.close();
-        }
-
-        if (document.readyState !== 'loading') {
-            run();
-        } else {
-            document.addEventListener('DOMContentLoaded', function () {
-                run();
-            });
-        }
-    </script>
-    </body>
-    </html>
-        "###;
+const DOCS: &str = include_str!("../../../static/api-docs.html");

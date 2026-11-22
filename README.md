@@ -8,13 +8,16 @@
 <p align="center">Archive Discord messages. Search them locally. Share a separate, read-only viewer.</p>
 
 <p align="center">
-  <a href="#get-started">Get started</a> ·
+  <a href="#install-a-release-stable">Stable releases</a> ·
+  <a href="#install-from-source-beta">Install from source</a> ·
   <a href="#search-only">Search only</a> ·
   <a href="#your-data">Your data</a> ·
   <a href="#release-timeline">Release timeline</a>
 </p>
 
-## Get started
+## Install a release (Stable)
+
+Use a stable release for everyday use. Stable packages bundle changes from the beta once they’re ready for release.
 
 1. Download the package for your system from [GitHub Releases](https://github.com/k0shir0/searchcord/releases/latest).
 2. On Windows, extract the ZIP to a folder and open **Start Searchcord**. Your browser opens when the archive is ready.
@@ -24,8 +27,22 @@ If you already use Searchcord on Windows, close it and extract the first release
 into your existing Searchcord folder. Open **Start Searchcord** from there.
 
 See the [operating guide](scraper/deploy/native/README.txt) for Linux, macOS, and
-existing archives in a custom location. [Build from source](scraper/deploy/native/BUILD.md)
-if you prefer.
+existing archives in a custom location.
+
+## Install from source (Beta)
+
+Build from `main` to try fixes and experimental changes between stable releases.
+Install Git, Rust through rustup, and your platform’s C compiler first.
+
+```sh
+git clone https://github.com/k0shir0/searchcord.git
+cd searchcord
+cargo build --release --locked -p searchcord-collector -p searchcord-viewer -p searchcord-snapshot
+```
+
+On Windows, open **Start Searchcord.bat** from the checkout. On Linux and macOS,
+run `./target/release/searchcord`. See the [build guide](scraper/deploy/native/BUILD.md)
+for packaging and the [operating guide](scraper/deploy/native/README.txt) for launch options.
 
 ## Use Searchcord
 

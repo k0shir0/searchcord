@@ -28,6 +28,8 @@ to the launchers. The archive can stay in its existing folder.
 
 The collector uses http://127.0.0.1:8000 and the viewer uses port 8001. Pass
 --host or --port to change the binding. The collector accepts --no-browser.
+Use the collector UI at the same host and port as its API. The collector API
+schema is available at /openapi.json on the collector's address.
 Direct binary launches resolve relative archive paths beside the executable.
 The packaged Windows launchers resolve them beside the launchers and default
 to data/searchcord.db.

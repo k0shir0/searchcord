@@ -83,6 +83,7 @@
 
 # Collector browser assets
 !/scraper/static/
+!/scraper/static/api-docs.html
 !/scraper/static/app.js
 !/scraper/static/collection.js
 !/scraper/static/collection-queue.js

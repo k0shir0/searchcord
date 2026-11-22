@@ -78,30 +78,35 @@
 <p id="archiveStatus" class="archive-error" role="status" hidden></p>
       <section class="composition" id="homeOverview" aria-label="Search overview">
         <div class="query-block" id="queryBlock">
-          <div class="query-copy">
+          <div class="search-banner-heading">
             <h2>Search your archive</h2>
-            <form class="query-form" id="queryForm">
-              <label for="searchInput">Search messages</label>
-              <input id="searchInput" type="search" placeholder="Search messages" aria-keyshortcuts="/">
-              <button id="searchBtn" type="submit">Search</button>
-            </form>
+            <button id="searchBannerToggle" type="button" aria-controls="searchControls" aria-expanded="true">Hide search</button>
           </div>
-          <div class="search-actions">
-            <button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters</button>
-            <span class="search-shortcut"><kbd>/</kbd> Search</span>
-          </div>
-          <div class="filter-tray" id="filterTray" hidden>
-            <form class="filter-form" id="filterForm">
-              <label>Server<input id="fGuild" name="server" type="text" list="dl-guilds" autocomplete="off" placeholder="server name"></label>
-              <label>Channel<input id="fChannel" name="channel" type="text" list="dl-channels" autocomplete="off" placeholder="channel name"></label>
-              <label>Author<input id="fUser" name="author" type="text" list="dl-users" autocomplete="off" placeholder="user name"></label>
-              <label>From<input id="fDateFrom" name="from" type="date" title="From date (UTC)"></label>
-              <label>To<input id="fDateTo" name="to" type="date" title="To date (UTC, inclusive)"></label>
-              <button type="reset">Clear filters</button>
-              <datalist id="dl-guilds"></datalist>
-              <datalist id="dl-channels"></datalist>
-              <datalist id="dl-users"></datalist>
-            </form>
+          <div id="searchControls">
+            <div class="query-copy">
+              <form class="query-form" id="queryForm">
+                <label for="searchInput">Search messages</label>
+                <input id="searchInput" type="search" placeholder="Search messages" aria-keyshortcuts="/">
+                <button id="searchBtn" type="submit">Search</button>
+              </form>
+            </div>
+            <div class="search-actions">
+              <button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters</button>
+              <span class="search-shortcut"><kbd>/</kbd> Search</span>
+            </div>
+            <div class="filter-tray" id="filterTray" hidden>
+              <form class="filter-form" id="filterForm">
+                <label>Server<input id="fGuild" name="server" type="text" list="dl-guilds" autocomplete="off" placeholder="server name"></label>
+                <label>Channel<input id="fChannel" name="channel" type="text" list="dl-channels" autocomplete="off" placeholder="channel name"></label>
+                <label>Author<input id="fUser" name="author" type="text" list="dl-users" autocomplete="off" placeholder="user name"></label>
+                <label>From<input id="fDateFrom" name="from" type="date" title="From date (UTC)"></label>
+                <label>To<input id="fDateTo" name="to" type="date" title="To date (UTC, inclusive)"></label>
+                <button type="reset">Clear filters</button>
+                <datalist id="dl-guilds"></datalist>
+                <datalist id="dl-channels"></datalist>
+                <datalist id="dl-users"></datalist>
+              </form>
+            </div>
           </div>
         </div>
         <div class="index-block" aria-label="Archive totals">
@@ -211,7 +216,7 @@
       <button class="sp-close" id="closeExportModal">close</button>
     </div>
     <div class="modal-body">
-      <div class="sg-label" style="margin-bottom:8px">who is the assistant?</div>
+      <div class="sg-label">who is the assistant?</div>
       <div class="export-participants" id="exportParticipants">
         <div class="placeholder-msg">loading…</div>
       </div>

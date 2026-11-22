@@ -236,6 +236,7 @@ fn mutations_reject_foreign_origins_and_non_json_without_side_effects() {
                 Request::builder()
                     .method("POST")
                     .uri("/api/settings")
+                    .header("host", "localhost:8000")
                     .header("origin", "http://localhost:8000")
                     .header("content-type", "application/json; charset=utf-8")
                     .body(Body::from(
@@ -524,16 +525,25 @@ fn cors_gzip_static_ranges_cached_media_and_missing_credentials_are_safe() {
         let req = Request::builder()
             .method(Method::OPTIONS)
             .uri("/api/settings")
-            .header("origin", "http://127.0.0.1:8000")
+            .header("host", "127.0.0.1:8000")
+            .header("origin", "http://127.0.0.1:8001")
             .header("access-control-request-method", "POST")
             .body(Body::empty())
             .unwrap();
         let response = http.clone().oneshot(req).await.unwrap();
-        assert_eq!(response.status(), 200);
-        assert_eq!(
-            response.headers()["access-control-allow-origin"],
-            "http://127.0.0.1:8000"
+        assert_eq!(response.status(), 403);
+        assert!(
+            !response
+                .headers()
+                .contains_key("access-control-allow-origin")
         );
+        let req = Request::builder()
+            .uri("/api/settings")
+            .header("sec-fetch-site", "same-site")
+            .body(Body::empty())
+            .unwrap();
+        let response = http.clone().oneshot(req).await.unwrap();
+        assert_eq!(response.status(), 403);
         let req = Request::builder()
             .uri("/")
             .header("accept-encoding", "gzip")
@@ -541,6 +551,16 @@ fn cors_gzip_static_ranges_cached_media_and_missing_credentials_are_safe() {
             .unwrap();
         let response = http.clone().oneshot(req).await.unwrap();
         assert_eq!(response.headers()["content-encoding"], "gzip");
+        let policy = response.headers()["content-security-policy"]
+            .to_str()
+            .unwrap();
+        assert!(policy.split("; ").any(|rule| rule == "script-src 'self'"));
+        assert!(
+            policy
+                .split("; ")
+                .any(|rule| rule == "frame-ancestors 'none'")
+        );
+        assert_eq!(response.headers()["x-content-type-options"], "nosniff");
         let req = Request::builder()
             .uri("/style.css")
             .header("range", "bytes=0-9")
