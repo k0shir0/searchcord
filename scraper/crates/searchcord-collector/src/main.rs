@@ -169,7 +169,8 @@ async fn run() -> Result<()> {
             return Err(error.into());
         }
     };
-    let url = local_url(&host, listener.local_addr()?.port());
+    let listening = listener.local_addr()?;
+    let url = local_url(&host, listening.port());
     let instance = app.instance_id().to_owned();
     println!("Local database ready. Searchcord: {url}");
     println!(
@@ -178,7 +179,8 @@ async fn run() -> Result<()> {
     std::io::stdout().flush()?;
     let browser_task = browser.then(|| tokio::spawn(browser_when_ready(url, instance)));
     let shutdown_app = app.clone();
-    let served = axum::serve(listener, http::router(app.clone()))
+    let router = http::router(app.clone()).layer(axum::Extension(listening));
+    let served = axum::serve(listener, router)
         .with_graceful_shutdown(async move {
             signal().await;
             if let Err(error) = shutdown_app.shutdown().await {

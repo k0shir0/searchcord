@@ -18,8 +18,7 @@ import aiosqlite
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, Response, RedirectResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse, Response, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 from storage import EPOCH_MS, image_urls, init_database, save_message_payloads, mark_messages_deleted
@@ -231,19 +230,36 @@ async def lifespan(app: FastAPI):
             scrapes.reset()
             live_monitors.clear()
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 APP_INSTANCE_ID = uuid.uuid4().hex
 
-# The UI is served from this same origin, so cross-origin access is never
-# needed. Allowing "*" would let any site you happen to visit read your
-# scraped messages and DM list straight off localhost.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+
+
+@app.middleware("http")
+async def browser_security(request: Request, call_next):
+    api_request = request.url.path.startswith("/api/")
+    origin = request.headers.get("origin")
+    own_origin = f"{request.url.scheme}://{request.url.netloc}"
+    cross_origin = request.headers.get("sec-fetch-site") in {"same-site", "cross-site"}
+    if api_request and (cross_origin or (origin is not None and origin.lower() != own_origin.lower())):
+        response = Response(content='{"detail":"Disallowed request origin"}',
+                            status_code=403, media_type="application/json")
+    else:
+        response = await call_next(request)
+    response.headers.setdefault("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.discordapp.com; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    if api_request:
+        response.headers.setdefault("Cache-Control", "private, no-store")
+    return response
+
+
+@app.api_route("/docs", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/redoc", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/docs/oauth2-redirect", methods=["GET", "HEAD"], include_in_schema=False)
+async def api_documentation():
+    return FileResponse(STATIC_DIR / "api-docs.html")
 
 
 @app.middleware("http")

@@ -46,16 +46,16 @@ a { color: inherit; }
 
 :where(button, summary, input[type="checkbox"]) { touch-action: manipulation; }
 @media (prefers-reduced-motion: no-preference) {
-  :where(button, summary, input[type="checkbox"]) {
-    transition: scale var(--press-duration, var(--control-duration)) var(--ease),
+  :is(button:enabled, summary, input[type="checkbox"]:enabled) {
+    transition: scale var(--press-duration, 200ms) var(--ease),
       background-color var(--control-duration) var(--ease),
       border-color var(--control-duration) var(--ease),
       color var(--control-duration) var(--ease),
       opacity var(--control-duration) var(--ease);
   }
   :where(button, summary, input[type="checkbox"]):where(:active:not(:disabled, [aria-disabled="true"])) {
-    --press-duration: 90ms;
-    scale: .98;
+    --press-duration: 70ms;
+    scale: .95;
   }
 }
 

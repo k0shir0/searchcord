@@ -83,6 +83,7 @@
 
 # Collector browser assets
 !/scraper/static/
+!/scraper/static/api-docs.html
 !/scraper/static/app.js
 !/scraper/static/collection.js
 !/scraper/static/collection-queue.js
@@ -104,6 +105,7 @@
 !/frontend/profile-view.css
 !/frontend/profile-view.js
 !/frontend/search/
+!/frontend/search/favicon.png
 !/frontend/search/index.html
 !/frontend/search/privacy.css
 !/frontend/search/privacy.html
