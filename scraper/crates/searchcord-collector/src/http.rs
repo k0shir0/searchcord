@@ -1354,6 +1354,10 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
             include_bytes!("../../../../frontend/search/index.html"),
             "text/html; charset=utf-8",
         ),
+        "/search/favicon.png" => (
+            include_bytes!("../../../../frontend/search/favicon.png"),
+            "image/png",
+        ),
         "/search/search.css" => (
             include_bytes!("../../../../frontend/search/search.css"),
             "text/css; charset=utf-8",

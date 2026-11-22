@@ -5,6 +5,7 @@ use std::{
 };
 pub const ASSETS: &[&str] = &[
     "index.html",
+    "favicon.png",
     "search.css",
     "search.js",
     "privacy.html",

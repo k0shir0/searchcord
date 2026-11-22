@@ -59,12 +59,6 @@ You can search an existing archive without connecting a Discord account.
 
 See the [viewer guide](scraper/deploy/search/RUNNING.txt) for custom archives and hosting.
 
-## Repository layout
-
-- [frontend](frontend/) contains the read-only search pages and the web assets shared by both apps.
-- [scraper](scraper/) contains the Rust code, collector web app, and packaging tools.
-- The Windows launchers and Cargo workspace files are at the root. Build from the root before using the launchers in a source checkout.
-
 ## Your data
 
 The default archive is in the **data** folder. Saved tokens are encrypted and

@@ -100,7 +100,16 @@ fn standalone_folder_is_fresh_has_only_approved_files_and_runs_without_python() 
         .unwrap();
     let index = client.get(&origin).send().unwrap();
     assert_eq!(index.status().as_u16(), 200);
-    assert!(index.text().unwrap().contains("<title>searchcord</title>"));
+    let index = index.text().unwrap();
+    assert!(index.contains("<title>searchcord</title>"));
+    assert!(index.contains("href=\"favicon.png\""));
+    let favicon = client.get(format!("{origin}/favicon.png")).send().unwrap();
+    assert_eq!(favicon.status(), 200);
+    assert_eq!(favicon.headers()["content-type"], "image/png");
+    assert_eq!(
+        favicon.bytes().unwrap().as_ref(),
+        fs::read(folder.join("static/search/favicon.png")).unwrap()
+    );
     assert_eq!(
         client
             .get(format!("{origin}/api/summary"))
