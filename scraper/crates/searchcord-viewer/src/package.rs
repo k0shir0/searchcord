@@ -13,6 +13,7 @@ pub const ASSETS: &[&str] = &[
     "bauhaus.css",
     "profile-view.css",
     "profile-view.js",
+    "search-pages.js",
 ];
 struct Cleanup(PathBuf, bool);
 impl Drop for Cleanup {

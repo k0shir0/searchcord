@@ -89,7 +89,7 @@ def create_app(path=None, immutable=None):
         if asset in ('bauhaus.css','profile-view.css','profile-view.js'):
             return FileResponse(FRONTEND / asset)
         target = FRONTEND / 'search' / asset
-        if asset in ('index.html','favicon.png','search.css','search.js','privacy.html','privacy.css'):
+        if asset in ('index.html','favicon.png','search.css','search.js','search-pages.js','privacy.html','privacy.css'):
             return FileResponse(target)
         raise HTTPException(404, 'Not found')
 

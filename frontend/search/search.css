@@ -161,7 +161,7 @@ body.has-profile .masthead h1 { font-size:clamp(42px,5vw,72px); }
 
 .search-status { color: var(--ink-soft); font-size: .9rem; }
 .results-heading { flex-wrap: wrap; }
-#resultBody[aria-busy="false"] > .result-skeleton,
-#resultBody[aria-busy="true"] > :not(.result-skeleton) { display: none; }
+#resultBody:not(.is-searching) > .result-skeleton,
+#resultBody.is-searching > :not(.result-skeleton) { display: none; }
 .rc-att { border: 0; padding-inline: 0; text-decoration: underline; min-height: 44px; display: inline-flex; align-items: center; }
 .rc-att:hover { background: transparent; color: var(--ink); }

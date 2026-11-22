@@ -115,7 +115,7 @@ a { color: inherit; }
 .section-head { align-items: end; border-bottom: 1px solid var(--ink); display: flex; gap: 20px; justify-content: space-between; margin-top: 34px; padding-bottom: 10px; }
 #resultsSection { margin-inline: clamp(18px, 4vw, 64px); }
 .section-head h2 { font-size: 22px; margin: 0; }
-.section-head p { color: var(--ink-soft); font-size: 12px; margin: 0; }
+.section-head p { color: var(--ink-soft); font-size: 12px; margin: 0; text-align: end; }
 .filter-form { align-items: end; border-bottom: 1px solid var(--ink); display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(120px, 1fr)) repeat(2, minmax(130px, .75fr)) auto; padding: 16px 0; }
 .filter-form label { color: var(--ink-soft); display: grid; font-size: 10px; font-weight: 700; gap: 5px; letter-spacing: .1em; }
 .filter-form input { background: var(--panel); border: 1px solid var(--rule); border-radius: 0; color: var(--ink); min-height: 40px; min-width: 0; padding: 8px 9px; }

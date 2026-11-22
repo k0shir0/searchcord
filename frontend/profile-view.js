@@ -17,12 +17,15 @@ window.SearchcordProfile = class {
     const version=++this.version; this.serverVersion++;this.serverController?.abort();clearTimeout(this.timer);
     this.controller?.abort();this.controller=new AbortController();this.uid=uid;
     this.host.hidden=false;this.host.replaceChildren(this.node('p','profile-status','Loading profile…'));
+    this.serverController=new AbortController();
+    const firstServers=this.fetchServers('',0).then(data=>({data}),error=>({error}));
     try {
       const data=await this.json(`/api/profiles/${encodeURIComponent(uid)}`,{signal:this.controller.signal});
       if(version!==this.version)return;
-      this.render(data);await this.servers();
+      this.render(data);await this.servers(false,firstServers);
     } catch(error) {
       if(version!==this.version||error.name==='AbortError')return;
+      this.serverController.abort();
       this.host.replaceChildren(this.node('p','profile-status',error.message));
     }
   }
@@ -91,15 +94,20 @@ window.SearchcordProfile = class {
     this.more=this.node('button','profile-more','More servers');this.more.type='button';this.more.hidden=true;this.more.addEventListener('click',()=>this.servers(true));history.append(this.more);
     card.append(identity,history);this.host.append(card);
   }
-  async servers(more=false) {
+  fetchServers(q, offset) {
+    const params=new URLSearchParams({q,offset,limit:30});
+    return this.json(`/api/profiles/${encodeURIComponent(this.uid)}/servers?${params}`,{signal:this.serverController.signal});
+  }
+  async servers(more=false, first=null) {
     const version=++this.serverVersion;const profileVersion=this.version;
-    this.serverController?.abort();this.serverController=new AbortController();
+    if(!first){this.serverController?.abort();this.serverController=new AbortController();}
     if(!more){this.offset=0;this.serverList.replaceChildren();}
     this.more.disabled=true;this.serverStatus.textContent='Loading servers…';
     try {
-      const query=new URLSearchParams({q:this.serverInput.value,offset:this.offset,limit:30});
-      const data=await this.json(`/api/profiles/${encodeURIComponent(this.uid)}/servers?${query}`,{signal:this.serverController.signal});
+      const result=first ? await first : {data:await this.fetchServers(this.serverInput.value,this.offset)};
       if(version!==this.serverVersion||profileVersion!==this.version)return;
+      if(result.error)throw result.error;
+      const data=result.data;
       for(const server of data.servers){
         const row=this.node('div','profile-server');row.setAttribute('role','listitem');
         const button=this.node('button','');button.type='button';button.append(this.node('span','server-monogram',server.name.slice(0,1)),this.node('strong','',server.name),this.node('span','server-count',`${new Intl.NumberFormat().format(server.messages)} messages`));

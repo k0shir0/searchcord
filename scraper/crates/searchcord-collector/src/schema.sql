@@ -91,7 +91,7 @@ CREATE VIEW message_records AS
                 LEFT JOIN guilds g ON g.id=CAST(m.guild_id AS TEXT)
                 LEFT JOIN authors a ON a.id=CAST(m.author_id AS TEXT);
 
-CREATE INDEX idx_au_id ON messages(author_id,id);
+CREATE INDEX idx_au_id_guild ON messages(author_id,id,guild_id);
 
 CREATE INDEX idx_authors_name ON authors(name COLLATE NOCASE);
 

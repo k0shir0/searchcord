@@ -110,6 +110,7 @@
 !/frontend/search/privacy.html
 !/frontend/search/search.css
 !/frontend/search/search.js
+!/frontend/search/search-pages.js
 
 # Native packaging and search deployment
 !/scraper/deploy/

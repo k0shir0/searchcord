@@ -671,6 +671,7 @@ fn api_method(path: &str) -> Option<&'static str> {
         | "/api/live/events"
         | "/api/export/participants"
         | "/api/search"
+        | "/api/search/count"
         | "/api/stats"
         | "/api/stats/contributors"
         | "/api/stats/servers"
@@ -780,7 +781,7 @@ async fn api<C: Clock>(
             }
             app.clear(tokens, token_id).await?
         }
-        "/api/search" => {
+        "/api/search" | "/api/search/count" => {
             let options = SearchOptions {
                 q: v.text("q", 200),
                 guild_id: v.string("guild_id"),
@@ -790,6 +791,18 @@ async fn api<C: Clock>(
                 date_to: v.string("date_to"),
                 ..Default::default()
             };
+            if path == "/api/search/count" {
+                let before = v.number("before", None, 1, i64::MAX);
+                valid(&v)?;
+                let path = app.path.clone();
+                let result = blocking(move || {
+                    let options = SearchOptions { before, ..options };
+                    let total = Archive::new(path, false).search_count(&options)?;
+                    Ok(json!({"total": total}))
+                })
+                .await?;
+                return Ok(json_response(200, result));
+            }
             let page = v.number("page", Some(1), 1, i64::MAX).unwrap_or(1);
             let limit = v.number("limit", Some(50), 1, 100).unwrap_or(50);
             let cursor = v.boolean("cursor");
@@ -1332,6 +1345,10 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
         ),
         "/profile-view.js" => (
             include_bytes!("../../../../frontend/profile-view.js"),
+            searchcord_viewer::javascript_type(),
+        ),
+        "/search/search-pages.js" => (
+            include_bytes!("../../../../frontend/search/search-pages.js"),
             searchcord_viewer::javascript_type(),
         ),
         "/vendor/chart.umd.min.js" => (

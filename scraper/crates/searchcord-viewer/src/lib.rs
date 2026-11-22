@@ -109,6 +109,10 @@ fn asset(path: &str) -> Option<(&'static [u8], &'static str)> {
             include_bytes!("../../../../frontend/profile-view.js"),
             javascript_type(),
         ),
+        "/search-pages.js" => (
+            include_bytes!("../../../../frontend/search/search-pages.js"),
+            javascript_type(),
+        ),
         _ => return None,
     })
 }
@@ -207,7 +211,7 @@ fn api(archive: &Archive, path: &str, query: &str) -> Response {
     let mut v = Validation::new(query);
     let operation: Box<dyn FnOnce() -> Result<Value, ArchiveError> + '_> = match path {
         "/api/summary" => Box::new(|| archive.summary()),
-        "/api/search" => {
+        "/api/search" | "/api/search/count" => {
             let options = SearchOptions {
                 q: v.text("q", 200),
                 guild_id: v.string("guild_id"),
@@ -220,7 +224,15 @@ fn api(archive: &Archive, path: &str, query: &str) -> Response {
                 scan: v.boolean("scan"),
                 ..SearchOptions::default()
             };
-            Box::new(move || archive.search(&options))
+            if path == "/api/search/count" {
+                Box::new(move || {
+                    archive
+                        .search_count(&options)
+                        .map(|total| json!({"total":total}))
+                })
+            } else {
+                Box::new(move || archive.search(&options))
+            }
         }
         _ if path.starts_with("/api/suggestions/")
             && !path[17..].is_empty()
