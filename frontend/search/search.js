@@ -23,6 +23,7 @@ const profileView = new SearchcordProfile($('#profileHost'), {
 
 function tray(open) {
   $('#filterTray').hidden = !open;
+  $('.search-surface').classList.toggle('is-expanded', open);
   $('#filterToggle').setAttribute('aria-expanded', String(open));
 }
 function error(message = '') {
@@ -84,10 +85,12 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-function messageAvatar(authorId, avatarUrl, authorName) {
-  const avatar = element('div', 'message-avatar');
+function messageAvatar(authorId, avatarUrl) {
+  let hash = 0;
+  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const avatar = element('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
   avatar.setAttribute('aria-hidden', 'true');
-  const fallback = () => { avatar.textContent = String(authorName || authorId).slice(0, 1).toUpperCase(); };
+  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
   fallback();
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -127,7 +130,7 @@ function render(messages, query) {
       });
       body.append(attachments);
     }
-    row.append(messageAvatar(message.author_id, message.avatar_url, message.author_name), body);
+    row.append(messageAvatar(message.author_id, message.avatar_url), body);
     fragment.append(row);
   }
   $('#messages').replaceChildren(fragment);

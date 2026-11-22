@@ -1381,6 +1381,7 @@ const searchPages = new SearchPages($('pagination'), $('resultsStatus'),
 function setFilterTrayExpanded(expanded) {
   $('filterToggle').setAttribute('aria-expanded', String(expanded));
   $('filterTray').hidden = !expanded;
+  $('queryBlock').classList.toggle('is-expanded', expanded);
 }
 
 function initSearch() {
@@ -1584,10 +1585,12 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
   }
 }
 
-function messageAvatar(authorId, avatarUrl, authorName) {
-  const avatar = ce('div', 'message-avatar');
+function messageAvatar(authorId, avatarUrl) {
+  let hash = 0;
+  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const avatar = ce('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
   avatar.setAttribute('aria-hidden', 'true');
-  const fallback = () => { avatar.textContent = String(authorName || authorId).slice(0, 1).toUpperCase(); };
+  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
   fallback();
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -1633,7 +1636,7 @@ function renderResults(data, query) {
       });
       content.appendChild(attachments);
     }
-    row.append(messageAvatar(msg.author_id, msg.avatar_url, msg.author_name), content); fragment.appendChild(row);
+    row.append(messageAvatar(msg.author_id, msg.avatar_url), content); fragment.appendChild(row);
   });
   results.replaceChildren(fragment);
   renderPagination(data.page, data.pages, data.has_more, data.partial);
