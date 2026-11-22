@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="static/brand/searchcord-logo-dark.png">
-    <img src="static/brand/searchcord-logo.png" alt="SearchCord" width="660">
+    <source media="(prefers-color-scheme: dark)" srcset="scraper/static/brand/searchcord-logo-dark.png">
+    <img src="scraper/static/brand/searchcord-logo.png" alt="SearchCord" width="660">
   </picture>
 </p>
 
@@ -23,8 +23,8 @@
 If you already use Searchcord on Windows, close it and extract the first release
 into your existing Searchcord folder. Open **Start Searchcord** from there.
 
-See the [operating guide](deploy/native/README.txt) for Linux, macOS, and
-existing archives in a custom location. [Build from source](deploy/native/BUILD.md)
+See the [operating guide](scraper/deploy/native/README.txt) for Linux, macOS, and
+existing archives in a custom location. [Build from source](scraper/deploy/native/BUILD.md)
 if you prefer.
 
 ## Use Searchcord
@@ -39,6 +39,16 @@ before collecting data.
 
 You can pause a scrape and resume from the last saved page. After restarting
 Searchcord, select the original saved account to resume a paused job.
+Enable **Fetch extended profiles** in the collection queue to save each user's
+extended profile before fetching the next message page.
+Enable the **Fast scrape** bolt in the collection queue before starting a job to
+shorten Searchcord's waits between requests and the break after every 100
+successful requests by 70%. The collection queue shows a countdown in seconds
+during each mandatory break. Discord rate limits still apply.
+
+Selecting a server shows message channels the active account can view and read.
+Channel checks run without the collector's built-in pacing delay and honor
+Discord's rate limits.
 
 Use **/** to focus message search or **Ctrl+K** (**⌘K** on macOS) to open the command menu.
 
@@ -47,7 +57,13 @@ Use **/** to focus message search or **Ctrl+K** (**⌘K** on macOS) to open the 
 On Windows, open **Start Searchcord Search** and visit <http://127.0.0.1:8001>.
 You can search an existing archive without connecting a Discord account.
 
-See the [viewer guide](deploy/search/RUNNING.txt) for custom archives and hosting.
+See the [viewer guide](scraper/deploy/search/RUNNING.txt) for custom archives and hosting.
+
+## Repository layout
+
+- [frontend](frontend/) contains the read-only search pages and the web assets shared by both apps.
+- [scraper](scraper/) contains the Rust code, collector web app, and packaging tools.
+- The Windows launchers and Cargo workspace files are at the root. Build from the root before using the launchers in a source checkout.
 
 ## Your data
 
@@ -55,12 +71,16 @@ The default archive is in the **data** folder. Saved tokens are encrypted and
 stored separately. Keep archives private and share only data you are entitled
 to share.
 
+Use **Settings → Remove a saved token** to delete one credential. If you remove
+the active token, Searchcord selects the first remaining token.
+
 ## Release timeline
 
 Major milestones by the date they reached `main` (America/Chicago).
 
 | Date | Update |
 | --- | --- |
+| 2026-11-21 | Performance and UI/UX changes, including faster archive search, simpler navigation and collection controls. [v0.3.0](https://github.com/k0shir0/searchcord/releases/tag/v0.3.0) |
 | 2026-11-07 | Added prebuilt downloads for Windows, Linux and macOS, with in-place updates on Windows x64. [v0.2.0](https://github.com/k0shir0/searchcord/releases/tag/v0.2.0) |
 | 2026-11-05 | The collector, search viewer and archive tools moved to Rust. Existing archives and the browser interface carry forward. Live monitoring now recovers paused after a restart. [#27](https://github.com/k0shir0/searchcord/pull/27) |
 | 2026-11-05 | Added compact image storage, geometric avatars and tools to shrink an existing media cache. [#8](https://github.com/k0shir0/searchcord/pull/8) |

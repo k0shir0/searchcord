@@ -5,9 +5,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/pr-tests.yml'
-      - 'crates/searchcord-parity/reference/**'
-      - 'static/**'
-      - 'tests/**'
+      - 'frontend/**'
+      - 'scraper/crates/searchcord-parity/reference/**'
+      - 'scraper/static/**'
+      - 'scraper/tests/**'
   workflow_dispatch:
 
 permissions:
@@ -38,17 +39,17 @@ jobs:
         with:
           node-version: '26'
       - name: Install Python reference dependencies
-        working-directory: crates/searchcord-parity/reference
+        working-directory: scraper/crates/searchcord-parity/reference
         run: python -m pip install -r requirements-parity.txt
       - name: Python regression tests
-        working-directory: crates/searchcord-parity/reference
+        working-directory: scraper/crates/searchcord-parity/reference
         run: python -m unittest discover -s tests -t . -v
       - name: Browser queue regression tests
-        run: node --test tests/test_collection_queue.mjs
+        run: node --test scraper/tests/test_collection_queue.mjs
       - name: JavaScript syntax
         shell: pwsh
         run: |
-          Get-ChildItem static -Recurse -Filter *.js | ForEach-Object {
+          Get-ChildItem -Path frontend,scraper/static -Recurse -Filter *.js | ForEach-Object {
             node --check $_.FullName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
