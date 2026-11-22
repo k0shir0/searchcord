@@ -6,6 +6,8 @@ const filters = [...document.querySelectorAll('[data-param]')];
 const dateFields = [$('#dateFrom'), $('#dateTo')];
 const number = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, {dateStyle:'medium', timeStyle:'short'});
+const searchPages = new SearchPages($('#pagination'), $('#resultStatus'),
+  (params, {signal, priority}) => json(`/api/search?${params}`, signal, priority));
 let request, generation = 0, current = null, nextCursor = null, page = 1;
 let cursors = [null];
 let activeProfile = null, profileRequest = 0;
@@ -21,14 +23,15 @@ const profileView = new SearchcordProfile($('#profileHost'), {
 
 function tray(open) {
   $('#filterTray').hidden = !open;
+  $('.search-surface').classList.toggle('is-expanded', open);
   $('#filterToggle').setAttribute('aria-expanded', String(open));
 }
 function error(message = '') {
   $('#searchError').textContent = message;
   $('#searchError').hidden = !message;
 }
-async function json(url, signal) {
-  const response = await fetch(url, {signal, cache:'no-store'});
+async function json(url, signal, priority) {
+  const response = await fetch(url, {signal, priority, cache:'no-store'});
   const data = await response.json();
   if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Check your search and filters, then try again.');
   return data;
@@ -82,10 +85,12 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-function messageAvatar(authorId, avatarUrl, authorName) {
-  const avatar = element('div', 'message-avatar');
+function messageAvatar(authorId, avatarUrl) {
+  let hash = 0;
+  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const avatar = element('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
   avatar.setAttribute('aria-hidden', 'true');
-  const fallback = () => { avatar.textContent = String(authorName || authorId).slice(0, 1).toUpperCase(); };
+  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
   fallback();
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -125,7 +130,7 @@ function render(messages, query) {
       });
       body.append(attachments);
     }
-    row.append(messageAvatar(message.author_id, message.avatar_url, message.author_name), body);
+    row.append(messageAvatar(message.author_id, message.avatar_url), body);
     fragment.append(row);
   }
   $('#messages').replaceChildren(fragment);
@@ -135,34 +140,44 @@ $('#messages').addEventListener('click', event => {
   const author = event.target.closest('button[data-profile-id]');
   if (author) openProfile(author.dataset.profileId);
 });
-async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} = {}) {
+async function run(params, {push=true, cursor=null, targetPage=1, scroll=true, paging=false} = {}) {
+  const body = $('#resultBody');
+  if (paging && body.getAttribute('aria-busy') === 'true') return;
   request?.abort();
   request = new AbortController();
   const version = ++generation;
   error();
   $('#results').hidden = false;
-  $('#resultBody').setAttribute('aria-busy','true');
-  $('#resultStatus').textContent = 'Searching…';
-  $('#pagination').hidden = true;
+  body.setAttribute('aria-busy','true');
+  body.classList.toggle('is-searching', !paging);
+  if (!paging) {
+    searchPages.reset();
+    $('#resultStatus').textContent = 'Searching…';
+    $('#pagination').hidden = true;
+  }
   const url = new URLSearchParams(params);
   url.set('limit', '50');
   if (cursor) url.set('before', cursor);
   try {
-    const data = await json(`/api/search?${url}`, request.signal);
+    const data = await searchPages.load(url, request.signal);
     if (version !== generation) return;
     if (data.scan) { params.set('scan','true'); url.set('scan','true'); }
     current = new URLSearchParams(params);
     nextCursor = data.next_cursor;
     page = targetPage;
     render(data.messages, params.get('q') || '');
-    $('#resultStatus').textContent = data.partial ? 'More history remains. Continue searching older messages.' :
-      (data.messages.length ? `${number.format(data.messages.length)} messages on this page` : 'No messages match these filters');
+    searchPages.summarize(data, page, url, {scopeBefore: cursors[0] ?? null});
     $('#emptyState').hidden = data.partial || data.messages.length > 0;
     $('#nextPage').textContent = data.partial ? 'Search older' : 'Next';
     $('#pageNumber').textContent = `Page ${page}`;
     $('#previousPage').disabled = page === 1;
     $('#nextPage').disabled = !data.has_more;
     $('#pagination').hidden = page === 1 && !data.has_more;
+    if (nextCursor && !data.partial) {
+      const next = new URLSearchParams(url);
+      next.set('before', nextCursor);
+      searchPages.prefetch(next);
+    }
     if (push) {
       const address = new URLSearchParams(url);
       address.delete('limit');
@@ -171,22 +186,28 @@ async function run(params, {push=true, cursor=null, targetPage=1, scroll=true} =
     }
     if (scroll) {
       $('#resultsTitle').focus({preventScroll: true});
-      $('#results').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
+      $('#results').scrollIntoView({behavior:paging || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start'});
     }
   } catch (exception) {
     if (exception.name === 'AbortError' || version !== generation) return;
     error(exception.message || 'Could not connect. Check the display server and try again.');
-    $('#messages').replaceChildren();
-    $('#emptyState').hidden = true;
-    $('#resultStatus').textContent = 'Search failed. Try again using the search above.';
+    if (!paging) {
+      $('#messages').replaceChildren();
+      $('#emptyState').hidden = true;
+      $('#resultStatus').textContent = 'Search failed. Try again using the search above.';
+    }
   } finally {
-    if (version === generation) $('#resultBody').setAttribute('aria-busy','false');
+    if (version === generation) {
+      body.setAttribute('aria-busy','false');
+      body.classList.remove('is-searching');
+    }
   }
 }
 async function submitSearch(scroll = false) {
   const profileVersion=++profileRequest;
   request?.abort(); generation++;
   $('#resultBody').setAttribute('aria-busy','false');
+  $('#resultBody').classList.remove('is-searching');
   try {
     const raw=searchInput.value.trim();
     if(raw.startsWith('@')) {
@@ -272,10 +293,10 @@ for (const input of [...filters, ...dateFields]) input.addEventListener('change'
 $('#nextPage').addEventListener('click', () => {
   if (!nextCursor || !current) return;
   cursors[page] = nextCursor;
-  run(current, {cursor:nextCursor,targetPage:page+1});
+  run(current, {cursor:nextCursor,targetPage:page+1,paging:true});
 });
 $('#previousPage').addEventListener('click', () => {
-  if (page > 1 && current) run(current, {cursor:cursors[page-2],targetPage:page-1});
+  if (page > 1 && current) run(current, {cursor:cursors[page-2],targetPage:page-1,paging:true});
 });
 function focusSearch() {
   if(activeProfile)setProfileSearch(true);
@@ -300,6 +321,7 @@ function restore() {
   closeProfile(false);
   if (!url.has('search') && !url.has('q')) {
     request?.abort(); generation++;
+    searchPages.reset();
     $('#results').hidden = true;
     $('#resultBody').setAttribute('aria-busy','false');
     return;
@@ -334,7 +356,7 @@ async function openProfile(uid,{push=true,params=null,cursor=null,targetPage=1,s
 function closeProfile(reset=true) {
   activeProfile=null;profileView.close();$('#profileSection').hidden=true;$('#profileSearchToggle').hidden=true;$('#profileMessageForm').hidden=true;
   document.body.classList.remove('has-profile');
-  if(reset){profileRequest++;request?.abort();generation++;searchInput.value='';$('#results').hidden=true;history.pushState(null,'',location.pathname);searchInput.focus();}
+  if(reset){profileRequest++;request?.abort();generation++;searchPages.reset();searchInput.value='';$('#results').hidden=true;history.pushState(null,'',location.pathname);searchInput.focus();}
 }
 $('#closeProfile').addEventListener('click',()=>closeProfile());
 $('#profileSearchToggle').addEventListener('click',()=>{

@@ -208,6 +208,7 @@ body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text-3);
   flex-shrink: 0;
 }
@@ -317,6 +318,7 @@ body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--text-3);
   padding: 12px 8px 5px;
 }
@@ -445,6 +447,7 @@ body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .1em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 .qb-count {
@@ -615,6 +618,7 @@ body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .12em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 .sg-hint {
@@ -640,7 +644,7 @@ body {
   padding: 7px 10px;
   color: var(--text);
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  font-family: 'Consolas', 'Menlo', monospace;
   outline: none;
   transition: border-color var(--t);
 }
@@ -777,7 +781,7 @@ body {
 .rc-loc { font-size: 11px; color: var(--text-3); }
 .rc-loc .srv { color: var(--text-2); }
 .rc-ts { font-size: 10px; color: var(--text-3); margin-left: auto; font-variant-numeric: tabular-nums; }
-.rc-uid { font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rc-uid { font-size: 10px; color: var(--text-3); font-family: monospace; }
 
 .rc-body {
   font-size: 12.5px;
@@ -934,7 +938,7 @@ mark {
   border-radius: 6px;
   padding: 10px;
   font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
+  font-family: 'Consolas', 'Menlo', monospace;
   color: var(--text-3);
   max-height: 140px;
   overflow-y: auto;
@@ -1092,6 +1096,7 @@ mark {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .12em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 
@@ -1176,6 +1181,7 @@ mark {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .12em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 .live-feed {
@@ -1253,6 +1259,7 @@ mark {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .12em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 
@@ -1281,12 +1288,14 @@ mark {
   font-weight: 700;
   color: var(--mint);
   line-height: 1;
+  letter-spacing: -.01em;
   font-variant-numeric: tabular-nums;
 }
 .stat-lbl {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: .08em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 
@@ -1311,6 +1320,7 @@ mark {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .1em;
+  text-transform: uppercase;
   color: var(--text-3);
   margin-bottom: 14px;
 }
@@ -1357,7 +1367,7 @@ mark {
 .lb-uid {
   font-size: 10px;
   color: var(--text-3);
-  font-variant-numeric: tabular-nums;
+  font-family: 'Consolas', monospace;
 }
 .lb-count { font-size: 11px; color: var(--mint); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; flex-shrink: 0; }
 
@@ -1411,13 +1421,14 @@ mark {
 .persona-item.selected { border-color: var(--mint); background: var(--mint-faint); }
 
 .persona-name { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; }
-.persona-uid  { font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.persona-uid  { font-size: 10px; color: var(--text-3); font-family: 'Consolas', monospace; }
 
 .export-field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .export-field label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .1em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
 .export-field input,

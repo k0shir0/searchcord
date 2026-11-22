@@ -192,6 +192,7 @@ pub fn initialize_with_hook(
         migrate_old_history(&tx)?;
     }
     object_sql(&tx, false)?;
+    tx.execute_batch("DROP INDEX IF EXISTS idx_au_id;")?;
     if migrate || !has_stats {
         tx.execute("DELETE FROM stats_counts", [])?;
         tx.execute(

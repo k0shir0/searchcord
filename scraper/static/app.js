@@ -416,7 +416,9 @@ function initSettings() {
     try {
       await api('/api/messages?confirm=true', { method: 'DELETE' });
       searchController?.abort(); ++searchRequest;
+      searchPages.reset();
       $('searchResults').replaceChildren(); $('resultsStatus').textContent = 'Archive cleared';
+      $('searchResults').removeAttribute('aria-busy');
       $('pagination').hidden = true;
       await Promise.all([loadDbStats(), loadSearchFilters()]);
       if (activeView === 'stats') await loadStats(true);
@@ -1373,10 +1375,13 @@ let searchController;
 let searchRequest = 0;
 let submittedSearch = new URLSearchParams();
 let searchCursors = [null];
+const searchPages = new SearchPages($('pagination'), $('resultsStatus'),
+  (params, options) => api(`/api/search?${params}`, options));
 
 function setFilterTrayExpanded(expanded) {
   $('filterToggle').setAttribute('aria-expanded', String(expanded));
   $('filterTray').hidden = !expanded;
+  $('queryBlock').classList.toggle('is-expanded', expanded);
 }
 
 function initSearch() {
@@ -1479,12 +1484,28 @@ function resolveFilter(map, rawValue) {
   return map.get(value) || (/^\d{1,20}$/.test(value) ? value : '');
 }
 
+function searchPageParams(params, page) {
+  const target = new URLSearchParams(params);
+  if (target.get('cursor') === 'true') {
+    target.delete('before');
+    if (searchCursors[page - 1]) target.set('before', searchCursors[page - 1]);
+  }
+  target.set('page', page);
+  target.set('limit', 50);
+  return target;
+}
+
 async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
+  const paging = reuseSubmitted && shouldScroll;
+  if (paging && $('searchResults').hasAttribute('aria-busy')) return;
   searchController?.abort();
   const request = ++searchRequest;
   $('searchResults').removeAttribute('aria-busy');
   const params = reuseSubmitted ? new URLSearchParams(submittedSearch) : new URLSearchParams();
-  $('pagination').hidden = true;
+  if (!paging) {
+    searchPages.reset();
+    $('pagination').hidden = true;
+  }
   if (!reuseSubmitted) {
     for (const [key, id] of Object.entries(searchFields)) {
       const input = $(id);
@@ -1521,51 +1542,55 @@ async function doSearch(page, shouldScroll = false, reuseSubmitted = false) {
     params.set('cursor', 'true');
     searchCursors = [null];
   }
-  if (params.get('cursor') === 'true') {
-    params.delete('before');
-    if (searchCursors[page - 1]) params.set('before', searchCursors[page - 1]);
-  }
-  params.set('page', page); params.set('limit', 50);
-  submittedSearch = new URLSearchParams(params);
-  S.searchPage = page;
+  const target = searchPageParams(params, page);
   $('resultsSection').hidden = false;
-  $('resultsStatus').textContent = 'Searching…';
+  if (!paging) {
+    $('resultsStatus').textContent = 'Searching…';
+    $('searchResults').innerHTML = '<div class="result-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
+  }
   $('searchResults').setAttribute('aria-busy', 'true');
-  $('searchResults').innerHTML = '<div class="result-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>';
-  await navigateView('browse');
+  if (activeView !== 'browse') await navigateView('browse');
   if (request !== searchRequest) return;
   if (activeView !== 'browse') { $('searchResults').removeAttribute('aria-busy'); return; }
-  const url = new URLSearchParams(params); url.delete('limit'); url.set('search', '1');
-  history.replaceState(null, '', `${location.pathname}?${url}#browse`);
+  const url = new URLSearchParams(target); url.delete('limit'); url.set('search', '1');
+  if (!paging) history.replaceState(null, '', `${location.pathname}?${url}#browse`);
   searchController = new AbortController();
   try {
-    const data = await api(`/api/search?${params}`, {signal: searchController.signal});
+    const data = await searchPages.load(target, searchController.signal);
     if (request !== searchRequest) return;
+    submittedSearch = target;
+    S.searchPage = page;
     if (params.get('cursor') === 'true') {
       searchCursors[page] = data.next_cursor;
       if (data.scan) {
         submittedSearch.set('scan', 'true'); url.set('scan', 'true');
-        history.replaceState(null, '', `${location.pathname}?${url}#browse`);
       }
     }
+    history.replaceState(null, '', `${location.pathname}?${url}${location.hash || '#browse'}`);
+    searchPages.summarize(data, page, target);
     renderResults(data, params.get('q') || '');
+    if ((data.has_more ?? page < data.pages) && !data.partial) {
+      searchPages.prefetch(searchPageParams(target, page + 1));
+    }
     if (shouldScroll && activeView === 'browse') {
       $('results-title').focus({preventScroll: true});
-      $('resultsSection').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
+      $('resultsSection').scrollIntoView({behavior: paging || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
     }
   } catch (error) {
     if (error.name === 'AbortError' || request !== searchRequest) return;
     $('resultsStatus').textContent = `Search failed: ${error.message}`;
-    $('searchResults').innerHTML = '<p class="no-results">Search is unavailable. Submit again to retry.</p>';
+    if (!paging) $('searchResults').innerHTML = '<p class="no-results">Search is unavailable. Submit again to retry.</p>';
   } finally {
     if (request === searchRequest) $('searchResults').removeAttribute('aria-busy');
   }
 }
 
-function messageAvatar(authorId, avatarUrl, authorName) {
-  const avatar = ce('div', 'message-avatar');
+function messageAvatar(authorId, avatarUrl) {
+  let hash = 0;
+  for (const char of String(authorId)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  const avatar = ce('div', `message-avatar avatar-${'abcdef'[hash % 6]}`);
   avatar.setAttribute('aria-hidden', 'true');
-  const fallback = () => { avatar.textContent = String(authorName || authorId).slice(0, 1).toUpperCase(); };
+  const fallback = () => { avatar.innerHTML = '<span class="shape-one"></span><span class="shape-two"></span><span class="shape-three"></span><span class="shape-four"></span>'; };
   fallback();
   if (avatarUrl) {
     const img = new Image(); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -1579,9 +1604,6 @@ const resultDate = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', time
 
 function renderResults(data, query) {
   const results = $('searchResults');
-  $('resultsStatus').textContent = data.total === null
-    ? (data.partial ? `${n(data.messages.length)} matches in the checked history. More history remains; search older.` : data.messages.length ? `${n(data.messages.length)} messages on this page` : 'No messages match these filters')
-    : data.total ? `${n((data.page - 1) * data.limit + 1)}–${n(Math.min(data.page * data.limit, data.total))} of ${n(data.total)} messages` : 'No messages match these filters';
   const fragment = document.createDocumentFragment();
   const regex = query ? new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi') : null;
   if (!data.messages.length) {
@@ -1614,13 +1636,13 @@ function renderResults(data, query) {
       });
       content.appendChild(attachments);
     }
-    row.append(messageAvatar(msg.author_id, msg.avatar_url, msg.author_name), content); fragment.appendChild(row);
+    row.append(messageAvatar(msg.author_id, msg.avatar_url), content); fragment.appendChild(row);
   });
   results.replaceChildren(fragment);
-  renderPagination(data.page, data.pages, data.has_more);
+  renderPagination(data.page, data.pages, data.has_more, data.partial);
 }
 
-function renderPagination(page, pages, hasMore) {
+function renderPagination(page, pages, hasMore, partial) {
   const pagination = $('pagination');
   pagination.replaceChildren(); pagination.hidden = pages === null ? page === 1 && !hasMore : pages <= 1;
   // Shared or reloaded links may lack earlier cursors. Never label a jump to
@@ -1628,7 +1650,7 @@ function renderPagination(page, pages, hasMore) {
   const previousPage = pages === null && searchCursors[page - 2] === undefined ? 1 : page - 1;
   const previousLabel = previousPage < page - 1 ? 'first page' : 'previous';
   for (const [label, target, disabled] of [[previousLabel, previousPage, page === 1], ['next', page + 1, pages === null ? !hasMore : page >= pages]]) {
-    const button = ce('button', 'page-control'); button.type = 'button'; button.textContent = label; button.disabled = disabled;
+    const button = ce('button', 'page-control'); button.type = 'button'; button.textContent = label === 'next' && partial ? 'search older' : label; button.disabled = disabled;
     button.addEventListener('click', () => doSearch(target, true, true));
     if (label === 'next') {
       const readout = ce('div', 'page-readout');
@@ -1959,7 +1981,7 @@ function highlight(raw, regex) {
 }
 
 async function api(url, opts = {}) {
-  const init = { method: opts.method || 'GET', headers: {}, signal: opts.signal };
+  const init = { method: opts.method || 'GET', headers: {}, signal: opts.signal, priority: opts.priority };
   if (opts.body) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(opts.body);

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="search.css">
   <link rel="stylesheet" href="../profile-view.css">
   <script src="../profile-view.js" defer></script>
+  <script src="search-pages.js" defer></script>
   <script src="search.js" defer></script>
 </head>
 <body>
@@ -18,16 +19,43 @@
   <header class="masthead"><h1>search<span>cord</span></h1></header>
   <main>
     <section class="search-surface query-block" aria-labelledby="searchTitle">
-      <div class="query-copy"><h2 id="searchTitle">Search your archive</h2></div>
+      <div class="bauhaus-geometry" aria-hidden="true">
+        <div class="geometry-ornaments">
+          <span class="ornament-rule ornament-rule-a"></span>
+          <span class="ornament-rule ornament-rule-b"></span>
+          <span class="ornament-rule ornament-rule-c"></span>
+          <span class="ornament-rule ornament-rule-d"></span>
+          <span class="ornament-rule ornament-rule-e"></span>
+          <span class="ornament-rule ornament-rule-f"></span>
+          <span class="ornament-rule ornament-rule-g"></span>
+          <span class="ornament-rule ornament-rule-h"></span>
+          <span class="ornament-rule ornament-rule-i"></span>
+          <span class="ornament-rule ornament-rule-j"></span>
+        </div>
+        <div class="geometry-forms geometry-forms-backdrop">
+          <span class="geometry-backdrop-disk"></span>
+          <span class="geometry-backdrop-square"></span>
+        </div>
+        <div class="geometry-forms geometry-forms-right">
+          <span class="geometry-ring"></span><span class="geometry-square"></span>
+          <span class="geometry-bar"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+        </div>
+        <div class="geometry-forms geometry-forms-left">
+          <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+        </div>
+        <div class="geometry-forms geometry-forms-center">
+          <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+        </div>
+      </div>
+      <div class="query-copy"><h2 id="searchTitle">What are you looking for?</h2></div>
       <form id="searchForm" role="search" autocomplete="off">
         <label class="sr-only" for="searchInput">Search messages</label>
         <div class="query-copy"><div class="query-form">
-          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="Search messages" aria-keyshortcuts="/" aria-describedby="searchError" list="profileOptions">
+          <input id="searchInput" name="q" type="search" maxlength="200" placeholder="try “release notes”" aria-keyshortcuts="/" aria-describedby="searchError" list="profileOptions">
           <button type="submit">Search</button>
         </div><datalist id="profileOptions"></datalist></div>
           <div class="search-actions">
             <button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters</button>
-            <span class="search-shortcut"><kbd>/</kbd> Search</span>
           </div>
         <div id="filterTray" class="filter-tray" hidden>
           <div class="filter-form">
@@ -43,7 +71,7 @@
       </form>
     </section>
     <p id="searchError" class="error" role="alert" hidden></p>
-    <div class="index-block" aria-label="Archive totals"><div class="index-stat"><span class="index-number" id="messageTotal">…</span><span class="index-caption">Messages indexed</span></div><div class="index-stat"><span class="index-number" id="serverTotal">…</span><span class="index-caption">Servers indexed</span></div></div>
+    <div class="index-block" aria-label="Archive totals"><div class="index-stat"><span class="index-number" id="messageTotal">…</span><span class="index-caption">messages indexed</span></div><div class="index-stat"><span class="index-number" id="serverTotal">…</span><span class="index-caption">indexed servers</span></div></div>
     <p id="archiveError" class="error" role="alert" hidden></p>
     <section id="profileSection" aria-label="Archived profile" hidden>
       <div class="profile-navigation"><button id="closeProfile" type="button">back to search</button></div>

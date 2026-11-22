@@ -7,6 +7,7 @@ static/search/**
 !static/search/index.html
 !static/search/search.css
 !static/search/search.js
+!static/search/search-pages.js
 !static/search/privacy.html
 !static/search/privacy.css
 !static/bauhaus.css

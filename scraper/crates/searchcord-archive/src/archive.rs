@@ -296,6 +296,15 @@ impl Archive {
     pub fn search_records(&self, options: &SearchOptions) -> Result<Page, ArchiveError> {
         self.raw_search(&self.query_options(options)?)
     }
+    pub fn search_count(&self, options: &SearchOptions) -> Result<i64, ArchiveError> {
+        let query = self.query_options(options)?;
+        let session = self.connect()?;
+        Ok(search::count(
+            &session.db,
+            session.decoder.as_ref(),
+            &query,
+        )?)
+    }
     pub(crate) fn search_session(
         &self,
         options: &SearchOptions,

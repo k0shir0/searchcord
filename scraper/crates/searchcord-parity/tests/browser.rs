@@ -224,6 +224,10 @@ fn unchanged_viewer_search_pagination_profiles_filters_and_privacy_work_in_brows
     let browser = Browser::new();
     browser.navigate(&format!("{}/", h.origin()));
     browser.wait("return document.querySelector('#messageTotal').textContent==='81'");
+    assert_eq!(
+        browser.js("return !!document.querySelector('.query-block .geometry-ring') && getComputedStyle(document.querySelector('.masthead h1')).fontFamily.includes('Bauhaus 93')"),
+        true
+    );
     browser.js("document.querySelector('#searchInput').value='common'; document.querySelector('#searchForm').requestSubmit(); return true;");
     browser.wait("return document.querySelectorAll('#messages .result-row').length===50 && document.querySelector('#resultBody').getAttribute('aria-busy')==='false'");
     assert_eq!(
@@ -257,7 +261,7 @@ fn unchanged_viewer_search_pagination_profiles_filters_and_privacy_work_in_brows
     browser.js("document.querySelector('#searchInput').value='no matching text'; document.querySelector('#searchForm').requestSubmit(); return true;");
     browser.wait("return !document.querySelector('#emptyState').hidden");
     browser.navigate(&format!("{}/privacy.html", h.origin()));
-    browser.wait("return document.body.textContent.toLowerCase().includes('privacy')");
+    browser.wait("return document.querySelector('.privacy-geometry .privacy-triangle') && document.querySelector('#privacyTitle').textContent.includes('privacy')");
     browser.assert_no_script_errors();
 }
 
@@ -269,6 +273,10 @@ fn unchanged_collector_search_statistics_settings_and_queue_render_in_browser() 
     let browser = Browser::new();
     browser.navigate(&format!("{}/", h.origin()));
     browser.wait("return document.querySelector('#homeMessages').textContent==='81'");
+    assert_eq!(
+        browser.js("return !!document.querySelector('.query-block .geometry-ring') && getComputedStyle(document.querySelector('.surface-tabs')).display === 'grid'"),
+        true
+    );
     browser.js("document.querySelector('#searchInput').value='common'; document.querySelector('#queryForm').requestSubmit(); return true;");
     browser.wait("return document.querySelector('#searchResults').textContent.includes('common fixture text')");
     assert_eq!(

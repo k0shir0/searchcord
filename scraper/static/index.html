@@ -2,7 +2,7 @@
 <html lang="en" data-theme="blue-purple">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>searchcord</title>
   <meta name="description" content="Search and explore your local Discord archive.">
   <link rel="icon" type="image/png" sizes="32x32" href="search/favicon.png">
@@ -72,23 +72,48 @@
   </div>
 </aside>
 
-<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">Browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">Collection</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">Stats</button></nav>
-
 <div id="pageStage" class="page-stage">
 <p id="archiveStatus" class="archive-error" role="status" hidden></p>
       <section class="composition" id="homeOverview" aria-label="Search overview">
         <div class="query-block" id="queryBlock">
+          <div class="bauhaus-geometry" aria-hidden="true">
+            <div class="geometry-ornaments">
+              <span class="ornament-rule ornament-rule-a"></span>
+              <span class="ornament-rule ornament-rule-b"></span>
+              <span class="ornament-rule ornament-rule-c"></span>
+              <span class="ornament-rule ornament-rule-d"></span>
+              <span class="ornament-rule ornament-rule-e"></span>
+              <span class="ornament-rule ornament-rule-f"></span>
+              <span class="ornament-rule ornament-rule-g"></span>
+              <span class="ornament-rule ornament-rule-h"></span>
+              <span class="ornament-rule ornament-rule-i"></span>
+              <span class="ornament-rule ornament-rule-j"></span>
+            </div>
+            <div class="geometry-forms geometry-forms-backdrop">
+              <span class="geometry-backdrop-disk"></span>
+              <span class="geometry-backdrop-square"></span>
+            </div>
+            <div class="geometry-forms geometry-forms-right">
+              <span class="geometry-ring"></span><span class="geometry-square"></span>
+              <span class="geometry-bar"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+            <div class="geometry-forms geometry-forms-left">
+              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+            <div class="geometry-forms geometry-forms-center">
+              <span class="geometry-ring"></span><span class="geometry-triangle"><svg class="geometry-triangle-art" viewBox="0 0 100 100" aria-hidden="true"><path class="geometry-clearance-path" d="M50 2 L98 98 H2 Z"></path><path d="M50 2 L98 98 H2 Z"></path></svg></span>
+            </div>
+          </div>
           <div class="query-copy">
-            <h2>Search your archive</h2>
+            <h2>What are you looking for?</h2>
             <form class="query-form" id="queryForm">
               <label for="searchInput">Search messages</label>
-              <input id="searchInput" type="search" placeholder="Search messages" aria-keyshortcuts="/">
+              <input id="searchInput" type="search" placeholder="try “release notes”" aria-keyshortcuts="/">
               <button id="searchBtn" type="submit">Search</button>
             </form>
           </div>
           <div class="search-actions">
             <button id="filterToggle" type="button" aria-controls="filterTray" aria-expanded="false">Filters</button>
-            <span class="search-shortcut"><kbd>/</kbd> Search</span>
           </div>
           <div class="filter-tray" id="filterTray" hidden>
             <form class="filter-form" id="filterForm">
@@ -105,12 +130,12 @@
           </div>
         </div>
         <div class="index-block" aria-label="Archive totals">
-          <div class="index-stat"><span class="index-number" id="homeMessages">…</span><span class="index-caption">Messages indexed</span></div>
-          <div class="index-stat"><span class="index-number" id="homeServers">…</span><span class="index-caption">Servers indexed</span></div>
+          <div class="index-stat"><span class="index-number" id="homeMessages">…</span><span class="index-caption">messages indexed</span></div>
+          <div class="index-stat"><span class="index-number" id="homeServers">…</span><span class="index-caption">indexed servers</span></div>
         </div>
       </section>
 
-
+<nav class="surface-tabs" aria-label="Searchcord views"><button class="surface-tab tab" type="button" data-view="browse" aria-pressed="true" aria-controls="view-browse">Browse</button><button class="surface-tab tab" type="button" data-view="scrape" aria-pressed="false" aria-controls="view-scrape">Collection</button><button class="surface-tab tab" type="button" data-view="stats" aria-pressed="false" aria-controls="view-stats">Stats</button></nav>
 
 <!-- ── Main ──────────────────────────────────────────── -->
 <main class="main">
@@ -257,6 +282,7 @@
 
 <script src="vendor/chart.umd.min.js" defer></script>
 <script src="collection-queue.js" defer></script>
+<script src="search/search-pages.js" defer></script>
 <script src="app.js" defer></script>
 <script src="collection.js" defer></script>
 <script src="stats.js" defer></script>

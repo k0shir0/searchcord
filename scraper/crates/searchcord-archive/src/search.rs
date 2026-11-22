@@ -127,24 +127,38 @@ pub(crate) fn records(
         .query_map(params_from_iter(keys), Record::from_row)?
         .collect()
 }
-fn packed_ids(
+fn filters(query: &Query) -> impl Iterator<Item = (&'static str, &'static str, &String)> {
+    [
+        ("guild_id", "guild", &query.guild_id),
+        ("channel_id", "channel", &query.channel_id),
+        ("author_id", "author", &query.author_id),
+    ]
+    .into_iter()
+    .filter_map(|(column, kind, value)| {
+        value
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map(|s| (column, kind, s))
+    })
+}
+
+#[derive(Default)]
+struct PackedScope {
+    conditions: Vec<String>,
+    parameters: Vec<SqlValue>,
+    selective: bool,
+    multi_source: bool,
+    has_author: bool,
+}
+
+fn packed_scope(
     db: &Connection,
     decoder: &PackedDecoder,
     query: &Query,
     lower: Option<i64>,
-    take: usize,
-) -> rusqlite::Result<Vec<i64>> {
-    let mut conditions = vec![];
-    let mut parameters = vec![];
-    let (mut selective, mut multi_source, mut has_author) = (false, false, false);
-    for (column, kind, value) in [
-        ("guild_id", "guild", &query.guild_id),
-        ("channel_id", "channel", &query.channel_id),
-        ("author_id", "author", &query.author_id),
-    ] {
-        let Some(value) = value.as_ref().filter(|v| !v.is_empty()) else {
-            continue;
-        };
+) -> rusqlite::Result<Option<PackedScope>> {
+    let mut scope = PackedScope::default();
+    for (column, kind, value) in filters(query) {
         if column == "author_id" {
             let reference: Option<i64> = db
                 .query_row("SELECT ref FROM ref_values WHERE value=?", [value], |r| {
@@ -152,11 +166,11 @@ fn packed_ids(
                 })
                 .optional()?;
             let Some(reference) = reference else {
-                return Ok(vec![]);
+                return Ok(None);
             };
-            conditions.push("m.author_id=?".to_owned());
-            parameters.push(SqlValue::Integer(reference));
-            has_author = true;
+            scope.conditions.push("m.author_id=?".to_owned());
+            scope.parameters.push(SqlValue::Integer(reference));
+            scope.has_author = true;
         } else {
             let references = ids(
                 db,
@@ -164,14 +178,16 @@ fn packed_ids(
                 &[SqlValue::Text(value.clone())],
             )?;
             if references.is_empty() {
-                return Ok(vec![]);
+                return Ok(None);
             }
-            multi_source |= references.len() > 1;
-            conditions.push(format!(
+            scope.multi_source |= references.len() > 1;
+            scope.conditions.push(format!(
                 "m.source_id IN ({})",
                 vec!["?"; references.len()].join(",")
             ));
-            parameters.extend(references.into_iter().map(SqlValue::Integer));
+            scope
+                .parameters
+                .extend(references.into_iter().map(SqlValue::Integer));
         }
         let count: Option<i64> = db
             .query_row(
@@ -180,19 +196,64 @@ fn packed_ids(
                 |r| r.get(0),
             )
             .optional()?;
-        selective |= count.is_some_and(|n| n <= 4096);
+        scope.selective |= count.is_some_and(|n| n <= 4096);
     }
     for (value, low) in [(lower, true), (query.upper, false), (query.before, false)] {
         if let Some(value) = value {
             let boundary = decoder.row_before_id(db, value)?;
-            conditions.push(format!("m.rowid{}?", if low { ">=" } else { "<=" }));
-            parameters.push(SqlValue::Integer(if low { boundary + 1 } else { boundary }));
+            scope
+                .conditions
+                .push(format!("m.rowid{}?", if low { ">=" } else { "<=" }));
+            scope
+                .parameters
+                .push(SqlValue::Integer(if low { boundary + 1 } else { boundary }));
         }
     }
+    Ok(Some(scope))
+}
+
+impl PackedScope {
+    fn with_text(&mut self, q: &str) -> (&'static str, &'static str) {
+        if !q.is_empty() {
+            self.conditions
+                .push("record_content(m.rowid) LIKE ? ESCAPE '!'".into());
+            self.parameters
+                .push(SqlValue::Text(format!("%{}%", like_literal(q))));
+        }
+        if let Some(matched) = (!self.selective).then(|| trigram_query(q)).flatten() {
+            self.conditions.insert(0, "f.messages_fts MATCH ?".into());
+            self.parameters.insert(0, SqlValue::Text(matched));
+            (
+                "messages_fts f JOIN message_index m ON m.rowid=f.rowid",
+                "f.rowid",
+            )
+        } else {
+            ("message_index m", "m.rowid")
+        }
+    }
+}
+
+fn where_sql(conditions: &[String]) -> String {
+    if conditions.is_empty() {
+        "1".into()
+    } else {
+        conditions.join(" AND ")
+    }
+}
+
+fn packed_ids(
+    db: &Connection,
+    decoder: &PackedDecoder,
+    query: &Query,
+    lower: Option<i64>,
+    take: usize,
+) -> rusqlite::Result<Vec<i64>> {
+    let Some(mut scope) = packed_scope(db, decoder, query, lower)? else {
+        return Ok(vec![]);
+    };
     let q = strip(&query.q);
     let short = q.split('\0').next().unwrap_or("").to_ascii_lowercase();
-    let literal = format!("%{}%", like_literal(q));
-    if !q.is_empty() && (1..=2).contains(&short.chars().count()) && !selective {
+    if (1..=2).contains(&short.chars().count()) && !scope.selective {
         let first = if let Some(lower) = lower {
             decoder.row_before_id(db, lower)? + 1
         } else {
@@ -216,14 +277,16 @@ fn packed_ids(
             (first - 1).div_euclid(block_rows) + 1,
             (last - 1).div_euclid(block_rows) + 1,
         ])?;
-        conditions.push("m.rowid BETWEEN ? AND ?".into());
-        conditions.push("record_content(m.rowid) LIKE ? ESCAPE '!'".into());
+        scope.conditions.push("m.rowid BETWEEN ? AND ?".into());
+        scope
+            .conditions
+            .push("record_content(m.rowid) LIKE ? ESCAPE '!'".into());
         let mut matches = db.prepare(&format!(
             "SELECT m.rowid FROM message_index m WHERE {} ORDER BY m.rowid DESC LIMIT ?",
-            conditions.join(" AND "),
+            where_sql(&scope.conditions),
         ))?;
         let mut result = Vec::with_capacity(take);
-        let literal = SqlValue::Text(literal);
+        let literal = SqlValue::Text(format!("%{}%", like_literal(q)));
         while let Some(row) = blocks.next()? {
             let block: i64 = row.get(0)?;
             let bounds = [
@@ -231,7 +294,11 @@ fn packed_ids(
                 SqlValue::Integer(block * block_rows),
             ];
             let limit = SqlValue::Integer((take - result.len()) as i64);
-            let params = parameters.iter().chain(&bounds).chain([&literal, &limit]);
+            let params = scope
+                .parameters
+                .iter()
+                .chain(&bounds)
+                .chain([&literal, &limit]);
             let mut rows = matches.query(params_from_iter(params))?;
             while let Some(row) = rows.next()? {
                 result.push(row.get(0)?);
@@ -242,40 +309,72 @@ fn packed_ids(
         }
         return Ok(result);
     }
-    let matched = if !q.is_empty() && !selective {
-        trigram_query(q)
+    let (relation, order) = scope.with_text(q);
+    let hint = if q.is_empty() && scope.multi_source && !scope.selective && !scope.has_author {
+        " NOT INDEXED"
     } else {
-        None
+        ""
     };
-    let (mut relation, order) = if let Some(matched) = matched {
-        conditions.insert(0, "f.messages_fts MATCH ?".into());
-        parameters.insert(0, SqlValue::Text(matched));
-        (
-            "messages_fts f JOIN message_index m ON m.rowid=f.rowid".to_owned(),
-            "f.rowid",
-        )
-    } else {
-        ("message_index m".to_owned(), "m.rowid")
-    };
-    if q.is_empty() && multi_source && !selective && !has_author {
-        relation.push_str(" NOT INDEXED");
-    }
-    if !q.is_empty() {
-        conditions.push("record_content(m.rowid) LIKE ? ESCAPE '!'".into());
-        parameters.push(SqlValue::Text(literal));
-    }
-    parameters.push(SqlValue::Integer(take as i64));
+    scope.parameters.push(SqlValue::Integer(take as i64));
     ids(
         db,
         &format!(
-            "SELECT m.rowid FROM {relation} WHERE {} ORDER BY {order} DESC LIMIT ?",
-            if conditions.is_empty() {
-                "1".into()
-            } else {
-                conditions.join(" AND ")
-            }
+            "SELECT m.rowid FROM {relation}{hint} WHERE {} ORDER BY {order} DESC LIMIT ?",
+            where_sql(&scope.conditions)
         ),
-        &parameters,
+        &scope.parameters,
+    )
+}
+
+pub(crate) fn count(
+    db: &Connection,
+    decoder: Option<&PackedDecoder>,
+    query: &Query,
+) -> rusqlite::Result<i64> {
+    let q = strip(&query.q);
+    let (relation, conditions, parameters) = if let Some(decoder) = decoder {
+        let Some(mut scope) = packed_scope(db, decoder, query, query.lower)? else {
+            return Ok(0);
+        };
+        let (mut relation, _) = scope.with_text(q);
+        let short = q.split('\0').next().unwrap_or("").to_ascii_lowercase();
+        if (1..=2).contains(&short.chars().count()) && !scope.selective {
+            relation = "message_short_fts b CROSS JOIN message_index m ON m.rowid BETWEEN (b.rowid-1)*?+1 AND b.rowid*?";
+            scope.conditions.push("b.message_short_fts MATCH ?".into());
+            let rows = decoder.block_rows as i64;
+            scope
+                .parameters
+                .splice(0..0, [SqlValue::Integer(rows), SqlValue::Integer(rows)]);
+            scope.parameters.push(SqlValue::Text(short_token(&short)));
+        }
+        (relation, scope.conditions, scope.parameters)
+    } else {
+        let (mut conditions, mut parameters) = standard_bounds(query);
+        add_standard_filters(query, &mut conditions, &mut parameters);
+        if let Some(matched) = trigram_query(q) {
+            conditions.push(
+                "rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)".into(),
+            );
+            parameters.push(SqlValue::Text(matched));
+        }
+        if !q.is_empty() {
+            conditions.push("content LIKE ? ESCAPE '!'".into());
+            parameters.push(SqlValue::Text(format!("%{}%", like_literal(q))));
+        }
+        ("messages", conditions, parameters)
+    };
+    if conditions.is_empty() {
+        return db.query_row(&format!("SELECT COUNT(*) FROM {relation}"), [], |r| {
+            r.get(0)
+        });
+    }
+    db.query_row(
+        &format!(
+            "SELECT COUNT(*) FROM {relation} WHERE {}",
+            where_sql(&conditions)
+        ),
+        params_from_iter(parameters),
+        |r| r.get(0),
     )
 }
 pub fn packed_search(
@@ -352,12 +451,7 @@ pub fn packed_search(
     })
 }
 
-pub fn standard_search(db: &Connection, query: &Query) -> rusqlite::Result<Page> {
-    if !(1..=100).contains(&query.limit) || query.window == 0 || query.window > 1_000_000 {
-        return Err(rusqlite::Error::InvalidParameterName(
-            "Invalid search limit/window".into(),
-        ));
-    }
+fn standard_bounds(query: &Query) -> (Vec<String>, Vec<SqlValue>) {
     let mut bounds = vec![];
     let mut bound_params = vec![];
     for (clause, value) in [
@@ -370,30 +464,34 @@ pub fn standard_search(db: &Connection, query: &Query) -> rusqlite::Result<Page>
             bound_params.push(SqlValue::Integer(value));
         }
     }
+    (bounds, bound_params)
+}
+
+fn add_standard_filters(
+    query: &Query,
+    conditions: &mut Vec<String>,
+    parameters: &mut Vec<SqlValue>,
+) {
+    for (column, _, value) in filters(query) {
+        conditions.push(format!("{column}=?"));
+        parameters.push(SqlValue::Text(value.clone()));
+    }
+}
+
+pub fn standard_search(db: &Connection, query: &Query) -> rusqlite::Result<Page> {
+    if !(1..=100).contains(&query.limit) || query.window == 0 || query.window > 1_000_000 {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "Invalid search limit/window".into(),
+        ));
+    }
+    let (bounds, bound_params) = standard_bounds(query);
     let mut conditions = vec![];
     let mut parameters = vec![];
-    for (column, value) in [
-        ("guild_id", &query.guild_id),
-        ("channel_id", &query.channel_id),
-        ("author_id", &query.author_id),
-    ] {
-        if let Some(value) = value.as_ref().filter(|s| !s.is_empty()) {
-            conditions.push(format!("{column}=?"));
-            parameters.push(SqlValue::Text(value.clone()));
-        }
-    }
+    add_standard_filters(query, &mut conditions, &mut parameters);
     conditions.extend(bounds.clone());
     parameters.extend(bound_params.clone());
-    let condition = if conditions.is_empty() {
-        "1".into()
-    } else {
-        conditions.join(" AND ")
-    };
-    let bound_condition = if bounds.is_empty() {
-        "1".into()
-    } else {
-        bounds.join(" AND ")
-    };
+    let condition = where_sql(&conditions);
+    let bound_condition = where_sql(&bounds);
     let q = strip(&query.q);
     let literal = format!("%{}%", like_literal(q));
     let take = query.limit + 1;

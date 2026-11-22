@@ -35,6 +35,10 @@ before collecting data.
 1. Open **Settings**, name your Discord token and select **save & use token**.
 2. In **Collection**, select **connect Discord**, queue channels or direct messages and select **start scraping**. Leave the message limit blank to collect full history. If you clear the queue, use **Undo** to restore it before making another queue change.
 3. In **Browse**, search messages or use **Filters** to narrow by server, channel, author or date. Click an author to see their saved profile.
+
+Results show the total matches and page count above the messages when the archive can count them. The next page starts loading as you approach the bottom. If Searchcord needs to check the archive in chunks, use **Search older** to continue.
+
+Profiles start loading archived server activity as soon as you open them. The collector rebuilds its author index once on the first start after this update, which may take longer on large archives.
 4. In **Stats**, explore activity and open the matching messages.
 
 You can pause a scrape and resume from the last saved page. After restarting
@@ -74,6 +78,7 @@ Major milestones by the date they reached `main` (America/Chicago).
 
 | Date | Update |
 | --- | --- |
+| 2026-11-21 | Restored the Bauhaus design and improved search pagination and profile loading. [v0.3.1](https://github.com/k0shir0/searchcord/releases/tag/v0.3.1) |
 | 2026-11-21 | Performance and UI/UX changes, including faster archive search, simpler navigation and collection controls. [v0.3.0](https://github.com/k0shir0/searchcord/releases/tag/v0.3.0) |
 | 2026-11-07 | Added prebuilt downloads for Windows, Linux and macOS, with in-place updates on Windows x64. [v0.2.0](https://github.com/k0shir0/searchcord/releases/tag/v0.2.0) |
 | 2026-11-05 | The collector, search viewer and archive tools moved to Rust. Existing archives and the browser interface carry forward. Live monitoring now recovers paused after a restart. [#27](https://github.com/k0shir0/searchcord/pull/27) |
