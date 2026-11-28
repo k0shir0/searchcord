@@ -49,6 +49,48 @@ fn decode(path: &Path) -> Vec<u8> {
         .unwrap();
     bytes
 }
+
+#[test]
+fn native_startup_upgrades_legacy_fts_update_trigger_transactionally() {
+    let (mut h, vault) = fixture();
+    h.init();
+    let db = h.database();
+    let trigger = "SELECT sql FROM sqlite_master WHERE name='messages_fts_update'";
+    let original = scalar(&db, trigger);
+    assert!(original.contains("ON messages BEGIN"));
+    assert!(
+        migrations::initialize_with_hook(&h.archive(), &vault, |_| Err("interrupted".into()))
+            .is_err()
+    );
+    assert_eq!(scalar(&db, trigger), original);
+
+    db.execute("INSERT INTO messages(id,content) VALUES (?,'first')", [ID])
+        .unwrap();
+    for _ in 0..2 {
+        initialize_with_vault(&h.archive(), &vault).unwrap();
+        assert!(scalar(&db, trigger).contains("WHEN old.content IS NOT new.content"));
+    }
+    let before = db.total_changes();
+    db.execute(
+        "UPDATE messages SET content=content,image_urls='attachment' WHERE id=?",
+        [ID],
+    )
+    .unwrap();
+    assert_eq!(db.total_changes() - before, 1);
+    db.execute("UPDATE messages SET content='second' WHERE id=?", [ID])
+        .unwrap();
+    let matches = |term: &str| {
+        db.query_row(
+            "SELECT COUNT(*) FROM messages_fts WHERE messages_fts MATCH ?",
+            [term],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(matches("fir"), 0);
+    assert_eq!(matches("sec"), 1);
+}
+
 #[test]
 fn native_legacy_upgrade_preserves_fields_credentials_and_sanitized_recovery() {
     let (mut h, v) = fixture();

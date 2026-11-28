@@ -142,6 +142,90 @@ fn filters(query: &Query) -> impl Iterator<Item = (&'static str, &'static str, &
     })
 }
 
+const SELECTIVE_FILTER_LIMIT: i64 = 4096;
+
+fn filter_count(db: &Connection, kind: &str, value: &str) -> rusqlite::Result<Option<i64>> {
+    db.query_row(
+        "SELECT count FROM stats_counts WHERE kind=? AND key=?",
+        params![kind, value],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
+fn standard_scope_index(db: &Connection, query: &Query) -> rusqlite::Result<Option<String>> {
+    let mut filters = filters(query).peekable();
+    if filters.peek().is_none()
+        || !db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='stats_counts')",
+            [],
+            |r| r.get::<_, bool>(0),
+        )?
+    {
+        return Ok(None);
+    }
+    // With several filters SQLite can choose a broader index than the counts indicate.
+    let mut smallest = SELECTIVE_FILTER_LIMIT + 1;
+    let mut index = None;
+    for (column, kind, value) in filters {
+        if let Some(count) = filter_count(db, kind, value)?
+            && count < smallest
+        {
+            let names = match column {
+                "guild_id" => ("idx_gd_id", "idx_gd_id"),
+                "channel_id" => ("idx_ch_id", "idx_ch_id"),
+                _ => ("idx_au_id_guild", "idx_au_id"),
+            };
+            if let Some(name) = db
+                .query_row(
+                    "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='messages'
+                        AND name IN (?,?) ORDER BY name DESC LIMIT 1",
+                    params![names.0, names.1],
+                    |r| r.get(0),
+                )
+                .optional()?
+            {
+                smallest = count;
+                index = Some(name);
+            }
+        }
+    }
+    Ok(index)
+}
+
+fn count_within_standard_scope(
+    db: &Connection,
+    index: &str,
+    matched: String,
+    conditions: &[String],
+    parameters: &[SqlValue],
+) -> rusqlite::Result<i64> {
+    const PROBE_LIMIT: usize = 128;
+    let conditions = where_sql(conditions);
+    let matched = SqlValue::Text(matched);
+    // A full probe is inconclusive. Count in the indexed scope and keep exact LIKE
+    // matching on both paths, since separate trigrams can match out of order.
+    db.query_row(
+        &format!(
+            "WITH candidates AS MATERIALIZED (
+               SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? LIMIT {PROBE_LIMIT}
+             )
+             SELECT CASE WHEN (SELECT COUNT(*) FROM candidates) < {PROBE_LIMIT} THEN (
+               SELECT COUNT(*) FROM candidates c CROSS JOIN messages ON messages.rowid=c.rowid
+               WHERE {conditions}
+             ) ELSE (
+               SELECT COUNT(*) FROM messages INDEXED BY {index} WHERE {conditions}
+             ) END"
+        ),
+        params_from_iter(
+            std::iter::once(&matched)
+                .chain(parameters)
+                .chain(parameters),
+        ),
+        |r| r.get(0),
+    )
+}
+
 #[derive(Default)]
 struct PackedScope {
     conditions: Vec<String>,
@@ -189,14 +273,8 @@ fn packed_scope(
                 .parameters
                 .extend(references.into_iter().map(SqlValue::Integer));
         }
-        let count: Option<i64> = db
-            .query_row(
-                "SELECT count FROM stats_counts WHERE kind=? AND key=?",
-                params![kind, value],
-                |r| r.get(0),
-            )
-            .optional()?;
-        scope.selective |= count.is_some_and(|n| n <= 4096);
+        scope.selective |=
+            filter_count(db, kind, value)?.is_some_and(|n| n <= SELECTIVE_FILTER_LIMIT);
     }
     for (value, low) in [(lower, true), (query.upper, false), (query.before, false)] {
         if let Some(value) = value {
@@ -351,15 +429,23 @@ pub(crate) fn count(
     } else {
         let (mut conditions, mut parameters) = standard_bounds(query);
         add_standard_filters(query, &mut conditions, &mut parameters);
+        let mut scoped_match = None;
         if let Some(matched) = trigram_query(q) {
-            conditions.push(
-                "rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)".into(),
-            );
-            parameters.push(SqlValue::Text(matched));
+            if let Some(index) = standard_scope_index(db, query)? {
+                scoped_match = Some((index, matched));
+            } else {
+                conditions.push(
+                    "rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)".into(),
+                );
+                parameters.push(SqlValue::Text(matched));
+            }
         }
         if !q.is_empty() {
             conditions.push("content LIKE ? ESCAPE '!'".into());
             parameters.push(SqlValue::Text(format!("%{}%", like_literal(q))));
+        }
+        if let Some((index, matched)) = scoped_match {
+            return count_within_standard_scope(db, &index, matched, &conditions, &parameters);
         }
         ("messages", conditions, parameters)
     };

@@ -171,6 +171,25 @@ pub fn initialize_with_hook(
     } else {
         None
     };
+    let fts_update: Option<String> = tx
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='messages_fts_update'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if fts_update.is_some_and(|sql| {
+        let mut words = sql.split_ascii_whitespace();
+        "CREATE TRIGGER messages_fts_update AFTER UPDATE OF content ON messages BEGIN"
+            .split_ascii_whitespace()
+            .all(|word| {
+                words
+                    .next()
+                    .is_some_and(|actual| actual.eq_ignore_ascii_case(word))
+            })
+    }) {
+        tx.execute_batch("DROP TRIGGER messages_fts_update;")?;
+    }
     tx.execute_batch("DROP VIEW IF EXISTS message_records;")?;
     object_sql(&tx, false)?;
     if !columns(&tx, "authors")?.contains("last_message_id") {

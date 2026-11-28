@@ -85,6 +85,82 @@ fn native_standard_reads_match_python_with_filters_dates_and_full_cursor_scans()
 }
 
 #[test]
+fn native_standard_counts_match_literal_search_with_or_without_filter_stats() {
+    let h = performance::fixture(600);
+    let archive = Archive::new(h.archive(), false);
+    let options = SearchOptions {
+        q: "% _ !".into(),
+        author_id: Some("000100".into()),
+        guild_id: Some("1".into()),
+        channel_id: Some("20".into()),
+        date_from: Some("2025-12-15".into()),
+        date_to: Some("2025-12-15".into()),
+        before: Some(performance::BASE + 128 * performance::STEP),
+        ..Default::default()
+    };
+    let writer = h.database();
+    for schema_change in [
+        None,
+        Some("DROP INDEX idx_au_id; DROP INDEX idx_ch_id; DROP INDEX idx_gd_id;"),
+        Some("DELETE FROM stats_counts WHERE kind IN ('author', 'guild', 'channel');"),
+        Some("DROP TABLE stats_counts; PRAGMA user_version=9;"),
+    ] {
+        if let Some(sql) = schema_change {
+            writer.execute_batch(sql).unwrap();
+        }
+        assert_eq!(archive.search_count(&options).unwrap(), 2);
+        for (q, expected) in [("rare needle", 1), ("common", 1), ("absent % _ !", 0)] {
+            let query = SearchOptions {
+                q: q.into(),
+                ..options.clone()
+            };
+            assert_eq!(archive.search_count(&query).unwrap(), expected, "{q}");
+        }
+    }
+}
+
+#[test]
+fn native_standard_count_checks_exact_matches_beyond_the_trigram_probe() {
+    let h = performance::fixture(512);
+    let archive = Archive::new(h.archive(), false);
+    let options = SearchOptions {
+        q: "abcdef".into(),
+        author_id: Some("100".into()),
+        guild_id: Some("1".into()),
+        ..Default::default()
+    };
+    let writer = h.database();
+    writer
+        .execute(
+            "UPDATE messages SET content='abc bcd cde def' WHERE author_id=100",
+            [],
+        )
+        .unwrap();
+    assert_eq!(archive.search_count(&options).unwrap(), 0);
+
+    let last_match = performance::BASE + 384 * performance::STEP;
+    writer
+        .execute("UPDATE messages SET content='abc bcd cde def'", [])
+        .unwrap();
+    writer
+        .execute(
+            "UPDATE messages SET content='abcdef' WHERE id=?",
+            [last_match],
+        )
+        .unwrap();
+    assert_eq!(archive.search_count(&options).unwrap(), 1);
+    assert_eq!(
+        archive
+            .search_count(&SearchOptions {
+                before: Some(last_match),
+                ..options
+            })
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
 fn native_connections_are_readonly_preserve_versions_and_pin_live_wal() {
     let h = performance::fixture(17);
     let original = fs::read(h.archive()).unwrap();
