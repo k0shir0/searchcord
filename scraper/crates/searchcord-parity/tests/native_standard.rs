@@ -99,12 +99,13 @@ fn native_standard_counts_match_literal_search_with_or_without_filter_stats() {
         ..Default::default()
     };
     let writer = h.database();
-    for remove_stats in [
+    for schema_change in [
         None,
+        Some("DROP INDEX idx_au_id; DROP INDEX idx_ch_id; DROP INDEX idx_gd_id;"),
         Some("DELETE FROM stats_counts WHERE kind IN ('author', 'guild', 'channel');"),
         Some("DROP TABLE stats_counts; PRAGMA user_version=9;"),
     ] {
-        if let Some(sql) = remove_stats {
+        if let Some(sql) = schema_change {
             writer.execute_batch(sql).unwrap();
         }
         assert_eq!(archive.search_count(&options).unwrap(), 2);
@@ -116,6 +117,47 @@ fn native_standard_counts_match_literal_search_with_or_without_filter_stats() {
             assert_eq!(archive.search_count(&query).unwrap(), expected, "{q}");
         }
     }
+}
+
+#[test]
+fn native_standard_count_checks_exact_matches_beyond_the_trigram_probe() {
+    let h = performance::fixture(512);
+    let archive = Archive::new(h.archive(), false);
+    let options = SearchOptions {
+        q: "abcdef".into(),
+        author_id: Some("100".into()),
+        guild_id: Some("1".into()),
+        ..Default::default()
+    };
+    let writer = h.database();
+    writer
+        .execute(
+            "UPDATE messages SET content='abc bcd cde def' WHERE author_id=100",
+            [],
+        )
+        .unwrap();
+    assert_eq!(archive.search_count(&options).unwrap(), 0);
+
+    let last_match = performance::BASE + 384 * performance::STEP;
+    writer
+        .execute("UPDATE messages SET content='abc bcd cde def'", [])
+        .unwrap();
+    writer
+        .execute(
+            "UPDATE messages SET content='abcdef' WHERE id=?",
+            [last_match],
+        )
+        .unwrap();
+    assert_eq!(archive.search_count(&options).unwrap(), 1);
+    assert_eq!(
+        archive
+            .search_count(&SearchOptions {
+                before: Some(last_match),
+                ..options
+            })
+            .unwrap(),
+        0
+    );
 }
 
 #[test]
