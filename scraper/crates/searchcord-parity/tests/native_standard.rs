@@ -85,6 +85,40 @@ fn native_standard_reads_match_python_with_filters_dates_and_full_cursor_scans()
 }
 
 #[test]
+fn native_standard_counts_match_literal_search_with_or_without_filter_stats() {
+    let h = performance::fixture(600);
+    let archive = Archive::new(h.archive(), false);
+    let options = SearchOptions {
+        q: "% _ !".into(),
+        author_id: Some("000100".into()),
+        guild_id: Some("1".into()),
+        channel_id: Some("20".into()),
+        date_from: Some("2025-12-15".into()),
+        date_to: Some("2025-12-15".into()),
+        before: Some(performance::BASE + 128 * performance::STEP),
+        ..Default::default()
+    };
+    let writer = h.database();
+    for remove_stats in [
+        None,
+        Some("DELETE FROM stats_counts WHERE kind IN ('author', 'guild', 'channel');"),
+        Some("DROP TABLE stats_counts; PRAGMA user_version=9;"),
+    ] {
+        if let Some(sql) = remove_stats {
+            writer.execute_batch(sql).unwrap();
+        }
+        assert_eq!(archive.search_count(&options).unwrap(), 2);
+        for (q, expected) in [("rare needle", 1), ("common", 1), ("absent % _ !", 0)] {
+            let query = SearchOptions {
+                q: q.into(),
+                ..options.clone()
+            };
+            assert_eq!(archive.search_count(&query).unwrap(), expected, "{q}");
+        }
+    }
+}
+
+#[test]
 fn native_connections_are_readonly_preserve_versions_and_pin_live_wal() {
     let h = performance::fixture(17);
     let original = fs::read(h.archive()).unwrap();

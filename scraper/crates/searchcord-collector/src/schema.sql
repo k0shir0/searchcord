@@ -120,7 +120,8 @@ CREATE TRIGGER messages_fts_insert
                 END;
 
 CREATE TRIGGER messages_fts_update
-                AFTER UPDATE OF content ON messages BEGIN
+                AFTER UPDATE OF content ON messages
+                WHEN old.content IS NOT new.content BEGIN
                 INSERT INTO messages_fts(messages_fts,rowid,content)
                 VALUES ('delete',old.rowid,old.content);
                 INSERT INTO messages_fts(rowid,content) VALUES (new.rowid,new.content);

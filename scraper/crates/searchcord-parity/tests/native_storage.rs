@@ -145,6 +145,41 @@ fn native_payload_observations_revisions_tombstones_fts_and_python_interchange()
     );
 }
 #[test]
+fn native_attachment_edits_preserve_fts_and_archive_attachments() {
+    let h = Harness::with_backend(Backend::Python).unwrap();
+    let mut store = Store::open(h.archive()).unwrap();
+    let original = message(ID, "original searchable");
+    store
+        .save_page(std::slice::from_ref(&original), &context())
+        .unwrap();
+    let mut edited = original;
+    edited["attachments"][1]["url"] = json!("https://cdn.discordapp.com/attachments/20/42/new.png");
+    assert_eq!(
+        store
+            .save_page(std::slice::from_ref(&edited), &context())
+            .unwrap(),
+        0
+    );
+    let saved = store.read_message(ID, 0, 100).unwrap().unwrap();
+    assert_eq!(saved["payload"], edited);
+    assert_eq!(saved["revisions"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        count(
+            store.connection(),
+            "SELECT count(*) FROM messages_fts WHERE content LIKE '%original%'"
+        ),
+        1
+    );
+    store
+        .connection()
+        .execute(
+            "INSERT INTO messages_fts(messages_fts,rank) VALUES ('integrity-check',1)",
+            [],
+        )
+        .unwrap();
+}
+
+#[test]
 fn native_page_metadata_dedup_backfill_legacy_and_atomic_rollback() {
     let h = Harness::with_backend(Backend::Python).unwrap();
     let mut store = Store::open(h.archive()).unwrap();

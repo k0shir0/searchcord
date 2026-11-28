@@ -142,6 +142,37 @@ fn filters(query: &Query) -> impl Iterator<Item = (&'static str, &'static str, &
     })
 }
 
+fn filter_is_selective(db: &Connection, kind: &str, value: &str) -> rusqlite::Result<bool> {
+    const SELECTIVE_FILTER_LIMIT: i64 = 4096;
+    let count: Option<i64> = db
+        .query_row(
+            "SELECT count FROM stats_counts WHERE kind=? AND key=?",
+            params![kind, value],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(count.is_some_and(|n| n <= SELECTIVE_FILTER_LIMIT))
+}
+
+fn standard_scope_is_selective(db: &Connection, query: &Query) -> rusqlite::Result<bool> {
+    let mut filters = filters(query).peekable();
+    if filters.peek().is_none()
+        || !db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='stats_counts')",
+            [],
+            |r| r.get::<_, bool>(0),
+        )?
+    {
+        return Ok(false);
+    }
+    for (_, kind, value) in filters {
+        if filter_is_selective(db, kind, value)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 #[derive(Default)]
 struct PackedScope {
     conditions: Vec<String>,
@@ -189,14 +220,7 @@ fn packed_scope(
                 .parameters
                 .extend(references.into_iter().map(SqlValue::Integer));
         }
-        let count: Option<i64> = db
-            .query_row(
-                "SELECT count FROM stats_counts WHERE kind=? AND key=?",
-                params![kind, value],
-                |r| r.get(0),
-            )
-            .optional()?;
-        scope.selective |= count.is_some_and(|n| n <= 4096);
+        scope.selective |= filter_is_selective(db, kind, value)?;
     }
     for (value, low) in [(lower, true), (query.upper, false), (query.before, false)] {
         if let Some(value) = value {
@@ -351,7 +375,10 @@ pub(crate) fn count(
     } else {
         let (mut conditions, mut parameters) = standard_bounds(query);
         add_standard_filters(query, &mut conditions, &mut parameters);
-        if let Some(matched) = trigram_query(q) {
+        // A small indexed scope is cheaper than an archive-wide FTS candidate list.
+        if let Some(matched) = trigram_query(q)
+            && !standard_scope_is_selective(db, query)?
+        {
             conditions.push(
                 "rowid IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)".into(),
             );
